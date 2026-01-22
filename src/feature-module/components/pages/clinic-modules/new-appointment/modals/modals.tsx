@@ -406,10 +406,9 @@ const Modals = ({ onPatientCreated }: ModalsProps) => {
                     </div>
                   </div>
                 </div>
-              </div>
                 {/* form end */}
               </div>
-            </div>
+              </div>
             <div className="modal-footer">
               <button
                 type="button"

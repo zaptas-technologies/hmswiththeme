@@ -336,7 +336,6 @@ const NewAppointment = () => {
                         onChange={(value) => setFormData({ ...formData, Status: value })}
                       />
                     </div>
-                  </div>
                   <div className="d-flex align-items-center justify-content-end mt-4">
                     <Link to={all_routes.appointments} className="btn btn-light me-2">
                       Cancel
@@ -357,6 +356,7 @@ const NewAppointment = () => {
           {/* row end */}
         </div>
         {/* End Content */}
+        </div>
         {/* Footer Start */}
         <div className="footer text-center bg-white p-2 border-top">
           <p className="text-dark mb-0">
