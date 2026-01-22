@@ -21,7 +21,7 @@ export const SidebarData = [
         submenuItems: [
           { label: "Admin Dashboard", link: routes.dashboard },
           { label: "Doctor Dashboard", link: routes.doctordashboard },
-          { label: "Patient Dashboard", link: routes.patientdashboard },
+          // { label: "Patient Dashboard", link: routes.patientdashboard },
         ],
       },
       // {
