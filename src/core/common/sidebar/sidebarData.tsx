@@ -273,8 +273,8 @@ export const SidebarData = [
         dot: true,
         submenuItems: [
           { label: "Patients", link: routes.patients },
-          { label: "Patient Details", link: routes.patientDetails },
-          { label: "Create Patient", link: routes.createPatient },
+          // { label: "Patient Details", link: routes.patientDetails },
+          // { label: "Create Patient", link: routes.createPatient },
         ],
       },
       {
