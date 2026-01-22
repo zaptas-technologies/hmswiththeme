@@ -270,8 +270,8 @@ export const updateDoctor: RequestHandler = async (req, res, next) => {
     const { id } = req.params;
     const updateData: Partial<DoctorRequest> = req.body;
 
-    // Don't allow updating id or _id
-    const { id: _ignoredId, _id: _ignoredMongoId, ...cleanUpdateData } = updateData;
+    // Extract password before cleaning (password is only for User account, not doctor record)
+    const { password, id: _ignoredId, _id: _ignoredMongoId, ...cleanUpdateData } = updateData;
 
     // Validate if updating required fields
     if (updateData.Email || updateData.Phone || updateData.Name_Designation || updateData.Status) {
@@ -295,17 +295,83 @@ export const updateDoctor: RequestHandler = async (req, res, next) => {
       return res.status(404).json({ message: "Doctor not found" });
     }
 
+    // Save old email before updating (needed for user account lookup)
+    const oldEmail = doctor.Email?.toLowerCase();
+
     // Check for email conflict if email is being updated
     if (updateData.Email && updateData.Email !== doctor.Email) {
       const existingByEmail = await Model.findOne({ Email: updateData.Email });
       if (existingByEmail && existingByEmail._id.toString() !== doctor._id.toString()) {
         return res.status(409).json({ message: "Doctor with this email already exists" });
       }
+      
+      // Also check if user account exists with new email
+      const existingUser = await User.findOne({ email: updateData.Email.toLowerCase() });
+      if (existingUser) {
+        return res.status(409).json({ message: "User account with this email already exists" });
+      }
     }
 
-    // Update doctor
+    // Update doctor (without password)
     Object.assign(doctor, cleanUpdateData);
     await doctor.save();
+
+    // Update user account if email or password is being changed
+    // Find user by old email (before update)
+    let user = oldEmail ? await User.findOne({ email: oldEmail }) : null;
+    
+    // If email is being updated and user not found by old email, try new email
+    if (!user && updateData.Email) {
+      user = await User.findOne({ email: updateData.Email.toLowerCase() });
+    }
+    
+    if (user) {
+      // Update existing user account
+      if (updateData.Email && updateData.Email !== doctor.Email) {
+        user.email = updateData.Email.toLowerCase();
+      }
+      
+      if (password) {
+        user.password = password; // Will be hashed by the pre-save hook
+      }
+      
+      // Update name and phone if they changed
+      const doctorName = updateData.Name_Designation?.split(" - ")[0] || updateData.Name_Designation || doctor.Name_Designation?.split(" - ")[0] || doctor.Name_Designation;
+      if (doctorName) {
+        user.name = doctorName;
+      }
+      
+      if (updateData.Phone) {
+        user.phone = updateData.Phone;
+      }
+      
+      if (updateData.Department) {
+        user.specialization = updateData.Department;
+      }
+      
+      await user.save();
+    } else if (password) {
+      // If user doesn't exist but password is provided, create user account
+      // This handles the case where doctor was created before user accounts were implemented
+      const newEmail = updateData.Email || doctor.Email;
+      if (newEmail) {
+        try {
+          await User.create({
+            email: newEmail.toLowerCase(),
+            password: password,
+            name: updateData.Name_Designation?.split(" - ")[0] || updateData.Name_Designation || doctor.Name_Designation?.split(" - ")[0] || doctor.Name_Designation,
+            phone: updateData.Phone || doctor.Phone,
+            role: "doctor",
+            specialization: updateData.Department || doctor.Department,
+          });
+        } catch (userErr: any) {
+          if (userErr.code === 11000) {
+            return res.status(409).json({ message: "User account with this email already exists" });
+          }
+          throw userErr;
+        }
+      }
+    }
 
     res.json(formatDoctorResponse(doctor));
   } catch (err: any) {

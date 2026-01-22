@@ -69,6 +69,7 @@ const EditDoctor = () => {
   
   const [phone, setPhone] = useState<string | undefined>();
   const [profileImage, setProfileImage] = useState<string>("");
+  const [password, setPassword] = useState<string>("");
 
   const getModalContainer = () => {
     const modalElement = document.getElementById("modal-datepicker");
@@ -141,14 +142,20 @@ const EditDoctor = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!doctorId) {
-      alert("Doctor ID is required");
-      return;
-    }
+      if (!doctorId) {
+        alert("Doctor ID is required");
+        return;
+      }
 
-    try {
-      setSaving(true);
-      setError(null);
+      // Validate password if provided
+      if (password && password.length < 6) {
+        alert("Password must be at least 6 characters long");
+        return;
+      }
+
+      try {
+        setSaving(true);
+        setError(null);
 
       // Only include fields that have values to avoid validation errors
       const updateData: Partial<Doctor> = {
@@ -156,6 +163,7 @@ const EditDoctor = () => {
         ...(formData.username && { username: formData.username }),
         ...((phone || formData.Phone) && { Phone: phone || formData.Phone }),
         ...(formData.Email && { Email: formData.Email }),
+        ...(password && { password }), // Include password if provided (for updating user account)
         ...(formData.dob && { dob: formData.dob.format("DD-MM-YYYY") }),
         ...(formData.yearOfExperience && { yearOfExperience: formData.yearOfExperience }),
         ...(formData.Department && { Department: formData.Department }),
@@ -385,6 +393,23 @@ const EditDoctor = () => {
                                   onChange={(e) => setFormData({ ...formData, Email: e.target.value })}
                                   required
                                 />
+                              </div>
+                            </div>
+                            {/* end col*/}
+                            <div className="col-lg-6">
+                              <div className="mb-3">
+                                <label className="form-label">
+                                  New Password
+                                </label>
+                                <input
+                                  type="password"
+                                  className="form-control"
+                                  value={password}
+                                  onChange={(e) => setPassword(e.target.value)}
+                                  minLength={6}
+                                  placeholder="Leave blank to keep current password"
+                                />
+                                <small className="text-muted">Enter new password only if you want to change it (minimum 6 characters)</small>
                               </div>
                             </div>
                             {/* end col*/}
