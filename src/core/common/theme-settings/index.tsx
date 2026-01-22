@@ -44,7 +44,7 @@ const ThemeSettings = () => {
       >
         <div className="offcanvas-header d-flex align-items-center justify-content-between bg-primary">
           <div>
-            <h5 className="text-white mb-0">Theme Customizer</h5>
+            <h5 className="text-white mb-0">View Customizer</h5>
           </div>
           <button
             type="button"
@@ -1023,14 +1023,14 @@ const ThemeSettings = () => {
               </Link>
             </div>
             <div className="col-6">
-              <Link
+              {/* <Link
                 to="#"
                 className="btn btn-primary w-100"
                 data-bs-dismiss="offcanvas"
               >
                 <i className="ti ti-shopping-cart-plus me-1" />
                 Buy Product
-              </Link>
+              </Link> */}
             </div>
           </div>
         </div>
