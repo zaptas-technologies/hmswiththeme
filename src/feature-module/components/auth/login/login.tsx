@@ -152,12 +152,12 @@ const Login = () => {
                           </div>
                         </div>
                         <div className="text-end">
-                          <Link
+                          {/* <Link
                             to={all_routes.forgotpasswordbasic}
                             className="text-danger"
                           >
                             Forgot Password?
-                          </Link>
+                          </Link> */}
                         </div>
                       </div>
                       <div className="mb-2">
@@ -169,7 +169,7 @@ const Login = () => {
                           {loading ? "Signing in..." : "Login"}
                         </button>
                       </div>
-                      <div className="login-or position-relative mb-3">
+                      {/* <div className="login-or position-relative mb-3">
                         <span className="span-or">OR</span>
                       </div>
                       <div className="mb-3">
@@ -220,7 +220,7 @@ const Login = () => {
                             Register
                           </Link>
                         </h6>
-                      </div>
+                      </div> */}
                     </div>
                     {/* end card body */}
                   </div>
