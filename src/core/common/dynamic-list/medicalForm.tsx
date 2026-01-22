@@ -1,24 +1,50 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Medicine_Name, Frequency, Timing } from "../selectOption";
 import CommonSelect from "../common-select/commonSelect";
 
-interface MedicationItem {
+export interface MedicationItem {
   id: number;
-  dosageMg: string;
-  dosageM: string;
-  instruction: string;
+  medicine?: string;
+  dosage?: string;
+  dosageMg?: string;
+  dosageM?: string;
+  frequency?: string;
+  timing?: string;
+  instruction?: string;
+  duration?: string;
 }
 
-const MedicalForm: React.FC = () => {
-  const [medications, setMedications] = useState<MedicationItem[]>([
-    {
-      id: Date.now(),
-      dosageMg: "",
-      dosageM: "",
-      instruction: "",
-    },
-  ]);
+interface MedicalFormProps {
+  value?: MedicationItem[];
+  onChange?: (medications: MedicationItem[]) => void;
+}
+
+const MedicalForm: React.FC<MedicalFormProps> = ({ value, onChange }) => {
+  const [medications, setMedications] = useState<MedicationItem[]>(
+    value || [
+      {
+        id: Date.now(),
+        dosageMg: "",
+        dosageM: "",
+        instruction: "",
+      },
+    ]
+  );
+
+  // Sync with external value prop
+  useEffect(() => {
+    if (value) {
+      setMedications(value);
+    }
+  }, [value]);
+
+  // Notify parent of changes
+  useEffect(() => {
+    if (onChange) {
+      onChange(medications);
+    }
+  }, [medications, onChange]);
 
   // Add a new medication row above last
   const handleAddAboveLast = () => {
@@ -43,13 +69,25 @@ const MedicalForm: React.FC = () => {
   // Handlers for controlled inputs
   const handleDosageMgChange = (id: number, value: string) => {
     setMedications((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, dosageMg: value } : item))
+      prev.map((item) => {
+        if (item.id === id) {
+          const dosage = value ? `${value}mg` : (item.dosageM ? `${item.dosageM}m` : "");
+          return { ...item, dosageMg: value, dosage };
+        }
+        return item;
+      })
     );
   };
 
   const handleDosageMChange = (id: number, value: string) => {
     setMedications((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, dosageM: value } : item))
+      prev.map((item) => {
+        if (item.id === id) {
+          const dosage = value ? `${value}m` : (item.dosageMg ? `${item.dosageMg}mg` : "");
+          return { ...item, dosageM: value, dosage };
+        }
+        return item;
+      })
     );
   };
 
@@ -80,7 +118,14 @@ const MedicalForm: React.FC = () => {
                     <CommonSelect
                       options={Medicine_Name}
                       className="select"
-                      defaultValue={Medicine_Name[0]}
+                      value={item.medicine || Medicine_Name[0]?.value}
+                      onChange={(value) => {
+                        setMedications((prev) =>
+                          prev.map((med) =>
+                            med.id === item.id ? { ...med, medicine: value } : med
+                          )
+                        );
+                      }}
                     />
                   </div>
                 </div>
@@ -138,7 +183,14 @@ const MedicalForm: React.FC = () => {
                     <CommonSelect
                       options={Frequency}
                       className="select"
-                      defaultValue={Frequency[0]}
+                      value={item.frequency || Frequency[0]?.value}
+                      onChange={(value) => {
+                        setMedications((prev) =>
+                          prev.map((med) =>
+                            med.id === item.id ? { ...med, frequency: value } : med
+                          )
+                        );
+                      }}
                     />
                   </div>
                 </div>
@@ -152,7 +204,14 @@ const MedicalForm: React.FC = () => {
                     <CommonSelect
                       options={Timing}
                       className="select"
-                      defaultValue={Timing[0]}
+                      value={item.timing || Timing[0]?.value}
+                      onChange={(value) => {
+                        setMedications((prev) =>
+                          prev.map((med) =>
+                            med.id === item.id ? { ...med, timing: value } : med
+                          )
+                        );
+                      }}
                     />
                   </div>
                 </div>

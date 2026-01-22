@@ -44,6 +44,20 @@ const OnlineConsultations = () => {
     emptyStomach: "",
   });
 
+  const [medications, setMedications] = useState<Array<{
+    medicine: string;
+    dosage?: string;
+    frequency?: string;
+    duration?: string;
+  }>>([]);
+
+  const [invoice, setInvoice] = useState<Array<{
+    id: number;
+    service: string;
+    amount: string;
+    paymentMode?: string;
+  }>>([{ id: Date.now(), service: "", amount: "" }]);
+
   // Fetch appointment and patient data
   useEffect(() => {
     const loadData = async () => {
@@ -66,6 +80,21 @@ const OnlineConsultations = () => {
         if (response.appointment.FollowUp) {
           setFollowUp(response.appointment.FollowUp);
         }
+        if (response.appointment.Medications && Array.isArray(response.appointment.Medications)) {
+          setMedications(response.appointment.Medications);
+        }
+        if (response.appointment.Invoice && Array.isArray(response.appointment.Invoice)) {
+          // Convert invoice data to match InvoiceList format
+          const invoiceData = response.appointment.Invoice.map((inv: any, idx: number) => ({
+            id: Date.now() + idx,
+            service: inv.item || inv.service || "",
+            amount: inv.price?.toString() || inv.amount?.toString() || inv.total?.toString() || "",
+            paymentMode: inv.paymentMode || "",
+          }));
+          if (invoiceData.length > 0) {
+            setInvoice(invoiceData);
+          }
+        }
       } catch (err: any) {
         setError(err?.response?.data?.message || err?.message || "Failed to load appointment data");
         // eslint-disable-next-line no-console
@@ -87,17 +116,65 @@ const OnlineConsultations = () => {
 
     try {
       setSaving(true);
+      // Format medications for API
+      const formattedMedications = medications
+        .filter((med) => med.medicine && med.medicine.trim() !== "")
+        .map((med) => ({
+          medicine: med.medicine,
+          dosage: med.dosage || "",
+          frequency: med.frequency || "",
+          duration: med.duration || "",
+        }));
+
+      // Get medications from state or existing appointment data
+      const medicationsToSave = formattedMedications.length > 0 
+        ? formattedMedications 
+        : (data.appointment.Medications || []);
+
+      // eslint-disable-next-line no-console
+      console.log("[Frontend] Medications state:", {
+        medicationsState: medications,
+        formattedMedications,
+        existingMedications: data.appointment.Medications,
+        medicationsToSave,
+        medicationsCount: medicationsToSave.length,
+      });
+
+      // Format invoice for API - convert from InvoiceList format to API format
+      const formattedInvoice = invoice
+        .filter((inv) => inv.service && inv.service.trim() !== "" && inv.amount && inv.amount.trim() !== "")
+        .map((inv) => {
+          const price = parseFloat(inv.amount) || 0;
+          return {
+            item: inv.service,
+            quantity: 1,
+            price: price,
+            total: price,
+            paymentMode: inv.paymentMode || "",
+          };
+        });
+
       const consultationData: ConsultationData = {
         appointmentId,
         vitals,
         complaints: data.appointment.Complaints || [],
         diagnosis: data.appointment.Diagnosis || [],
-        medications: data.appointment.Medications || [],
+        medications: medicationsToSave,
         advice: data.appointment.Advice || [],
         investigations: data.appointment.Investigations || [],
         followUp,
-        invoice: data.appointment.Invoice || [],
+        invoice: formattedInvoice.length > 0 ? formattedInvoice : [],
       };
+
+      // eslint-disable-next-line no-console
+      console.log("[Frontend] Saving consultation data:", {
+        appointmentId,
+        medicationsCount: consultationData.medications?.length || 0,
+        medications: consultationData.medications,
+        invoiceItems: invoice,
+        formattedInvoice,
+        completeAppointment: true,
+      });
 
       await saveConsultation(appointmentId, consultationData, true);
       alert("Appointment completed successfully!");
@@ -160,7 +237,7 @@ const OnlineConsultations = () => {
           {/* Start Page Header */}
           <div className="d-flex align-items-sm-center flex-sm-row flex-column gap-2 pb-3 mb-3 border-1 border-bottom">
             <div className="flex-grow-1">
-              <h4 className="fw-bold mb-0"> Online Consultations </h4>
+              <h4 className="fw-bold mb-0">  Consultatiosns </h4>
             </div>
             <div className="text-end d-flex">
               {/* dropdown*/}
@@ -481,7 +558,25 @@ const OnlineConsultations = () => {
             </div>
             {/* end card header */}
             <div className="card-body pb-0">
-              <MedicalForm />
+              <MedicalForm
+                value={medications.map((med, idx) => ({
+                  id: idx,
+                  medicine: med.medicine,
+                  dosage: med.dosage,
+                  frequency: med.frequency,
+                  duration: med.duration,
+                }))}
+                onChange={(meds) => {
+                  setMedications(
+                    meds.map((med) => ({
+                      medicine: med.medicine || "",
+                      dosage: med.dosage || med.dosageMg || med.dosageM || "",
+                      frequency: med.frequency || "",
+                      duration: med.duration || "",
+                    }))
+                  );
+                }}
+              />
             </div>
             {/* end card-body */}
           </div>
@@ -566,7 +661,10 @@ const OnlineConsultations = () => {
             </div>
             {/* end card header */}
             <div className="card-body">
-              <InvoiceList />
+              <InvoiceList
+                value={invoice}
+                onChange={(items) => setInvoice(items)}
+              />
             </div>
             {/* end card-body */}
           </div>

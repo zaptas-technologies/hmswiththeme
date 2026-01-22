@@ -1,21 +1,50 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import CommonSelect from "../common-select/commonSelect";
 import { Payment_Mode, Service } from "../selectOption";
 
-const InvoiceList: React.FC = () => {
-  const [invoiceItems, setInvoiceItems] = useState([
-    { id: Date.now(), service: "", amount: "" },
-  ]);
+export interface InvoiceItem {
+  id: number;
+  service: string;
+  amount: string;
+  paymentMode?: string;
+}
+
+interface InvoiceListProps {
+  value?: InvoiceItem[];
+  onChange?: (items: InvoiceItem[]) => void;
+}
+
+const InvoiceList: React.FC<InvoiceListProps> = ({ value, onChange }) => {
+  const [invoiceItems, setInvoiceItems] = useState<InvoiceItem[]>(
+    value || [{ id: Date.now(), service: "", amount: "" }]
+  );
+  const [paymentMode, setPaymentMode] = useState<string>(Payment_Mode[0]?.value || "");
+
+  // Sync with external value prop
+  useEffect(() => {
+    if (value) {
+      setInvoiceItems(value);
+    }
+  }, [value]);
+
+  // Notify parent of changes
+  useEffect(() => {
+    if (onChange) {
+      onChange(invoiceItems);
+    }
+  }, [invoiceItems, onChange]);
 
   const handleAddInvoice = () => {
     const newItem = { id: Date.now() + Math.random(), service: "", amount: "" };
     const last = invoiceItems[invoiceItems.length - 1];
-    setInvoiceItems([...invoiceItems.slice(0, -1), newItem, last]);
+    const updated = [...invoiceItems.slice(0, -1), newItem, last];
+    setInvoiceItems(updated);
   };
 
   const handleRemoveInvoice = (id: number) => {
-    setInvoiceItems((prev) => prev.filter((item) => item.id !== id));
+    const updated = invoiceItems.filter((item) => item.id !== id);
+    setInvoiceItems(updated);
   };
 
   const handleChangeInvoice = (
@@ -23,11 +52,10 @@ const InvoiceList: React.FC = () => {
     field: "service" | "amount",
     value: string
   ) => {
-    setInvoiceItems((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, [field]: value } : item
-      )
+    const updated = invoiceItems.map((item) =>
+      item.id === id ? { ...item, [field]: value } : item
     );
+    setInvoiceItems(updated);
   };
 
   return (
@@ -47,8 +75,8 @@ const InvoiceList: React.FC = () => {
                 <CommonSelect
                   options={Service}
                   className="select"
-                  defaultValue={Service[0]}
-                 
+                  value={item.service || Service[0]?.value}
+                  onChange={(value) => handleChangeInvoice(item.id, "service", value)}
                 />
               </div>
             </div>
@@ -125,7 +153,14 @@ const InvoiceList: React.FC = () => {
             <CommonSelect
               options={Payment_Mode}
               className="select"
-              defaultValue={Payment_Mode[0]}
+              value={paymentMode}
+              onChange={(value) => {
+                setPaymentMode(value);
+                // Update all items with payment mode if needed
+                if (onChange) {
+                  onChange(invoiceItems.map(item => ({ ...item, paymentMode: value })));
+                }
+              }}
             />
           </div>
         </div>
