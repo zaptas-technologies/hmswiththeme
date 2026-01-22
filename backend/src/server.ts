@@ -18,12 +18,35 @@ dotenv.config();
 
 const start = async () => {
   const app = express();
-  app.use(
-    cors({
-      origin: true,
-      credentials: true,
-    })
-  );
+  
+  // Enhanced CORS configuration to handle all HTTP methods including PATCH
+  const corsOptions = {
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+      // Allow all origins for development
+      callback(null, true);
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-Requested-With",
+      "x-user-id",
+      "Accept",
+      "Origin",
+    ],
+    exposedHeaders: ["Content-Type", "Authorization"],
+    preflightContinue: false,
+    optionsSuccessStatus: 204,
+    maxAge: 86400, // 24 hours
+  };
+  
+  // Apply CORS to all routes - this must be before other middleware
+  app.use(cors(corsOptions));
+  
+  // Handle preflight requests explicitly for all routes
+  app.options("*", cors(corsOptions));
+  
   app.use(express.json({ limit: "1mb" }));
   app.use(morgan("dev"));
 

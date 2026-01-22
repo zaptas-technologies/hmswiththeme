@@ -91,3 +91,98 @@ export const fetchDashboard = async (): Promise<DashboardResponse> => {
   const { data } = await api.get<DashboardResponse>("/dashboard");
   return data;
 };
+
+// Admin Dashboard Types
+export type AdminStats = {
+  doctors: { count: number; change: number; sparkline: number[] };
+  patients: { count: number; change: number; sparkline: number[] };
+  appointments: { count: number; change: number; sparkline: number[] };
+  revenue: { amount: number; change: number; sparkline: number[] };
+};
+
+export type AppointmentStatistics = {
+  all: number;
+  cancelled: number;
+  reschedule: number;
+  completed: number;
+};
+
+export type PopularDoctor = {
+  name: string;
+  role: string;
+  img: string;
+  bookings: number;
+};
+
+export type RecentAppointmentItem = {
+  id: string;
+  doctor: string;
+  doctorImg: string;
+  patient: string;
+  patientImg: string;
+  dateTime: string;
+  mode: string;
+  status: string;
+};
+
+export type TopDepartment = {
+  name: string;
+  count: number;
+};
+
+export type ScheduleStats = {
+  available: number;
+  unavailable: number;
+  leave: number;
+};
+
+export type IncomeByTreatment = {
+  department: string;
+  appointments: number;
+  revenue: number;
+};
+
+export type TopPatientItem = {
+  name: string;
+  phone: string;
+  img: string;
+  appointments: number;
+  totalPaid: number;
+};
+
+export type RecentTransaction = {
+  id: string;
+  type: string;
+  invoice: string;
+  amount: number;
+  date: string;
+};
+
+export type LeaveRequest = {
+  id: string;
+  doctorName: string;
+  doctorImg: string;
+  days: number;
+  reason: string;
+  startDate: string;
+  endDate: string;
+};
+
+export type AdminDashboardResponse = {
+  stats: AdminStats;
+  appointmentStatistics: AppointmentStatistics;
+  popularDoctors: PopularDoctor[];
+  recentAppointments: RecentAppointmentItem[];
+  topDepartments: TopDepartment[];
+  scheduleStats: ScheduleStats;
+  incomeByTreatment: IncomeByTreatment[];
+  topPatients: TopPatientItem[];
+  recentTransactions: RecentTransaction[];
+  leaveRequests: LeaveRequest[];
+  appointmentTrend: AppointmentTrend;
+};
+
+export const fetchAdminDashboard = async (): Promise<AdminDashboardResponse> => {
+  const { data } = await api.get<AdminDashboardResponse>("/dashboard/admin");
+  return data;
+};

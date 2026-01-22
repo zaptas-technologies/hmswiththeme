@@ -1,13 +1,32 @@
 import { Link } from "react-router";
 import { all_routes } from "../../../../routes/all_routes";
 import Datatable from "../../../../../core/common/dataTable";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import ImageWithBasePath from "../../../../../core/imageWithBasePath";
-import { PatientListData } from "../../../../../core/json/patientListData";
 import SearchInput from "../../../../../core/common/dataTable/dataTableSearch";
+import { fetchPatients, type Patient } from "../../../../../api/patients";
+import { fetchDoctors, type Doctor } from "../../../../../api/doctors";
 
 const Patients = () => {
-  const data = PatientListData;
+  const [data, setData] = useState<Patient[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [totalPatients, setTotalPatients] = useState(0);
+  const [searchText, setSearchText] = useState<string>("");
+  const [filters, setFilters] = useState({
+    status: "",
+    doctor: "",
+    date: "",
+  });
+  const [sortBy, setSortBy] = useState("Recent");
+  const [page] = useState(1);
+  const [limit] = useState(100);
+  
+  // For filter dropdowns
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [selectedPatients, setSelectedPatients] = useState<string[]>([]);
+  const [selectedDoctors, setSelectedDoctors] = useState<string[]>([]);
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const columns = [
     {
       title: "Patient",
@@ -19,7 +38,7 @@ const Patients = () => {
             className="avatar avatar-md me-2"
           >
             <ImageWithBasePath
-              src={`assets/img/users/${render.Patient_img}`}
+              src={`assets/img/users/${render.Patient_img || "user-33.jpg"}`}
               alt="product"
               className="rounded-circle"
             />
@@ -52,7 +71,7 @@ const Patients = () => {
             className="avatar me-2 flex-shrink-0"
           >
             <ImageWithBasePath
-              src={`assets/img/doctors/${render.Doctor_img}`}
+              src={`assets/img/doctors/${render.Doctor_img || "doctor-01.jpg"}`}
               alt="img"
               className="rounded-circle"
             />
@@ -72,12 +91,14 @@ const Patients = () => {
     {
       title: "Address",
       dataIndex: "Address",
-      sorter: (a: any, b: any) => a.Address.length - b.Address.length,
+      render: (text: any) => text || "-",
+      sorter: (a: any, b: any) => (a.Address || "").length - (b.Address || "").length,
     },
     {
       title: "Last Visit",
       dataIndex: "Last_Visit",
-      sorter: (a: any, b: any) => a.Last_Visit.length - b.Last_Visit.length,
+      render: (text: any) => text || "-",
+      sorter: (a: any, b: any) => (a.Last_Visit || "").length - (b.Last_Visit || "").length,
     },
     {
       title: "Status",
@@ -146,10 +167,85 @@ const Patients = () => {
       sorter: (a: any, b: any) => a.Status.length - b.Status.length,
     },
   ];
-  const [searchText, setSearchText] = useState<string>("");
+  // Load doctors for filter dropdown
+  useEffect(() => {
+    const loadDoctors = async () => {
+      try {
+        const doctorsRes = await fetchDoctors({ limit: 100, sort: "Name_Designation" });
+        const doctorsList = Array.isArray(doctorsRes) ? doctorsRes : doctorsRes.data || [];
+        setDoctors(doctorsList);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error("Failed to load doctors:", err);
+      }
+    };
+    loadDoctors();
+  }, []);
+
+  // Load patients data
+  const loadPatients = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const sortParam = sortBy === "Recent" ? "-createdAt" : "createdAt";
+      
+      const response = await fetchPatients({
+        page,
+        limit: 100, // Get more data for client-side filtering
+        sort: sortParam,
+        search: searchText,
+        status: selectedStatuses.length > 0 ? selectedStatuses[0] : filters.status,
+      });
+
+      // Apply additional client-side filters if needed
+      let filteredData = response.data;
+      
+      if (selectedDoctors.length > 0) {
+        filteredData = filteredData.filter((p) =>
+          selectedDoctors.some((doc) => p.Doctor?.includes(doc))
+        );
+      }
+      
+      if (selectedPatients.length > 0) {
+        filteredData = filteredData.filter((p) =>
+          selectedPatients.includes(p.Patient)
+        );
+      }
+
+      setData(filteredData);
+      setTotalPatients(response.pagination.total);
+    } catch (err: any) {
+      setError(err?.response?.data?.message || err?.message || "Failed to load patients");
+      // eslint-disable-next-line no-console
+      console.error("Failed to load patients:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, limit, sortBy, searchText, filters, selectedDoctors, selectedPatients, selectedStatuses]);
+
+  // Initial load and when dependencies change
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      loadPatients();
+    }, searchText ? 500 : 0); // Debounce only for search
+
+    return () => clearTimeout(timer);
+  }, [loadPatients, searchText, sortBy, selectedDoctors, selectedPatients, selectedStatuses]);
 
   const handleSearch = (value: string) => {
     setSearchText(value);
+  };
+
+  const handleClearFilters = () => {
+    setFilters({ status: "", doctor: "", date: "" });
+    setSelectedPatients([]);
+    setSelectedDoctors([]);
+    setSelectedStatuses([]);
+  };
+
+  const handleSortChange = (sort: string) => {
+    setSortBy(sort);
   };
 
   return (
@@ -166,7 +262,7 @@ const Patients = () => {
               <h4 className="fw-bold mb-0">
                 Patients List
                 <span className="badge badge-soft-primary fw-medium border py-1 px-2 border-primary fs-13 ms-1">
-                  Total Patients : 565
+                  Total Patients : {loading ? "..." : totalPatients}
                 </span>
               </h4>
             </div>
@@ -235,23 +331,30 @@ const Patients = () => {
               <div className="dropdown me-2">
                 <Link
                   to="#"
-                  className="bg-white border rounded btn btn-md text-dark fs-14 py-1 align-items-center d-flex fw-normal"
+                  className={`bg-white border rounded btn btn-md text-dark fs-14 py-1 align-items-center d-flex fw-normal ${selectedPatients.length > 0 || selectedDoctors.length > 0 || selectedStatuses.length > 0 ? "border-primary" : ""}`}
                   data-bs-toggle="dropdown"
                   data-bs-auto-close="outside"
                 >
                   <i className="ti ti-filter text-gray-5 me-1" />
                   Filters
+                  {(selectedPatients.length > 0 || selectedDoctors.length > 0 || selectedStatuses.length > 0) && (
+                    <span className="badge bg-primary ms-2">{selectedPatients.length + selectedDoctors.length + selectedStatuses.length}</span>
+                  )}
                 </Link>
                 <div
                   className="dropdown-menu dropdown-lg dropdown-menu-end filter-dropdown p-0"
                   id="filter-dropdown"
                 >
-                  <div className="d-flex align-items-center justify-content-between border-bottom filter-header">
+                    <div className="d-flex align-items-center justify-content-between border-bottom filter-header">
                     <h4 className="mb-0 fw-bold">Filter</h4>
                     <div className="d-flex align-items-center">
                       <Link
                         to="#"
                         className="link-danger text-decoration-underline"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          handleClearFilters();
+                        }}
                       >
                         Clear All
                       </Link>
@@ -289,71 +392,33 @@ const Patients = () => {
                                 />
                               </div>
                             </div>
-                            <ul className="mb-3">
-                              <li className="mb-1">
-                                <label className="dropdown-item px-2 d-flex align-items-center text-dark">
-                                  <input
-                                    className="form-check-input m-0 me-2"
-                                    type="checkbox"
-                                  />
-                                  <span className="avatar avatar-xs rounded-circle me-2">
-                                    <ImageWithBasePath
-                                      src="assets/img/users/user-33.jpg"
-                                      className="flex-shrink-0 rounded-circle"
-                                      alt="img"
+                            <ul className="mb-3" style={{ maxHeight: "200px", overflowY: "auto" }}>
+                              {data.slice(0, 20).map((patient) => (
+                                <li key={patient._id || patient.id} className="mb-1">
+                                  <label className="dropdown-item px-2 d-flex align-items-center text-dark">
+                                    <input
+                                      className="form-check-input m-0 me-2"
+                                      type="checkbox"
+                                      checked={selectedPatients.includes(patient.Patient)}
+                                      onChange={(e) => {
+                                        if (e.target.checked) {
+                                          setSelectedPatients([...selectedPatients, patient.Patient]);
+                                        } else {
+                                          setSelectedPatients(selectedPatients.filter((p) => p !== patient.Patient));
+                                        }
+                                      }}
                                     />
-                                  </span>
-                                  Alberto Ripley
-                                </label>
-                              </li>
-                              <li className="mb-1">
-                                <label className="dropdown-item px-2 d-flex align-items-center text-dark">
-                                  <input
-                                    className="form-check-input m-0 me-2"
-                                    type="checkbox"
-                                  />
-                                  <span className="avatar avatar-xs rounded-circle me-2">
-                                    <ImageWithBasePath
-                                      src="assets/img/users/user-12.jpg"
-                                      className="flex-shrink-0 rounded-circle"
-                                      alt="img"
-                                    />
-                                  </span>
-                                  Bernard Griffith
-                                </label>
-                              </li>
-                              <li className="mb-1">
-                                <label className="dropdown-item px-2 d-flex align-items-center text-dark">
-                                  <input
-                                    className="form-check-input m-0 me-2"
-                                    type="checkbox"
-                                  />
-                                  <span className="avatar avatar-xs rounded-circle me-2">
-                                    <ImageWithBasePath
-                                      src="assets/img/users/user-02.jpg"
-                                      className="flex-shrink-0 rounded-circle"
-                                      alt="img"
-                                    />
-                                  </span>
-                                  Carol Lam
-                                </label>
-                              </li>
-                              <li>
-                                <label className="dropdown-item px-2 d-flex align-items-center text-dark">
-                                  <input
-                                    className="form-check-input m-0 me-2"
-                                    type="checkbox"
-                                  />
-                                  <span className="avatar avatar-xs rounded-circle me-2">
-                                    <ImageWithBasePath
-                                      src="assets/img/users/user-08.jpg"
-                                      className="flex-shrink-0 rounded-circle"
-                                      alt="img"
-                                    />
-                                  </span>
-                                  Ezra Belcher
-                                </label>
-                              </li>
+                                    <span className="avatar avatar-xs rounded-circle me-2">
+                                      <ImageWithBasePath
+                                        src={`assets/img/users/${patient.Patient_img || "user-33.jpg"}`}
+                                        className="flex-shrink-0 rounded-circle"
+                                        alt="img"
+                                      />
+                                    </span>
+                                    {patient.Patient}
+                                  </label>
+                                </li>
+                              ))}
                             </ul>
                             <div className="row g-2">
                               <div className="col-6">
@@ -403,87 +468,34 @@ const Patients = () => {
                                 />
                               </div>
                             </div>
-                            <ul className="mb-3">
-                              <li className="mb-1">
-                                <label className="dropdown-item px-2 d-flex align-items-center text-dark">
-                                  <input
-                                    className="form-check-input m-0 me-2"
-                                    type="checkbox"
-                                  />
-                                  <span className="avatar avatar-xs rounded-circle me-2">
-                                    <ImageWithBasePath
-                                      src="assets/img/doctors/doctor-01.jpg"
-                                      className="flex-shrink-0 rounded-circle"
-                                      alt="img"
+                            <ul className="mb-3" style={{ maxHeight: "200px", overflowY: "auto" }}>
+                              {doctors.slice(0, 20).map((doctor) => (
+                                <li key={doctor._id || doctor.id} className="mb-1">
+                                  <label className="dropdown-item px-2 d-flex align-items-center text-dark">
+                                    <input
+                                      className="form-check-input m-0 me-2"
+                                      type="checkbox"
+                                      checked={selectedDoctors.includes(doctor.Name_Designation || doctor.Doctor || "")}
+                                      onChange={(e) => {
+                                        const doctorName = doctor.Name_Designation || doctor.Doctor || "";
+                                        if (e.target.checked) {
+                                          setSelectedDoctors([...selectedDoctors, doctorName]);
+                                        } else {
+                                          setSelectedDoctors(selectedDoctors.filter((d) => d !== doctorName));
+                                        }
+                                      }}
                                     />
-                                  </span>
-                                  Dr. Mick Thompson
-                                </label>
-                              </li>
-                              <li className="mb-1">
-                                <label className="dropdown-item px-2 d-flex align-items-center text-dark">
-                                  <input
-                                    className="form-check-input m-0 me-2"
-                                    type="checkbox"
-                                  />
-                                  <span className="avatar avatar-xs rounded-circle me-2">
-                                    <ImageWithBasePath
-                                      src="assets/img/doctors/doctor-02.jpg"
-                                      className="flex-shrink-0 rounded-circle"
-                                      alt="img"
-                                    />
-                                  </span>
-                                  Dr. Sarah Johnson
-                                </label>
-                              </li>
-                              <li className="mb-1">
-                                <label className="dropdown-item px-2 d-flex align-items-center text-dark">
-                                  <input
-                                    className="form-check-input m-0 me-2"
-                                    type="checkbox"
-                                  />
-                                  <span className="avatar avatar-xs rounded-circle me-2">
-                                    <ImageWithBasePath
-                                      src="assets/img/doctors/doctor-03.jpg"
-                                      className="flex-shrink-0 rounded-circle"
-                                      alt="img"
-                                    />
-                                  </span>
-                                  Dr. Emily Carter
-                                </label>
-                              </li>
-                              <li className="mb-1">
-                                <label className="dropdown-item px-2 d-flex align-items-center text-dark">
-                                  <input
-                                    className="form-check-input m-0 me-2"
-                                    type="checkbox"
-                                  />
-                                  <span className="avatar avatar-xs rounded-circle me-2">
-                                    <ImageWithBasePath
-                                      src="assets/img/doctors/doctor-04.jpg"
-                                      className="flex-shrink-0 rounded-circle"
-                                      alt="img"
-                                    />
-                                  </span>
-                                  Dr. David Lee
-                                </label>
-                              </li>
-                              <li className="mb-0">
-                                <label className="dropdown-item px-2 d-flex align-items-center text-dark">
-                                  <input
-                                    className="form-check-input m-0 me-2"
-                                    type="checkbox"
-                                  />
-                                  <span className="avatar avatar-xs rounded-circle me-2">
-                                    <ImageWithBasePath
-                                      src="assets/img/doctors/doctor-05.jpg"
-                                      className="flex-shrink-0 rounded-circle"
-                                      alt="img"
-                                    />
-                                  </span>
-                                  Dr. Anna Kim
-                                </label>
-                              </li>
+                                    <span className="avatar avatar-xs rounded-circle me-2">
+                                      <ImageWithBasePath
+                                        src={`assets/img/doctors/${doctor.img || "doctor-01.jpg"}`}
+                                        className="flex-shrink-0 rounded-circle"
+                                        alt="img"
+                                      />
+                                    </span>
+                                    {doctor.Name_Designation || doctor.Doctor}
+                                  </label>
+                                </li>
+                              ))}
                             </ul>
                             <div className="row g-2">
                               <div className="col-6">
@@ -682,6 +694,14 @@ const Patients = () => {
                                   <input
                                     className="form-check-input m-0 me-2"
                                     type="checkbox"
+                                    checked={selectedStatuses.includes("Available")}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setSelectedStatuses([...selectedStatuses.filter((s) => s !== "Unavailable"), "Available"]);
+                                      } else {
+                                        setSelectedStatuses(selectedStatuses.filter((s) => s !== "Available"));
+                                      }
+                                    }}
                                   />
                                   Available
                                 </label>
@@ -691,6 +711,14 @@ const Patients = () => {
                                   <input
                                     className="form-check-input m-0 me-2"
                                     type="checkbox"
+                                    checked={selectedStatuses.includes("Unavailable")}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setSelectedStatuses([...selectedStatuses.filter((s) => s !== "Available"), "Unavailable"]);
+                                      } else {
+                                        setSelectedStatuses(selectedStatuses.filter((s) => s !== "Unavailable"));
+                                      }
+                                    }}
                                   />
                                   Unavailable
                                 </label>
@@ -726,6 +754,10 @@ const Patients = () => {
                       <button
                         type="submit"
                         className="btn btn-primary btn-md fw-medium"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          loadPatients();
+                        }}
                       >
                         Filter
                       </button>
@@ -739,16 +771,30 @@ const Patients = () => {
                   className="dropdown-toggle btn bg-white btn-md d-inline-flex align-items-center fw-normal rounded border text-dark px-2 py-1 fs-14"
                   data-bs-toggle="dropdown"
                 >
-                  <span className="me-1"> Sort By : </span> Recent
+                  <span className="me-1"> Sort By : </span> {sortBy}
                 </Link>
                 <ul className="dropdown-menu  dropdown-menu-end p-2">
                   <li>
-                    <Link to="#" className="dropdown-item rounded-1">
+                    <Link
+                      to="#"
+                      className="dropdown-item rounded-1"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleSortChange("Recent");
+                      }}
+                    >
                       Recent
                     </Link>
                   </li>
                   <li>
-                    <Link to="#" className="dropdown-item rounded-1">
+                    <Link
+                      to="#"
+                      className="dropdown-item rounded-1"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleSortChange("Oldest");
+                      }}
+                    >
                       Oldest
                     </Link>
                   </li>
@@ -758,14 +804,29 @@ const Patients = () => {
           </div>
           {/*  End Filter */}
           {/*  Start Table */}
-          <div className="table-responsive">
-            <Datatable
-              columns={columns}
-              dataSource={data}
-              Selection={false}
-              searchText={searchText}
-            />
-          </div>
+          {loading ? (
+            <div className="d-flex align-items-center justify-content-center" style={{ minHeight: "400px" }}>
+              <div className="text-center">
+                <div className="spinner-border text-primary" role="status">
+                  <span className="visually-hidden">Loading...</span>
+                </div>
+                <p className="mt-3">Loading patients...</p>
+              </div>
+            </div>
+          ) : error ? (
+            <div className="alert alert-danger" role="alert">
+              {error}
+            </div>
+          ) : (
+            <div className="table-responsive">
+              <Datatable
+                columns={columns}
+                dataSource={data}
+                Selection={false}
+                searchText={""}
+              />
+            </div>
+          )}
           {/*  End Table */}
         </div>
         {/* End Content */}

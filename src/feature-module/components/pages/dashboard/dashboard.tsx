@@ -1,7 +1,7 @@
 import { Link } from "react-router";
 import ImageWithBasePath from "../../../../core/imageWithBasePath";
 import { all_routes } from "../../../routes/all_routes";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Chart from "react-apexcharts";
 import SCol2Chart from "./chats/scol2";
 import SCol3Chart from "./chats/scol3";
@@ -10,8 +10,13 @@ import SCol19Chart from "./chats/scol19";
 import CircleChart from "./chats/circleChart";
 import { Calendar, type CalendarProps } from "antd";
 import type { Dayjs } from "dayjs";
+import { fetchAdminDashboard, type AdminDashboardResponse } from "../../../../api/dashboard";
+import dayjs from "dayjs";
 
 const Dashboard = () => {
+  const [dashboardData, setDashboardData] = useState<AdminDashboardResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [sColChart] = useState<any>({
     chart: {
       width: 80,
@@ -52,16 +57,76 @@ const Dashboard = () => {
     },
   });
 
-  const series = [
-    {
-      name: "Data",
-      data: [40, 15, 60, 15, 90, 20, 70], // y-values
-    },
-  ];
+
+  useEffect(() => {
+    const loadDashboard = async () => {
+      try {
+        setLoading(true);
+        const data = await fetchAdminDashboard();
+        setDashboardData(data);
+      } catch (err: any) {
+        setError(err?.response?.data?.message || err?.message || "Failed to load dashboard");
+        // eslint-disable-next-line no-console
+        console.error("Failed to load dashboard:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadDashboard();
+  }, []);
 
   const onPanelChange = (value: Dayjs, mode: CalendarProps<Dayjs>["mode"]) => {
     console.log(value.format("YYYY-MM-DD"), mode);
   };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 0,
+    }).format(amount);
+  };
+
+  const formatDate = (dateString: string) => {
+    if (!dateString) return "";
+    try {
+      return dayjs(dateString).format("DD MMM YYYY, hh:mm A");
+    } catch {
+      return dateString;
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="page-wrapper">
+        <div className="content pb-0">
+          <div className="d-flex align-items-center justify-content-center" style={{ minHeight: "400px" }}>
+            <div className="text-center">
+              <div className="spinner-border text-primary" role="status">
+                <span className="visually-hidden">Loading...</span>
+              </div>
+              <p className="mt-3">Loading dashboard...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !dashboardData) {
+    return (
+      <div className="page-wrapper">
+        <div className="content pb-0">
+          <div className="alert alert-danger" role="alert">
+            {error || "Failed to load dashboard data"}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const { stats, appointmentStatistics, popularDoctors, recentAppointments, topDepartments, scheduleStats, incomeByTreatment, topPatients, recentTransactions, leaveRequests } = dashboardData;
+
   return (
     <>
       {/* ========================
@@ -108,8 +173,8 @@ const Dashboard = () => {
                       <i className="ti ti-calendar-heart fs-24" />
                     </span>
                     <div className="text-end">
-                      <span className="badge px-2 py-1 fs-12 fw-medium d-inline-flex mb-1 bg-success">
-                        +95%
+                      <span className={`badge px-2 py-1 fs-12 fw-medium d-inline-flex mb-1 ${stats.doctors.change >= 0 ? "bg-success" : "bg-danger"}`}>
+                        {stats.doctors.change >= 0 ? "+" : ""}{stats.doctors.change}%
                       </span>
                       <p className="fs-13 mb-0">in last 7 Days </p>
                     </div>
@@ -117,13 +182,13 @@ const Dashboard = () => {
                   <div className="d-flex align-items-center justify-content-between">
                     <div>
                       <p className="mb-1">Doctors</p>
-                      <h3 className="fw-bold mb-0">247</h3>
+                      <h3 className="fw-bold mb-0">{stats.doctors.count}</h3>
                     </div>
                     <div>
                       <div id="s-col" className="chart-set">
                         <Chart
                           options={sColChart}
-                          series={series}
+                          series={[{ name: "Data", data: stats.doctors.sparkline }]}
                           type="bar"
                           width={80}
                           height={54}
@@ -148,8 +213,8 @@ const Dashboard = () => {
                       <i className="ti ti-calendar-heart fs-24" />
                     </span>
                     <div className="text-end">
-                      <span className="badge px-2 py-1 fs-12 fw-medium d-inline-flex mb-1 bg-success">
-                        +25%
+                      <span className={`badge px-2 py-1 fs-12 fw-medium d-inline-flex mb-1 ${stats.patients.change >= 0 ? "bg-success" : "bg-danger"}`}>
+                        {stats.patients.change >= 0 ? "+" : ""}{stats.patients.change}%
                       </span>
                       <p className="fs-13 mb-0">in last 7 Days </p>
                     </div>
@@ -157,7 +222,7 @@ const Dashboard = () => {
                   <div className="d-flex align-items-center justify-content-between">
                     <div>
                       <p className="mb-1">Patients</p>
-                      <h3 className="fw-bold mb-0">4178</h3>
+                      <h3 className="fw-bold mb-0">{stats.patients.count}</h3>
                     </div>
                     <div>
                       <div id="s-col-2" className="chart-set">
@@ -182,8 +247,8 @@ const Dashboard = () => {
                       <i className="ti ti-calendar-heart fs-24" />
                     </span>
                     <div className="text-end">
-                      <span className="badge px-2 py-1 fs-12 fw-medium d-inline-flex mb-1 bg-danger">
-                        -15%
+                      <span className={`badge px-2 py-1 fs-12 fw-medium d-inline-flex mb-1 ${stats.appointments.change >= 0 ? "bg-success" : "bg-danger"}`}>
+                        {stats.appointments.change >= 0 ? "+" : ""}{stats.appointments.change}%
                       </span>
                       <p className="fs-13 mb-0">in last 7 Days </p>
                     </div>
@@ -191,7 +256,7 @@ const Dashboard = () => {
                   <div className="d-flex align-items-center justify-content-between">
                     <div>
                       <p className="mb-1">Appointment</p>
-                      <h3 className="fw-bold mb-0">12178</h3>
+                      <h3 className="fw-bold mb-0">{stats.appointments.count}</h3>
                     </div>
                     <div>
                       <div id="s-col-3" className="chart-set">
@@ -216,8 +281,8 @@ const Dashboard = () => {
                       <i className="ti ti-calendar-heart fs-24" />
                     </span>
                     <div className="text-end">
-                      <span className="badge px-2 py-1 fs-12 fw-medium d-inline-flex mb-1 bg-success">
-                        +25%
+                      <span className={`badge px-2 py-1 fs-12 fw-medium d-inline-flex mb-1 ${stats.revenue.change >= 0 ? "bg-success" : "bg-danger"}`}>
+                        {stats.revenue.change >= 0 ? "+" : ""}{stats.revenue.change}%
                       </span>
                       <p className="fs-13 mb-0">in last 7 Days </p>
                     </div>
@@ -225,7 +290,7 @@ const Dashboard = () => {
                   <div className="d-flex align-items-center justify-content-between overflow-hidden">
                     <div>
                       <p className="mb-1">Revenue</p>
-                      <h3 className="fw-bold mb-0 text-truncate">$55,1240</h3>
+                      <h3 className="fw-bold mb-0 text-truncate">{formatCurrency(stats.revenue.amount)}</h3>
                     </div>
                     <div>
                       <div id="s-col-4" className="chart-set">
@@ -282,7 +347,7 @@ const Dashboard = () => {
                           <i className="ti ti-point-filled me-1 text-primary" />
                           All Appointments
                         </p>
-                        <h5 className="fw-bold mb-0">6314</h5>
+                        <h5 className="fw-bold mb-0">{appointmentStatistics.all}</h5>
                       </div>
                     </div>
                     <div className="col-md-3 col-sm-6">
@@ -291,7 +356,7 @@ const Dashboard = () => {
                           <i className="ti ti-point-filled me-1 text-danger" />
                           Cancelled
                         </p>
-                        <h5 className="fw-bold mb-0">456</h5>
+                        <h5 className="fw-bold mb-0">{appointmentStatistics.cancelled}</h5>
                       </div>
                     </div>
                     <div className="col-md-3 col-sm-6">
@@ -300,7 +365,7 @@ const Dashboard = () => {
                           <i className="ti ti-point-filled me-1 text-warning" />
                           Reschedule
                         </p>
-                        <h5 className="fw-bold mb-0">745</h5>
+                        <h5 className="fw-bold mb-0">{appointmentStatistics.reschedule}</h5>
                       </div>
                     </div>
                     <div className="col-md-3 col-sm-6">
@@ -309,7 +374,7 @@ const Dashboard = () => {
                           <i className="ti ti-point-filled me-1 text-success" />
                           Completed
                         </p>
-                        <h5 className="fw-bold mb-0">4578</h5>
+                        <h5 className="fw-bold mb-0">{appointmentStatistics.completed}</h5>
                       </div>
                     </div>
                   </div>
@@ -352,105 +417,42 @@ const Dashboard = () => {
                 </div>
                 <div className="card-body">
                   <div className="row row-gap-3">
-                    <div className="col-md-4">
-                      <div className="border shadow-sm p-3 rounded-2">
-                        <div className="d-flex align-items-center mb-3">
-                          <Link
-                            to={all_routes.doctordetails}
-                            className="avatar me-2 flex-shrink-0 position-relative"
-                          >
-                            <span className="online text-success position-absolute end-0 bottom-0 pe-1">
-                              <i className="ti ti-circle-filled d-flex bg-white fs-6 rounded-circle border border-1 border-white" />
-                            </span>
-                            <ImageWithBasePath
-                              src="assets/img/doctors/doctor-01.jpg"
-                              alt="img"
-                              className="rounded-circle"
-                            />
-                          </Link>
-                          <div>
-                            <h6 className="fs-14 mb-1 text-truncate">
-                              <Link
-                                to={all_routes.doctordetails}
-                                className="fw-semibold"
-                              >
-                                Dr. Alex Morgan
-                              </Link>
-                            </h6>
-                            <p className="mb-0 fs-13">Cardiologist</p>
+                    {popularDoctors.slice(0, 3).map((doctor, index) => (
+                      <div key={index} className="col-md-4">
+                        <div className="border shadow-sm p-3 rounded-2">
+                          <div className="d-flex align-items-center mb-3">
+                            <Link
+                              to={all_routes.doctordetails}
+                              className="avatar me-2 flex-shrink-0 position-relative"
+                            >
+                              <span className="online text-success position-absolute end-0 bottom-0 pe-1">
+                                <i className="ti ti-circle-filled d-flex bg-white fs-6 rounded-circle border border-1 border-white" />
+                              </span>
+                              <ImageWithBasePath
+                                src={doctor.img || "assets/img/doctors/doctor-01.jpg"}
+                                alt="img"
+                                className="rounded-circle"
+                              />
+                            </Link>
+                            <div>
+                              <h6 className="fs-14 mb-1 text-truncate">
+                                <Link
+                                  to={all_routes.doctordetails}
+                                  className="fw-semibold"
+                                >
+                                  {doctor.name}
+                                </Link>
+                              </h6>
+                              <p className="mb-0 fs-13">{doctor.role}</p>
+                            </div>
                           </div>
+                          <p className="mb-0">
+                            <span className="text-dark fw-semibold">{doctor.bookings}</span>
+                            Bookings
+                          </p>
                         </div>
-                        <p className="mb-0">
-                          <span className="text-dark fw-semibold">258</span>
-                          Bookings
-                        </p>
                       </div>
-                    </div>
-                    <div className="col-md-4">
-                      <div className="border shadow-sm p-3 rounded-2">
-                        <div className="d-flex align-items-center mb-3">
-                          <Link
-                            to={all_routes.doctordetails}
-                            className="avatar me-2 flex-shrink-0 position-relative"
-                          >
-                            <span className="online text-success position-absolute end-0 bottom-0 pe-1">
-                              <i className="ti ti-circle-filled d-flex bg-white fs-6 rounded-circle border border-1 border-white" />
-                            </span>
-                            <ImageWithBasePath
-                              src="assets/img/doctors/doctor-03.jpg"
-                              alt="img"
-                              className="rounded-circle"
-                            />
-                          </Link>
-                          <div>
-                            <h6 className="fs-14 mb-1 text-truncate">
-                              <Link
-                                to={all_routes.doctordetails}
-                                className="fw-semibold"
-                              >
-                                Dr. Emily Carter
-                              </Link>
-                            </h6>
-                            <p className="mb-0 fs-13">Pediatrician</p>
-                          </div>
-                        </div>
-                        <p className="mb-0">
-                          <span className="text-dark fw-semibold">125</span>
-                          Bookings
-                        </p>
-                      </div>
-                    </div>
-                    <div className="col-md-4">
-                      <div className="border shadow-sm p-3 rounded-2">
-                        <div className="d-flex align-items-center mb-3">
-                          <Link
-                            to={all_routes.doctordetails}
-                            className="avatar me-2 flex-shrink-0 position-relative"
-                          >
-                            <ImageWithBasePath
-                              src="assets/img/doctors/doctor-04.jpg"
-                              alt="img"
-                              className="rounded-circle"
-                            />
-                          </Link>
-                          <div>
-                            <h6 className="fs-14 mb-1 text-truncate">
-                              <Link
-                                to={all_routes.doctordetails}
-                                className="fw-semibold"
-                              >
-                                Dr. David Lee
-                              </Link>
-                            </h6>
-                            <p className="mb-0 fs-13">Gynecologist</p>
-                          </div>
-                        </div>
-                        <p className="mb-0">
-                          <span className="text-dark fw-semibold">115</span>
-                          Bookings
-                        </p>
-                      </div>
-                    </div>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -491,81 +493,36 @@ const Dashboard = () => {
                       onPanelChange={onPanelChange}
                     />
                   </div>
-                  <div className="mb-3 bg-light p-3 rounded-2 d-flex align-items-center justify-content-between">
-                    <div>
-                      <h6 className="fs-14 fw-semibold mb-1">General Visit</h6>
-                      <p className="mb-0 text-truncate">
-                        <i className="ti ti-calendar-time me-1 text-dark" />
-                        Wed, 05 Apr 2025, 06:30 PM
-                      </p>
-                    </div>
-                    <div className="avatar-list-stacked avatar-group-sm event flex-shrink-0">
-                      <span className="avatar avatar-lg rounded-circle border-0">
-                        <ImageWithBasePath
-                          src="assets/img/profiles/avatar-26.jpg"
-                          className="img-fluid rounded-circle border border-white"
-                          alt="Img"
-                        />
-                      </span>
-                      <span className="avatar avatar-lg rounded-circle border-0">
-                        <ImageWithBasePath
-                          src="assets/img/doctors/doctor-05.jpg"
-                          className="img-fluid rounded-circle border border-white"
-                          alt="Img"
-                        />
-                      </span>
-                    </div>
-                  </div>
-                  <div className="mb-3 bg-soft-danger p-3 rounded-2 d-flex align-items-center justify-content-between">
-                    <div>
-                      <h6 className="fs-14 fw-semibold mb-1">General Visit</h6>
-                      <p className="mb-0 text-truncate">
-                        <i className="ti ti-calendar-time me-1 text-dark" />
-                        Wed, 05 Apr 2025, 04:10 PM
-                      </p>
-                    </div>
-                    <div className="avatar-list-stacked avatar-group-sm event flex-shrink-0">
-                      <span className="avatar avatar-lg rounded-circle border-0">
-                        <ImageWithBasePath
-                          src="assets/img/users/user-17.jpg"
-                          className="img-fluid rounded-circle border border-white"
-                          alt="Img"
-                        />
-                      </span>
-                      <span className="avatar avatar-lg rounded-circle border-0">
-                        <ImageWithBasePath
-                          src="assets/img/doctors/doctor-10.jpg"
-                          className="img-fluid rounded-circle border border-white"
-                          alt="Img"
-                        />
-                      </span>
-                    </div>
-                  </div>
-                  <div className="mb-3 bg-soft-info p-3 rounded-2 d-flex align-items-center justify-content-between">
-                    <div>
-                      <h6 className="fs-14 fw-semibold mb-1">General Visit</h6>
-                      <p className="mb-0 text-truncate">
-                        <i className="ti ti-calendar-time me-1 text-dark" />
-                        Wed, 05 Apr 2025, 10:00 AM
-                      </p>
-                    </div>
-                    <div className="avatar-list-stacked avatar-group-sm event flex-shrink-0">
-                      <span className="avatar avatar-lg rounded-circle border-0">
-                        <ImageWithBasePath
-                          src="assets/img/users/user-16.jpg"
-                          className="img-fluid rounded-circle border border-white"
-                          alt="Img"
-                        />
-                      </span>
-                      <span className="avatar avatar-lg rounded-circle border-0">
-                        <ImageWithBasePath
-                          src="assets/img/doctors/doctor-09.jpg"
-                          className="img-fluid rounded-circle border border-white"
-                          alt="Img"
-                        />
-                      </span>
-                    </div>
-                  </div>
+                  {recentAppointments.slice(0, 3).map((appointment, index) => {
+                    const bgClass = index === 0 ? "bg-light" : index === 1 ? "bg-soft-danger" : "bg-soft-info";
+                    return (
+                      <div key={appointment.id} className={`mb-3 ${bgClass} p-3 rounded-2 d-flex align-items-center justify-content-between`}>
+                        <div>
+                          <h6 className="fs-14 fw-semibold mb-1">{appointment.mode || "General Visit"}</h6>
+                          <p className="mb-0 text-truncate">
+                            <i className="ti ti-calendar-time me-1 text-dark" />
+                            {formatDate(appointment.dateTime)}
+                          </p>
+                        </div>
+                        <div className="avatar-list-stacked avatar-group-sm event flex-shrink-0">
+                          <span className="avatar avatar-lg rounded-circle border-0">
+                            <ImageWithBasePath
+                              src={appointment.patientImg || "assets/img/profiles/avatar-26.jpg"}
+                              className="img-fluid rounded-circle border border-white"
+                              alt="Img"
+                            />
+                          </span>
+                          <span className="avatar avatar-lg rounded-circle border-0">
+                            <ImageWithBasePath
+                              src={appointment.doctorImg || "assets/img/doctors/doctor-05.jpg"}
+                              className="img-fluid rounded-circle border border-white"
+                              alt="Img"
+                            />
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
                   <Link
                     to={all_routes.appointments}
                     className="btn btn-light w-100"
@@ -617,21 +574,16 @@ const Dashboard = () => {
                     <CircleChart />
                   </div>
                   <div className="d-flex align-items-center flex-wrap justify-content-center gap-2 mt-3">
-                    <p className="d-flex align-items-center mb-0 fs-13">
-                      <i className="ti ti-circle-filled text-info fs-10 me-1" />
-                      <span className="text-dark fw-semibold me-1">214</span>
-                      Cardiology
-                    </p>
-                    <p className="d-flex align-items-center mb-0 fs-13">
-                      <i className="ti ti-circle-filled text-purple fs-10 me-1" />
-                      <span className="text-dark fw-semibold me-1">150</span>
-                      Dental
-                    </p>
-                    <p className="d-flex align-items-center mb-0 fs-13">
-                      <i className="ti ti-circle-filled text-primary fs-10 me-1" />
-                      <span className="text-dark fw-semibold me-1">121</span>
-                      Neurolgy
-                    </p>
+                    {topDepartments.slice(0, 3).map((dept, index) => {
+                      const colors = ["text-info", "text-purple", "text-primary"];
+                      return (
+                        <p key={index} className="d-flex align-items-center mb-0 fs-13">
+                          <i className={`ti ti-circle-filled ${colors[index]} fs-10 me-1`} />
+                          <span className="text-dark fw-semibold me-1">{dept.count}</span>
+                          {dept.name}
+                        </p>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -654,19 +606,19 @@ const Dashboard = () => {
                     <div className="col d-flex border-end">
                       <div className="text-center flex-fill">
                         <p className="mb-1">Available</p>
-                        <h3 className="fw-bold mb-0">48</h3>
+                        <h3 className="fw-bold mb-0">{scheduleStats.available}</h3>
                       </div>
                     </div>
                     <div className="col d-flex border-end">
                       <div className="text-center flex-fill">
                         <p className="mb-1">Unavailable</p>
-                        <h3 className="fw-bold mb-0">28</h3>
+                        <h3 className="fw-bold mb-0">{scheduleStats.unavailable}</h3>
                       </div>
                     </div>
                     <div className="col d-flex">
                       <div className="text-center flex-fill">
                         <p className="mb-1">Leave</p>
-                        <h3 className="fw-bold mb-0">12</h3>
+                        <h3 className="fw-bold mb-0">{scheduleStats.leave}</h3>
                       </div>
                     </div>
                   </div>
@@ -828,45 +780,15 @@ const Dashboard = () => {
                   </div>
                 </div>
                 <div className="card-body">
-                  <div className="d-flex align-items-center justify-content-between mb-3">
-                    <div>
-                      <p className="fw-semibold mb-1 text-dark">Cardiology</p>
-                      <p className="mb-0">4,556 Apointments</p>
+                  {incomeByTreatment.map((treatment, index) => (
+                    <div key={index} className={`d-flex align-items-center justify-content-between ${index < incomeByTreatment.length - 1 ? "mb-3" : "mb-0"}`}>
+                      <div>
+                        <p className="fw-semibold mb-1 text-dark">{treatment.department}</p>
+                        <p className="mb-0">{treatment.appointments.toLocaleString()} Appointments</p>
+                      </div>
+                      <h6 className="fw-bold mb-0">{formatCurrency(treatment.revenue)}</h6>
                     </div>
-                    <h6 className="fw-bold mb-0">$5,985</h6>
-                  </div>
-                  <div className="d-flex align-items-center justify-content-between mb-3">
-                    <div>
-                      <p className="fw-semibold mb-1 text-dark">Radiology</p>
-                      <p className="mb-0">4,125 Apointments</p>
-                    </div>
-                    <h6 className="fw-bold mb-0">$5,194</h6>
-                  </div>
-                  <div className="d-flex align-items-center justify-content-between mb-3">
-                    <div>
-                      <p className="fw-semibold mb-1 text-dark">
-                        Dental Surgery
-                      </p>
-                      <p className="mb-0">1,796 Apointments</p>
-                    </div>
-                    <h6 className="fw-bold mb-0">$2,716</h6>
-                  </div>
-                  <div className="d-flex align-items-center justify-content-between mb-3">
-                    <div>
-                      <p className="fw-semibold mb-1 text-dark">Orthopaedics</p>
-                      <p className="mb-0">3,827 Apointments</p>
-                    </div>
-                    <h6 className="fw-bold mb-0">$4,682</h6>
-                  </div>
-                  <div className="d-flex align-items-center justify-content-between mb-0">
-                    <div>
-                      <p className="fw-semibold mb-1 text-dark">
-                        General Medicine
-                      </p>
-                      <p className="mb-0">9,894 Apointments</p>
-                    </div>
-                    <h6 className="fw-bold mb-0">$9,450</h6>
-                  </div>
+                  ))}
                 </div>
               </div>
             </div>
@@ -900,301 +822,81 @@ const Dashboard = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        <tr>
-                          <td>
-                            <div className="d-flex align-items-center">
-                              <Link
-                                to={all_routes.doctordetails}
-                                className="avatar me-2"
-                              >
-                                <ImageWithBasePath
-                                  src="assets/img/doctors/doctor-06.jpg"
-                                  alt="img"
-                                  className="rounded-circle"
-                                />
-                              </Link>
-                              <div>
-                                <h6 className="fs-14 mb-1">
+                        {recentAppointments.slice(0, 5).map((appointment) => {
+                          const getStatusBadgeClass = (status: string) => {
+                            if (status === "Confirmed" || status === "Checked Out" || status === "Completed") {
+                              return "badge-soft-success border border-success rounded text-success";
+                            }
+                            if (status === "Cancelled") {
+                              return "badge-soft-danger border border-danger rounded";
+                            }
+                            if (status === "Schedule") {
+                              return "badge-soft-info border border-info rounded";
+                            }
+                            return "badge-soft-secondary border border-secondary rounded";
+                          };
+                          return (
+                            <tr key={appointment.id}>
+                              <td>
+                                <div className="d-flex align-items-center">
                                   <Link
                                     to={all_routes.doctordetails}
-                                    className="fw-semibold"
+                                    className="avatar me-2"
                                   >
-                                    Dr. John Smith
+                                    <ImageWithBasePath
+                                      src={appointment.doctorImg || "assets/img/doctors/doctor-01.jpg"}
+                                      alt="img"
+                                      className="rounded-circle"
+                                    />
                                   </Link>
-                                </h6>
-                                <p className="mb-0 fs-13">Neurosurgeon</p>
-                              </div>
-                            </div>
-                          </td>
-                          <td>
-                            <div className="d-flex align-items-center">
-                              <Link
-                                to={all_routes.patientDetails}
-                                className="avatar me-2"
-                              >
-                                <ImageWithBasePath
-                                  src="assets/img/profiles/avatar-02.jpg"
-                                  alt="img"
-                                  className="rounded-circle"
-                                />
-                              </Link>
-                              <div>
-                                <h6 className="fs-14 mb-1">
+                                  <div>
+                                    <h6 className="fs-14 mb-1">
+                                      <Link
+                                        to={all_routes.doctordetails}
+                                        className="fw-semibold"
+                                      >
+                                        {appointment.doctor}
+                                      </Link>
+                                    </h6>
+                                    <p className="mb-0 fs-13">Doctor</p>
+                                  </div>
+                                </div>
+                              </td>
+                              <td>
+                                <div className="d-flex align-items-center">
                                   <Link
                                     to={all_routes.patientDetails}
-                                    className="fw-medium"
+                                    className="avatar me-2"
                                   >
-                                    Jesus Adams
+                                    <ImageWithBasePath
+                                      src={appointment.patientImg || "assets/img/profiles/avatar-02.jpg"}
+                                      alt="img"
+                                      className="rounded-circle"
+                                    />
                                   </Link>
-                                </h6>
-                                <p className="mb-0 fs-13">+1 41254 45214</p>
-                              </div>
-                            </div>
-                          </td>
-                          <td>28 May 2025 - 11:15 AM</td>
-                          <td>Online</td>
-                          <td>
-                            <span className="badge fs-13 py-1 badge-soft-success border border-success rounded text-success fw-medium">
-                              Confirmed
-                            </span>
-                          </td>
-                        </tr>
-                        <tr>
-                          <td>
-                            <div className="d-flex align-items-center">
-                              <Link
-                                to={all_routes.doctordetails}
-                                className="avatar me-2"
-                              >
-                                <ImageWithBasePath
-                                  src="assets/img/doctors/doctor-07.jpg"
-                                  alt="img"
-                                  className="rounded-circle"
-                                />
-                              </Link>
-                              <div>
-                                <h6 className="fs-14 mb-1">
-                                  <Link
-                                    to={all_routes.doctordetails}
-                                    className="fw-semibold"
-                                  >
-                                    Dr. Lisa White
-                                  </Link>
-                                </h6>
-                                <p className="mb-0 fs-13">Oncologist</p>
-                              </div>
-                            </div>
-                          </td>
-                          <td>
-                            <div className="d-flex align-items-center">
-                              <Link
-                                to={all_routes.patientDetails}
-                                className="avatar me-2"
-                              >
-                                <ImageWithBasePath
-                                  src="assets/img/profiles/avatar-27.jpg"
-                                  alt="img"
-                                  className="rounded-circle"
-                                />
-                              </Link>
-                              <div>
-                                <h6 className="fs-14 mb-1">
-                                  <Link
-                                    to={all_routes.patientDetails}
-                                    className="fw-medium"
-                                  >
-                                    Ezra Belcher
-                                  </Link>
-                                </h6>
-                                <p className="mb-0 fs-13">+1 65895 41247</p>
-                              </div>
-                            </div>
-                          </td>
-                          <td>29 May 2025 - 11:30 AM</td>
-                          <td>In-Person</td>
-                          <td>
-                            <span className="badge fs-13 py-1 badge-soft-danger border border-danger rounded fw-medium">
-                              Cancelled
-                            </span>
-                          </td>
-                        </tr>
-                        <tr>
-                          <td>
-                            <div className="d-flex align-items-center">
-                              <Link
-                                to={all_routes.doctordetails}
-                                className="avatar me-2"
-                              >
-                                <ImageWithBasePath
-                                  src="assets/img/doctors/doctor-10.jpg"
-                                  alt="img"
-                                  className="rounded-circle"
-                                />
-                              </Link>
-                              <div>
-                                <h6 className="fs-14 mb-1">
-                                  <Link
-                                    to={all_routes.doctordetails}
-                                    className="fw-semibold"
-                                  >
-                                    Dr. Patricia Brown
-                                  </Link>
-                                </h6>
-                                <p className="mb-0 fs-13">Pulmonologist</p>
-                              </div>
-                            </div>
-                          </td>
-                          <td>
-                            <div className="d-flex align-items-center">
-                              <Link
-                                to={all_routes.patientDetails}
-                                className="avatar me-2"
-                              >
-                                <ImageWithBasePath
-                                  src="assets/img/profiles/avatar-20.jpg"
-                                  alt="img"
-                                  className="rounded-circle"
-                                />
-                              </Link>
-                              <div>
-                                <h6 className="fs-14 mb-1">
-                                  <Link
-                                    to={all_routes.patientDetails}
-                                    className="fw-medium"
-                                  >
-                                    Glen Lentz
-                                  </Link>
-                                </h6>
-                                <p className="mb-0 fs-13">+1 62458 45845</p>
-                              </div>
-                            </div>
-                          </td>
-                          <td>30 May 2025 - 09:30 AM </td>
-                          <td>Online</td>
-                          <td>
-                            <span className="badge fs-13 py-1 badge-soft-success border border-success rounded text-success fw-medium">
-                              Confirmed
-                            </span>
-                          </td>
-                        </tr>
-                        <tr>
-                          <td>
-                            <div className="d-flex align-items-center">
-                              <Link
-                                to={all_routes.doctordetails}
-                                className="avatar me-2"
-                              >
-                                <ImageWithBasePath
-                                  src="assets/img/doctors/doctor-11.jpg"
-                                  alt="img"
-                                  className="rounded-circle"
-                                />
-                              </Link>
-                              <div>
-                                <h6 className="fs-14 mb-1">
-                                  <Link
-                                    to={all_routes.doctordetails}
-                                    className="fw-semibold"
-                                  >
-                                    Dr. Rachel Green
-                                  </Link>
-                                </h6>
-                                <p className="mb-0 fs-13">Urologist</p>
-                              </div>
-                            </div>
-                          </td>
-                          <td>
-                            <div className="d-flex align-items-center">
-                              <Link
-                                to={all_routes.patientDetails}
-                                className="avatar me-2"
-                              >
-                                <ImageWithBasePath
-                                  src="assets/img/profiles/avatar-06.jpg"
-                                  alt="img"
-                                  className="rounded-circle"
-                                />
-                              </Link>
-                              <div>
-                                <h6 className="fs-14 mb-1">
-                                  <Link
-                                    to={all_routes.patientDetails}
-                                    className="fw-medium"
-                                  >
-                                    Bernard Griffith
-                                  </Link>
-                                </h6>
-                                <p className="mb-0 fs-13">+1 61422 45214</p>
-                              </div>
-                            </div>
-                          </td>
-                          <td>30 May 2025 - 10:00 AM</td>
-                          <td>Online</td>
-                          <td>
-                            <span className="badge fs-13 py-1 badge-soft-secondary border border-secondary rounded fw-medium">
-                              Checked Out
-                            </span>
-                          </td>
-                        </tr>
-                        <tr>
-                          <td>
-                            <div className="d-flex align-items-center">
-                              <Link
-                                to={all_routes.doctordetails}
-                                className="avatar me-2"
-                              >
-                                <ImageWithBasePath
-                                  src="assets/img/doctors/doctor-14.jpg"
-                                  alt="img"
-                                  className="rounded-circle"
-                                />
-                              </Link>
-                              <div>
-                                <h6 className="fs-14 mb-1">
-                                  <Link
-                                    to={all_routes.doctordetails}
-                                    className="fw-semibold"
-                                  >
-                                    Dr. Michael Smith
-                                  </Link>
-                                </h6>
-                                <p className="mb-0 fs-13">Cardiologist</p>
-                              </div>
-                            </div>
-                          </td>
-                          <td>
-                            <div className="d-flex align-items-center">
-                              <Link
-                                to={all_routes.patientDetails}
-                                className="avatar me-2"
-                              >
-                                <ImageWithBasePath
-                                  src="assets/img/profiles/avatar-25.jpg"
-                                  alt="img"
-                                  className="rounded-circle"
-                                />
-                              </Link>
-                              <div>
-                                <h6 className="fs-14 mb-1">
-                                  <Link
-                                    to={all_routes.patientDetails}
-                                    className="fw-medium"
-                                  >
-                                    John Elsass
-                                  </Link>
-                                </h6>
-                                <p className="mb-0 fs-13">+1 47851 26371</p>
-                              </div>
-                            </div>
-                          </td>
-                          <td>30 May 2025 - 11:00 AM</td>
-                          <td>Online</td>
-                          <td>
-                            <span className="badge fs-13 py-1 badge-soft-info border border-info rounded fw-medium">
-                              Schedule
-                            </span>
-                          </td>
-                        </tr>
+                                  <div>
+                                    <h6 className="fs-14 mb-1">
+                                      <Link
+                                        to={all_routes.patientDetails}
+                                        className="fw-medium"
+                                      >
+                                        {appointment.patient}
+                                      </Link>
+                                    </h6>
+                                    <p className="mb-0 fs-13">Patient</p>
+                                  </div>
+                                </div>
+                              </td>
+                              <td>{formatDate(appointment.dateTime)}</td>
+                              <td>{appointment.mode}</td>
+                              <td>
+                                <span className={`badge fs-13 py-1 ${getStatusBadgeClass(appointment.status)} fw-medium`}>
+                                  {appointment.status}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -1219,156 +921,38 @@ const Dashboard = () => {
                   </Link>
                 </div>
                 <div className="card-body">
-                  <div className="d-flex justify-content-between align-items-center mb-3">
-                    <div className="d-flex align-items-center">
-                      <Link
-                        to={all_routes.patientDetails}
-                        className="avatar me-2 flex-shrink-0"
-                      >
-                        <ImageWithBasePath
-                          src="assets/img/profiles/avatar-02.jpg"
-                          alt="img"
-                          className="rounded-circle"
-                        />
-                      </Link>
-                      <div>
-                        <h6 className="fs-14 mb-1 text-truncate">
-                          <Link
-                            to={all_routes.patientDetails}
-                            className="fw-medium"
-                          >
-                            Jesus Adams
-                          </Link>
-                        </h6>
-                        <p className="mb-0 fs-13 text-truncate">
-                          Total Paid : $6589
-                        </p>
+                  {topPatients.map((patient, index) => (
+                    <div key={index} className={`d-flex justify-content-between align-items-center ${index < topPatients.length - 1 ? "mb-3" : "mb-0"}`}>
+                      <div className="d-flex align-items-center">
+                        <Link
+                          to={all_routes.patientDetails}
+                          className="avatar me-2 flex-shrink-0"
+                        >
+                          <ImageWithBasePath
+                            src={patient.img || "assets/img/profiles/avatar-02.jpg"}
+                            alt="img"
+                            className="rounded-circle"
+                          />
+                        </Link>
+                        <div>
+                          <h6 className="fs-14 mb-1 text-truncate">
+                            <Link
+                              to={all_routes.patientDetails}
+                              className="fw-medium"
+                            >
+                              {patient.name}
+                            </Link>
+                          </h6>
+                          <p className="mb-0 fs-13 text-truncate">
+                            Total Paid : {formatCurrency(patient.totalPaid)}
+                          </p>
+                        </div>
                       </div>
+                      <span className="badge fw-medium badge-soft-primary border border-primary flex-shrink-0">
+                        {patient.appointments} Appointments
+                      </span>
                     </div>
-                    <span className="badge fw-medium badge-soft-primary border border-primary flex-shrink-0">
-                      80 Appointments
-                    </span>
-                  </div>
-                  <div className="d-flex justify-content-between align-items-center mb-3">
-                    <div className="d-flex align-items-center">
-                      <Link
-                        to={all_routes.patientDetails}
-                        className="avatar me-2 flex-shrink-0"
-                      >
-                        <ImageWithBasePath
-                          src="assets/img/profiles/avatar-27.jpg"
-                          alt="img"
-                          className="rounded-circle"
-                        />
-                      </Link>
-                      <div>
-                        <h6 className="fs-14 mb-1 text-truncate">
-                          <Link
-                            to={all_routes.patientDetails}
-                            className="fw-medium"
-                          >
-                            Ezra Belcher
-                          </Link>
-                        </h6>
-                        <p className="mb-0 fs-13 text-truncate">
-                          Total Paid : $5632
-                        </p>
-                      </div>
-                    </div>
-                    <span className="badge fw-medium badge-soft-primary border border-primary flex-shrink-0">
-                      60 Appointments
-                    </span>
-                  </div>
-                  <div className="d-flex justify-content-between align-items-center mb-3">
-                    <div className="d-flex align-items-center">
-                      <Link
-                        to={all_routes.patientDetails}
-                        className="avatar me-2 flex-shrink-0"
-                      >
-                        <ImageWithBasePath
-                          src="assets/img/profiles/avatar-20.jpg"
-                          alt="img"
-                          className="rounded-circle"
-                        />
-                      </Link>
-                      <div>
-                        <h6 className="fs-14 mb-1 text-truncate">
-                          <Link
-                            to={all_routes.patientDetails}
-                            className="fw-medium"
-                          >
-                            Glen Lentz
-                          </Link>
-                        </h6>
-                        <p className="mb-0 fs-13 text-truncate">
-                          Total Paid : $4125
-                        </p>
-                      </div>
-                    </div>
-                    <span className="badge fw-medium badge-soft-primary border border-primary flex-shrink-0">
-                      40 Appointments
-                    </span>
-                  </div>
-                  <div className="d-flex justify-content-between align-items-center mb-3">
-                    <div className="d-flex align-items-center">
-                      <Link
-                        to={all_routes.patientDetails}
-                        className="avatar me-2 flex-shrink-0"
-                      >
-                        <ImageWithBasePath
-                          src="assets/img/profiles/avatar-06.jpg"
-                          alt="img"
-                          className="rounded-circle"
-                        />
-                      </Link>
-                      <div>
-                        <h6 className="fs-14 mb-1 text-truncate">
-                          <Link
-                            to={all_routes.patientDetails}
-                            className="fw-medium"
-                          >
-                            Bernard Griffith
-                          </Link>
-                        </h6>
-                        <p className="mb-0 fs-13 text-truncate">
-                          Total Paid : $3140
-                        </p>
-                      </div>
-                    </div>
-                    <span className="badge fw-medium badge-soft-primary border border-primary flex-shrink-0">
-                      25 Appointments
-                    </span>
-                  </div>
-                  <div className="d-flex justify-content-between align-items-center mb-0">
-                    <div className="d-flex align-items-center">
-                      <Link
-                        to={all_routes.patientDetails}
-                        className="avatar me-2 flex-shrink-0"
-                      >
-                        <ImageWithBasePath
-                          src="assets/img/profiles/avatar-25.jpg"
-                          alt="img"
-                          className="rounded-circle"
-                        />
-                      </Link>
-                      <div>
-                        <h6 className="fs-14 mb-1 text-truncate">
-                          <Link
-                            to={all_routes.patientDetails}
-                            className="fw-medium"
-                          >
-                            John Elsass
-                          </Link>
-                        </h6>
-                        <p className="mb-0 fs-13 text-truncate">
-                          Total Paid : $2654
-                        </p>
-                      </div>
-                    </div>
-                    <span className="badge fw-medium badge-soft-primary border border-primary flex-shrink-0">
-                      25 Appointments
-                    </span>
-                  </div>
+                  ))}
                 </div>
               </div>
             </div>
@@ -1406,136 +990,34 @@ const Dashboard = () => {
                   </div>
                 </div>
                 <div className="card-body">
-                  <div className="d-flex justify-content-between align-items-center mb-3">
-                    <div className="d-flex align-items-center">
-                      <Link to="#" className="avatar me-2 flex-shrink-0">
-                        <ImageWithBasePath
-                          src="assets/img/icons/stripe.svg"
-                          alt="img"
-                          className="rounded-circle"
-                        />
-                      </Link>
-                      <div>
-                        <h6 className="fs-14 mb-1 text-truncate">
-                          <Link to="#" className="fw-semibold">
-                            General Check-up
-                          </Link>
-                        </h6>
-                        <p className="mb-0 fs-13 text-truncate">
-                          <Link to="#" className="link-primary">
-                            #INV5889
-                          </Link>
-                        </p>
+                  {recentTransactions.map((transaction, index) => (
+                    <div key={transaction.id} className={`d-flex justify-content-between align-items-center ${index < recentTransactions.length - 1 ? "mb-3" : "mb-0"}`}>
+                      <div className="d-flex align-items-center">
+                        <Link to="#" className="avatar me-2 flex-shrink-0">
+                          <ImageWithBasePath
+                            src="assets/img/icons/stripe.svg"
+                            alt="img"
+                            className="rounded-circle"
+                          />
+                        </Link>
+                        <div>
+                          <h6 className="fs-14 mb-1 text-truncate">
+                            <Link to="#" className="fw-semibold">
+                              {transaction.type}
+                            </Link>
+                          </h6>
+                          <p className="mb-0 fs-13 text-truncate">
+                            <Link to="#" className="link-primary">
+                              {transaction.invoice}
+                            </Link>
+                          </p>
+                        </div>
                       </div>
+                      <span className={`badge fw-medium flex-shrink-0 ${transaction.amount >= 0 ? "bg-success" : "bg-danger"}`}>
+                        {transaction.amount >= 0 ? "+" : ""}{formatCurrency(transaction.amount)}
+                      </span>
                     </div>
-                    <span className="badge fw-medium bg-success flex-shrink-0">
-                      + $234
-                    </span>
-                  </div>
-                  <div className="d-flex justify-content-between align-items-center mb-3">
-                    <div className="d-flex align-items-center">
-                      <Link to="#" className="avatar me-2 flex-shrink-0">
-                        <ImageWithBasePath
-                          src="assets/img/icons/paypal.svg"
-                          alt="img"
-                          className="rounded-circle"
-                        />
-                      </Link>
-                      <div>
-                        <h6 className="fs-14 mb-1 text-truncate">
-                          <Link to="#" className="fw-semibold">
-                            Online Consultation
-                          </Link>
-                        </h6>
-                        <p className="mb-0 fs-13 text-truncate">
-                          <Link to="#" className="link-primary">
-                            #INV7874
-                          </Link>
-                        </p>
-                      </div>
-                    </div>
-                    <span className="badge fw-medium bg-success flex-shrink-0">
-                      + $234
-                    </span>
-                  </div>
-                  <div className="d-flex justify-content-between align-items-center mb-3">
-                    <div className="d-flex align-items-center">
-                      <Link to="#" className="avatar me-2 flex-shrink-0">
-                        <ImageWithBasePath
-                          src="assets/img/icons/stripe.svg"
-                          alt="img"
-                          className="rounded-circle"
-                        />
-                      </Link>
-                      <div>
-                        <h6 className="fs-14 mb-1 text-truncate">
-                          <Link to="#" className="fw-semibold">
-                            Purchase Product
-                          </Link>
-                        </h6>
-                        <p className="mb-0 fs-13 text-truncate">
-                          <Link to="#" className="link-primary">
-                            #INV4458
-                          </Link>
-                        </p>
-                      </div>
-                    </div>
-                    <span className="badge fw-medium bg-danger flex-shrink-0">
-                      - $69
-                    </span>
-                  </div>
-                  <div className="d-flex justify-content-between align-items-center mb-3">
-                    <div className="d-flex align-items-center">
-                      <Link to="#" className="avatar me-2 flex-shrink-0">
-                        <ImageWithBasePath
-                          src="assets/img/icons/paypal.svg"
-                          alt="img"
-                          className="rounded-circle"
-                        />
-                      </Link>
-                      <div>
-                        <h6 className="fs-14 mb-1 text-truncate">
-                          <Link to="#" className="fw-semibold">
-                            Online Consultation
-                          </Link>
-                        </h6>
-                        <p className="mb-0 fs-13 text-truncate">
-                          <Link to="#" className="link-primary">
-                            #INV5456
-                          </Link>
-                        </p>
-                      </div>
-                    </div>
-                    <span className="badge fw-medium bg-success flex-shrink-0">
-                      + $234
-                    </span>
-                  </div>
-                  <div className="d-flex justify-content-between align-items-center mb-0">
-                    <div className="d-flex align-items-center">
-                      <Link to="#" className="avatar me-2 flex-shrink-0">
-                        <ImageWithBasePath
-                          src="assets/img/icons/stripe.svg"
-                          alt="img"
-                          className="rounded-circle"
-                        />
-                      </Link>
-                      <div>
-                        <h6 className="fs-14 mb-1 text-truncate">
-                          <Link to="#" className="fw-semibold">
-                            Online Consultation
-                          </Link>
-                        </h6>
-                        <p className="mb-0 fs-13 text-truncate">
-                          <Link to="#" className="link-primary">
-                            #INV4557
-                          </Link>
-                        </p>
-                      </div>
-                    </div>
-                    <span className="badge fw-medium bg-success flex-shrink-0">
-                      + $234
-                    </span>
-                  </div>
+                  ))}
                 </div>
               </div>
             </div>
@@ -1573,206 +1055,48 @@ const Dashboard = () => {
                   </div>
                 </div>
                 <div className="card-body">
-                  <div className="d-flex justify-content-between mb-3">
-                    <div className="d-flex align-items-center">
-                      <Link
-                        to={all_routes.doctordetails}
-                        className="avatar flex-shrink-0"
-                      >
-                        <ImageWithBasePath
-                          src="assets/img/profiles/avatar-16.jpg"
-                          className="rounded-circle"
-                          alt="img"
-                        />
-                      </Link>
-                      <div className="ms-2">
-                        <div>
-                          <h6 className="fw-semibold text-truncate mb-1 fs-14">
-                            <Link to={all_routes.doctordetails}>
-                              James Allaire
-                            </Link>
-                          </h6>
-                          <p className="fs-13 mb-0 text-truncate">
-                            4 Days - Personal Reason
-                          </p>
+                  {leaveRequests.map((leave, index) => (
+                    <div key={leave.id} className={`d-flex justify-content-between ${index < leaveRequests.length - 1 ? "mb-3" : "mb-0"}`}>
+                      <div className="d-flex align-items-center">
+                        <Link
+                          to={all_routes.doctordetails}
+                          className="avatar flex-shrink-0"
+                        >
+                          <ImageWithBasePath
+                            src={leave.doctorImg || "assets/img/profiles/avatar-16.jpg"}
+                            className="rounded-circle"
+                            alt="img"
+                          />
+                        </Link>
+                        <div className="ms-2">
+                          <div>
+                            <h6 className="fw-semibold text-truncate mb-1 fs-14">
+                              <Link to={all_routes.doctordetails}>
+                                {leave.doctorName}
+                              </Link>
+                            </h6>
+                            <p className="fs-13 mb-0 text-truncate">
+                              {leave.days} {leave.days === 1 ? "Day" : "Days"} - {leave.reason}
+                            </p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    <div className="d-flex align-items-center">
-                      <Link
-                        to="#"
-                        className="d-inline-flex bg-soft-danger text-danger p-2 rounded-circle"
-                      >
-                        <i className="ti ti-x fw-bold" />
-                      </Link>
-                      <Link
-                        to="#"
-                        className="d-inline-flex ms-2 text-success p-2 bg-soft-success rounded-circle"
-                      >
-                        <i className="ti ti-check fw-bold" />
-                      </Link>
-                    </div>
-                  </div>
-                  <div className="d-flex justify-content-between mb-3">
-                    <div className="d-flex align-items-center">
-                      <Link
-                        to={all_routes.doctordetails}
-                        className="avatar flex-shrink-0"
-                      >
-                        <ImageWithBasePath
-                          src="assets/img/profiles/avatar-21.jpg"
-                          className="rounded-circle"
-                          alt="img"
-                        />
-                      </Link>
-                      <div className="ms-2">
-                        <div>
-                          <h6 className="fw-semibold text-truncate mb-1 fs-14">
-                            <Link to={all_routes.doctordetails}>
-                              Esther Schmidt
-                            </Link>
-                          </h6>
-                          <p className="fs-13 mb-0 text-truncate">
-                            2 Days - Going to Hospital
-                          </p>
-                        </div>
+                      <div className="d-flex align-items-center">
+                        <Link
+                          to="#"
+                          className="d-inline-flex bg-soft-danger text-danger p-2 rounded-circle"
+                        >
+                          <i className="ti ti-x fw-bold" />
+                        </Link>
+                        <Link
+                          to="#"
+                          className="d-inline-flex ms-2 text-success p-2 bg-soft-success rounded-circle"
+                        >
+                          <i className="ti ti-check fw-bold" />
+                        </Link>
                       </div>
                     </div>
-                    <div className="d-flex align-items-center">
-                      <Link
-                        to="#"
-                        className="d-inline-flex bg-soft-danger text-danger p-2 rounded-circle"
-                      >
-                        <i className="ti ti-x fw-bold" />
-                      </Link>
-                      <Link
-                        to="#"
-                        className="d-inline-flex ms-2 text-success p-2 bg-soft-success rounded-circle"
-                      >
-                        <i className="ti ti-check fw-bold" />
-                      </Link>
-                    </div>
-                  </div>
-                  <div className="d-flex justify-content-between mb-3">
-                    <div className="d-flex align-items-center">
-                      <Link
-                        to={all_routes.doctordetails}
-                        className="avatar flex-shrink-0"
-                      >
-                        <ImageWithBasePath
-                          src="assets/img/doctors/doctor-03.jpg"
-                          className="rounded-circle"
-                          alt="img"
-                        />
-                      </Link>
-                      <div className="ms-2">
-                        <div>
-                          <h6 className="fw-semibold text-truncate mb-1 fs-14">
-                            <Link to={all_routes.doctordetails}>
-                              Valerie Padgett
-                            </Link>
-                          </h6>
-                          <p className="fs-13 mb-0 text-truncate">
-                            1 Day - Changing Account
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="d-flex align-items-center">
-                      <Link
-                        to="#"
-                        className="d-inline-flex bg-soft-danger text-danger p-2 rounded-circle"
-                      >
-                        <i className="ti ti-x fw-bold" />
-                      </Link>
-                      <Link
-                        to="#"
-                        className="d-inline-flex ms-2 text-success p-2 bg-soft-success rounded-circle"
-                      >
-                        <i className="ti ti-check fw-bold" />
-                      </Link>
-                    </div>
-                  </div>
-                  <div className="d-flex justify-content-between mb-3">
-                    <div className="d-flex align-items-center">
-                      <Link
-                        to={all_routes.doctordetails}
-                        className="avatar flex-shrink-0"
-                      >
-                        <ImageWithBasePath
-                          src="assets/img/doctors/doctor-02.jpg"
-                          className="rounded-circle"
-                          alt="img"
-                        />
-                      </Link>
-                      <div className="ms-2">
-                        <div>
-                          <h6 className="fw-semibold text-truncate mb-1 fs-14">
-                            <Link to={all_routes.doctordetails}>
-                              Diane Nash
-                            </Link>
-                          </h6>
-                          <p className="fs-13 mb-0 text-truncate">
-                            1 Day - Not Well
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="d-flex align-items-center">
-                      <Link
-                        to="#"
-                        className="d-inline-flex bg-soft-danger text-danger p-2 rounded-circle"
-                      >
-                        <i className="ti ti-x fw-bold" />
-                      </Link>
-                      <Link
-                        to="#"
-                        className="d-inline-flex ms-2 text-success p-2 bg-soft-success rounded-circle"
-                      >
-                        <i className="ti ti-check fw-bold" />
-                      </Link>
-                    </div>
-                  </div>
-                  <div className="d-flex justify-content-between mb-0">
-                    <div className="d-flex align-items-center">
-                      <Link
-                        to={all_routes.doctordetails}
-                        className="avatar flex-shrink-0"
-                      >
-                        <ImageWithBasePath
-                          src="assets/img/doctors/doctor-09.jpg"
-                          className="rounded-circle"
-                          alt="img"
-                        />
-                      </Link>
-                      <div className="ms-2">
-                        <div>
-                          <h6 className="fw-semibold text-truncate mb-1 fs-14">
-                            <Link to={all_routes.doctordetails}>
-                              Sally Cavazos
-                            </Link>
-                          </h6>
-                          <p className="fs-13 mb-0 text-truncate">
-                            2 Days - Going to Checkup
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="d-flex align-items-center">
-                      <Link
-                        to="#"
-                        className="d-inline-flex bg-soft-danger text-danger p-2 rounded-circle"
-                      >
-                        <i className="ti ti-x fw-bold" />
-                      </Link>
-                      <Link
-                        to="#"
-                        className="d-inline-flex ms-2 text-success p-2 bg-soft-success rounded-circle"
-                      >
-                        <i className="ti ti-check fw-bold" />
-                      </Link>
-                    </div>
-                  </div>
+                  ))}
                 </div>
               </div>
             </div>

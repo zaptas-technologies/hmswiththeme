@@ -76,6 +76,16 @@ const formatDoctorResponse = (doctor: any) => {
     ...doc,
     _id: doc._id?.toString() || doc._id,
     id: doc.id || doc._id?.toString(),
+    // Ensure img field is included (use img or avatar field)
+    img: doc.img || doc.avatar || "assets/img/doctors/doctor-01.jpg",
+    // Map role to Designation if needed
+    Designation: doc.role || doc.Designation,
+    // Ensure all optional fields have default values
+    languageSpoken: doc.languageSpoken || [],
+    schedules: doc.schedules || [],
+    education: doc.education || [],
+    awards: doc.awards || [],
+    certifications: doc.certifications || [],
   };
 };
 
@@ -213,6 +223,13 @@ export const createDoctor: RequestHandler = async (req, res, next) => {
 
 // PATCH /api/doctors/:id - Update doctor
 export const updateDoctor: RequestHandler = async (req, res, next) => {
+  // Set CORS headers on the actual response
+  const origin = req.headers.origin;
+  res.header("Access-Control-Allow-Origin", origin || "*");
+  res.header("Access-Control-Allow-Credentials", "true");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, x-user-id, Accept, Origin");
+  
   try {
     const Model = getResourceModel("doctors");
     const { id } = req.params;

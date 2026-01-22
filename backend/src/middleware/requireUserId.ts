@@ -2,6 +2,12 @@ import { RequestHandler } from "express";
 
 // Auth middleware: supports token-based auth (Authorization header) or legacy x-user-id header
 export const requireUserId: RequestHandler = (req, res, next) => {
+  // Set CORS headers before any response to ensure they're always sent
+  res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
+  res.header("Access-Control-Allow-Credentials", "true");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, x-user-id, Accept, Origin");
+
   // Try token-based auth first
   const authHeader = req.header("Authorization");
   if (authHeader && authHeader.startsWith("Bearer ")) {
