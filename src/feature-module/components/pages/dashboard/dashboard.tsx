@@ -125,7 +125,7 @@ const Dashboard = () => {
     );
   }
 
-  const { stats, appointmentStatistics, popularDoctors, recentAppointments, topDepartments, scheduleStats, incomeByTreatment, topPatients, recentTransactions, leaveRequests } = dashboardData;
+  const { stats, appointmentStatistics, popularDoctors, recentAppointments, topDepartments, scheduleStats, scheduledDoctors, incomeByTreatment, topPatients, recentTransactions, leaveRequests } = dashboardData;
 
   return (
     <>
@@ -571,7 +571,7 @@ const Dashboard = () => {
                 </div>
                 <div className="card-body">
                   <div id="circle-chart" className="chart-set">
-                    <CircleChart />
+                    <CircleChart departments={topDepartments} />
                   </div>
                   <div className="d-flex align-items-center flex-wrap justify-content-center gap-2 mt-3">
                     {topDepartments.slice(0, 3).map((dept, index) => {
@@ -623,125 +623,46 @@ const Dashboard = () => {
                     </div>
                   </div>
                   <div className="overflow-auto">
-                    <div className="d-flex justify-content-between align-items-center mb-3">
-                      <div className="d-flex align-items-center flex-shrink-0">
-                        <Link
-                          to={all_routes.doctordetails}
-                          className="avatar flex-shrink-0"
-                        >
-                          <ImageWithBasePath
-                            src="assets/img/doctors/doctor-02.jpg"
-                            className="rounded-circle"
-                            alt="img"
-                          />
-                        </Link>
-                        <div className="ms-2 flex-shrink-0">
-                          <div>
-                            <h6 className="fw-semibold fs-14 text-truncate mb-1">
-                              <Link to={all_routes.doctordetails}>
-                                Dr. Sarah Johnson
-                              </Link>
-                            </h6>
-                            <p className="fs-13">Orthopedic Surgeon</p>
+                    {scheduledDoctors.length > 0 ? (
+                      scheduledDoctors.map((doctor, index) => (
+                        <div key={doctor.id} className={`d-flex justify-content-between align-items-center ${index < scheduledDoctors.length - 1 ? "mb-3" : "mb-0"}`}>
+                          <div className="d-flex align-items-center flex-shrink-0">
+                            <Link
+                              to={`${all_routes.doctordetails}?id=${doctor.id}`}
+                              className="avatar flex-shrink-0"
+                            >
+                              <ImageWithBasePath
+                                src={doctor.img || "assets/img/doctors/doctor-01.jpg"}
+                                className="rounded-circle"
+                                alt="img"
+                              />
+                            </Link>
+                            <div className="ms-2 flex-shrink-0">
+                              <div>
+                                <h6 className="fw-semibold fs-14 text-truncate mb-1">
+                                  <Link to={`${all_routes.doctordetails}?id=${doctor.id}`}>
+                                    {doctor.name}
+                                  </Link>
+                                </h6>
+                                <p className="fs-13">{doctor.role || doctor.department || "Doctor"}</p>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex-shrink-0 ms-2">
+                            <Link
+                              to={all_routes.newAppointment}
+                              className="btn btn-primary btn-sm py-1 flex-shrink-0"
+                            >
+                              Book Now
+                            </Link>
                           </div>
                         </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-4">
+                        <p className="text-muted mb-0">No available doctors at the moment</p>
                       </div>
-                      <div className="flex-shrink-0 ms-2">
-                        <Link
-                          to="#"
-                          className="btn btn-primary btn-sm py-1 flex-shrink-0"
-                        >
-                          Book Now
-                        </Link>
-                      </div>
-                    </div>
-                    <div className="d-flex justify-content-between align-items-center mb-3">
-                      <div className="d-flex align-items-center flex-shrink-0">
-                        <Link
-                          to={all_routes.doctordetails}
-                          className="avatar flex-shrink-0"
-                        >
-                          <ImageWithBasePath
-                            src="assets/img/doctors/doctor-03.jpg"
-                            className="rounded-circle"
-                            alt="img"
-                          />
-                        </Link>
-                        <div className="ms-2 flex-shrink-0">
-                          <div>
-                            <h6 className="fw-semibold fs-14 text-truncate mb-1">
-                              <Link to={all_routes.doctordetails}>
-                                Dr. Emily Carter
-                              </Link>
-                            </h6>
-                            <p className="fs-13">Pediatrician</p>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex-shrink-0 ms-2">
-                        <Link to="#" className="btn btn-primary btn-sm py-1">
-                          Book Now
-                        </Link>
-                      </div>
-                    </div>
-                    <div className="d-flex justify-content-between align-items-center mb-3">
-                      <div className="d-flex align-items-center flex-shrink-0">
-                        <Link
-                          to={all_routes.doctordetails}
-                          className="avatar flex-shrink-0"
-                        >
-                          <ImageWithBasePath
-                            src="assets/img/doctors/doctor-04.jpg"
-                            className="rounded-circle"
-                            alt="img"
-                          />
-                        </Link>
-                        <div className="ms-2 flex-shrink-0">
-                          <div>
-                            <h6 className="fw-semibold fs-14 text-truncate mb-1">
-                              <Link to={all_routes.doctordetails}>
-                                Dr. David Lee
-                              </Link>
-                            </h6>
-                            <p className="fs-13">Gynecologist</p>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex-shrink-0 ms-2">
-                        <Link to="#" className="btn btn-primary btn-sm py-1">
-                          Book Now
-                        </Link>
-                      </div>
-                    </div>
-                    <div className="d-flex justify-content-between align-items-center mb-0">
-                      <div className="d-flex align-items-center flex-shrink-0">
-                        <Link
-                          to={all_routes.doctordetails}
-                          className="avatar flex-shrink-0"
-                        >
-                          <ImageWithBasePath
-                            src="assets/img/doctors/doctor-14.jpg"
-                            className="rounded-circle"
-                            alt="img"
-                          />
-                        </Link>
-                        <div className="ms-2 flex-shrink-0">
-                          <div>
-                            <h6 className="fw-semibold fs-14 text-truncate mb-1">
-                              <Link to={all_routes.doctordetails}>
-                                Dr. Michael Smith
-                              </Link>
-                            </h6>
-                            <p className="fs-13">Cardiologist</p>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex-shrink-0 ms-2">
-                        <Link to="#" className="btn btn-primary btn-sm py-1">
-                          Book Now
-                        </Link>
-                      </div>
-                    </div>
+                    )}
                   </div>
                 </div>
               </div>

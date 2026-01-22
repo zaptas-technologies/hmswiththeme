@@ -168,6 +168,14 @@ export type LeaveRequest = {
   endDate: string;
 };
 
+export type ScheduledDoctor = {
+  id: string;
+  name: string;
+  role: string;
+  img: string;
+  department: string;
+};
+
 export type AdminDashboardResponse = {
   stats: AdminStats;
   appointmentStatistics: AppointmentStatistics;
@@ -175,6 +183,7 @@ export type AdminDashboardResponse = {
   recentAppointments: RecentAppointmentItem[];
   topDepartments: TopDepartment[];
   scheduleStats: ScheduleStats;
+  scheduledDoctors: ScheduledDoctor[];
   incomeByTreatment: IncomeByTreatment[];
   topPatients: TopPatientItem[];
   recentTransactions: RecentTransaction[];

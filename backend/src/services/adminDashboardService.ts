@@ -129,6 +129,14 @@ export const buildAdminDashboardPayload = async () => {
     ],
   });
 
+  // Get available doctors for schedule section (limit to 4)
+  const scheduledDoctors = await DoctorModel.find({
+    Status: "Available",
+  })
+    .select("Name_Designation role Department img")
+    .limit(4)
+    .lean();
+
   // Income By Treatment (Department)
   const incomeByTreatment = await AppointmentModel.aggregate([
     { $match: { Department: { $exists: true, $ne: "" }, Status: { $in: ["Confirmed", "Checked Out", "Completed"] } } },
@@ -351,6 +359,13 @@ export const buildAdminDashboardPayload = async () => {
       date: t.Date_Time,
     })),
     leaveRequests: formattedLeaveRequests,
+    scheduledDoctors: scheduledDoctors.map((d: any) => ({
+      id: String(d._id),
+      name: d.Name_Designation?.split(" - ")[0] || d.Name_Designation || "Unknown Doctor",
+      role: d.role || d.Department || "Doctor",
+      img: d.img || "assets/img/doctors/doctor-01.jpg",
+      department: d.Department || "",
+    })),
     appointmentTrend: {
       categories: monthLabels,
       total: totalByMonth,

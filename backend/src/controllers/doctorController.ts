@@ -188,10 +188,24 @@ export const createDoctor: RequestHandler = async (req, res, next) => {
       doctorData.id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
     }
 
-    // Check if doctor with same email or id already exists
-    const existingByEmail = await Model.findOne({ Email: doctorData.Email });
+    // Normalize email for checking (lowercase, trim)
+    const normalizedEmail = doctorData.Email.toLowerCase().trim();
+    
+    // Check if doctor with same email already exists (case-insensitive using regex)
+    // Check both Email and email fields since schema might use either
+    const emailRegex = new RegExp(`^${normalizedEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+    const existingByEmail = await Model.findOne({
+      $or: [
+        { email: emailRegex },
+        { Email: emailRegex }
+      ]
+    });
+    
     if (existingByEmail) {
-      return res.status(409).json({ message: "Doctor with this email already exists" });
+      return res.status(409).json({ 
+        message: "Doctor with this email already exists",
+        email: normalizedEmail 
+      });
     }
 
     const existingById = await Model.findOne({ id: doctorData.id });
@@ -200,22 +214,28 @@ export const createDoctor: RequestHandler = async (req, res, next) => {
     }
 
     // Check if user account already exists with this email
-    const existingUser = await User.findOne({ email: doctorData.Email.toLowerCase() });
+    const existingUser = await User.findOne({ email: normalizedEmail });
     if (existingUser) {
-      return res.status(409).json({ message: "User account with this email already exists" });
+      return res.status(409).json({ 
+        message: "User account with this email already exists",
+        email: normalizedEmail 
+      });
     }
 
     // Extract password before creating doctor (password is only for User account, not doctor record)
-    const { password, ...doctorRecordData } = doctorData;
+    const { password, email, ...doctorRecordData } = doctorData; // Remove email (lowercase) if present
+    
+    // Normalize email in doctor record to ensure consistency - use only Email (uppercase) as per schema
+    doctorRecordData.Email = normalizedEmail;
 
-    // Create doctor record (without password)
+    // Create doctor record (without password, with normalized Email)
     const doctor = await Model.create(doctorRecordData);
 
     // Create user account for login if password is provided
     if (password) {
       try {
         await User.create({
-          email: doctorData.Email.toLowerCase(),
+          email: normalizedEmail,
           password: password,
           name: doctorData.Name_Designation.split(" - ")[0] || doctorData.Name_Designation, // Extract name from Name_Designation
           phone: doctorData.Phone,
@@ -238,8 +258,13 @@ export const createDoctor: RequestHandler = async (req, res, next) => {
     // Handle MongoDB duplicate key error
     if (err.code === 11000) {
       const field = Object.keys(err.keyPattern)[0];
+      const fieldName = field === 'Email' || field === 'email' ? 'email' : field;
+      // eslint-disable-next-line no-console
+      console.error('Duplicate key error:', { field, keyPattern: err.keyPattern, keyValue: err.keyValue });
       return res.status(409).json({ 
-        message: `Doctor with this ${field} already exists` 
+        message: `Doctor with this ${fieldName} already exists`,
+        field: fieldName,
+        duplicateKey: err.keyValue
       });
     }
     

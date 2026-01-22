@@ -1,14 +1,38 @@
-import { useState } from "react";
+import { useMemo } from "react";
 import Chart from "react-apexcharts";
 
-const CircleChart = () => {
-  const [chartOptions] = useState<any>({
+type CircleChartProps = {
+  departments?: Array<{ name: string; count: number }>;
+};
+
+const CircleChart = ({ departments = [] }: CircleChartProps) => {
+  // Prepare chart data from departments
+  const chartData = useMemo(() => {
+    const top3 = departments.slice(0, 3);
+    const labels = top3.map((dept) => `${dept.count} ${dept.name}`);
+    const series = top3.map((dept) => dept.count);
+    
+    // If no departments, use default empty data
+    if (top3.length === 0) {
+      return {
+        labels: ["No Data"],
+        series: [0],
+      };
+    }
+    
+    return {
+      labels,
+      series,
+    };
+  }, [departments]);
+
+  const chartOptions = useMemo(() => ({
     chart: {
       type: "donut",
       height: 270,
       width: "100%",
     },
-    labels: ["214 Cardiology", "121 Neurolgy", "150 Dental"],
+    labels: chartData.labels,
     colors: ["#6DA6F2", "#5C60CC", "#9B51B6"],
     legend: {
       show: false,
@@ -59,13 +83,11 @@ const CircleChart = () => {
     tooltip: {
       enabled: true,
     },
-  });
-
-  const [series] = useState([219, 200, 219]);
+  }), [chartData.labels]);
 
   return (
     <div id="circle-chart">
-      <Chart options={chartOptions} series={series} type="donut" height={270} />
+      <Chart options={chartOptions} series={chartData.series} type="donut" height={270} />
     </div>
   );
 };
