@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { fetchDashboard, type DashboardResponse } from "../../../../../api/dashboard";
 import ImageWithBasePath from "../../../../../core/imageWithBasePath";
 import Modals from "./modals/modals";
@@ -8,6 +8,7 @@ import SCol5Chart from "./charts/scol5";
 import SCol6Chart from "./charts/scol6";
 import SCol7Chart from "./charts/scol7";
 import CircleChart2 from "./charts/circleChart2";
+import { all_routes } from "../../../../routes/all_routes";
 
 const heroIcons = [
   { className: "ti ti-calendar-heart", tone: "primary" },
@@ -19,6 +20,7 @@ const DoctorDahboard = () => {
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const load = async () => {
@@ -295,9 +297,18 @@ const DoctorDahboard = () => {
                     </div>
                   </div>
                   <div className="my-3 border-bottom pb-3">
-                    <Link to="#" className="btn btn-primary w-100">
-                      Start Appointment
-                    </Link>
+                    {data.upcoming.appointmentId && data.upcoming.patientName !== "-" ? (
+                      <Link
+                        to={`${all_routes.onlineconsultations}?appointmentId=${data.upcoming.appointmentId}`}
+                        className="btn btn-primary w-100"
+                      >
+                        Start Appointment
+                      </Link>
+                    ) : (
+                      <button className="btn btn-primary w-100" disabled>
+                        No Upcoming Appointment
+                      </button>
+                    )}
                   </div>
                   <div className="d-flex align-items-center gap-2">
                     <Link to="#" className="btn btn-dark w-100">
@@ -474,12 +485,19 @@ const DoctorDahboard = () => {
                               ${item.fee.toLocaleString()}
                             </td>
                             <td>
-                              <Link
-                                to="#"
-                                className="shadow-sm fs-14 d-inline-flex border rounded-2 p-1 me-1"
-                              >
-                                <i className="ti ti-calendar-plus" />
-                              </Link>
+                              {item.status !== "Checked Out" && item.status !== "Cancelled" ? (
+                                <Link
+                                  to={`${all_routes.onlineconsultations}?appointmentId=${item.id}`}
+                                  className="shadow-sm fs-14 d-inline-flex border rounded-2 p-1 me-1"
+                                  title="Start Consultation"
+                                >
+                                  <i className="ti ti-calendar-plus" />
+                                </Link>
+                              ) : (
+                                <span className="shadow-sm fs-14 d-inline-flex border rounded-2 p-1 me-1 text-muted" title="Appointment completed">
+                                  <i className="ti ti-check" />
+                                </span>
+                              )}
                               <Link
                                 to="#"
                                 data-bs-toggle="dropdown"

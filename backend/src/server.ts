@@ -11,6 +11,7 @@ import { buildDoctorRouter } from "./routes/doctorRoutes";
 import { buildAppointmentRouter } from "./routes/appointmentRoutes";
 import { buildDoctorLeaveRouter } from "./routes/doctorLeaveRoutes";
 import { buildPatientRouter } from "./routes/patientRoutes";
+import { buildConsultationRouter } from "./routes/consultationRoutes";
 import { scanResourceFiles } from "./utils/resourceLoader";
 import { initResourceModels } from "./models/resourceRegistry";
 
@@ -59,6 +60,7 @@ const start = async () => {
   app.use("/api/appointments", buildAppointmentRouter());
   app.use("/api/doctor-leaves", buildDoctorLeaveRouter());
   app.use("/api/patients", buildPatientRouter());
+  app.use("/api/consultations", buildConsultationRouter());
   app.use("/api", buildResourceRouter(resources));
 
   app.get("/", (_req, res) =>
