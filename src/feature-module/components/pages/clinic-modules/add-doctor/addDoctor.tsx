@@ -56,6 +56,7 @@ const AddDoctor = () => {
   const [username, setUsername] = useState("");
   const [phone, setPhone] = useState<string | undefined>();
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [dob, setDob] = useState<Dayjs | null>(null);
   const [yearOfExperience, setYearOfExperience] = useState("");
   const [department, setDepartment] = useState("");
@@ -177,8 +178,13 @@ const AddDoctor = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!name || !email || !phone) {
-      alert("Please fill in required fields: Name, Email, and Phone");
+    if (!name || !email || !phone || !password) {
+      alert("Please fill in required fields: Name, Email, Phone, and Password");
+      return;
+    }
+    
+    if (password.length < 6) {
+      alert("Password must be at least 6 characters long");
       return;
     }
 
@@ -189,6 +195,7 @@ const AddDoctor = () => {
         Name_Designation: `${name}${designation ? ` - ${designation}` : ""}`,
         Email: email,
         Phone: phone,
+        password, // Include password for user account creation
         Department: department,
         role: designation,
         Fees: consultationCharge,
@@ -362,6 +369,24 @@ const AddDoctor = () => {
                                   onChange={(e) => setEmail(e.target.value)}
                                   required
                                 />
+                              </div>
+                            </div>
+                            <div className="col-lg-6">
+                              <div className="mb-3">
+                                <label className="form-label">
+                                  Password
+                                  <span className="text-danger">*</span>
+                                </label>
+                                <input 
+                                  type="password" 
+                                  className="form-control" 
+                                  value={password}
+                                  onChange={(e) => setPassword(e.target.value)}
+                                  required
+                                  minLength={6}
+                                  placeholder="Minimum 6 characters"
+                                />
+                                <small className="text-muted">Password must be at least 6 characters long</small>
                               </div>
                             </div>
                           </div>

@@ -1,6 +1,7 @@
 import { RequestHandler } from "express";
 import { getResourceModel } from "../models/resourceRegistry";
 import mongoose from "mongoose";
+import { User } from "../models/userModel";
 
 export interface DoctorRequest {
   id?: string;
@@ -10,6 +11,7 @@ export interface DoctorRequest {
   Department?: string;
   Phone: string;
   Email: string;
+  password?: string; // Password for creating user account
   Fees?: string;
   Status: "Available" | "Unavailable";
   
@@ -197,7 +199,40 @@ export const createDoctor: RequestHandler = async (req, res, next) => {
       return res.status(409).json({ message: "Doctor with this ID already exists" });
     }
 
-    const doctor = await Model.create(doctorData);
+    // Check if user account already exists with this email
+    const existingUser = await User.findOne({ email: doctorData.Email.toLowerCase() });
+    if (existingUser) {
+      return res.status(409).json({ message: "User account with this email already exists" });
+    }
+
+    // Extract password before creating doctor (password is only for User account, not doctor record)
+    const { password, ...doctorRecordData } = doctorData;
+
+    // Create doctor record (without password)
+    const doctor = await Model.create(doctorRecordData);
+
+    // Create user account for login if password is provided
+    if (password) {
+      try {
+        await User.create({
+          email: doctorData.Email.toLowerCase(),
+          password: password,
+          name: doctorData.Name_Designation.split(" - ")[0] || doctorData.Name_Designation, // Extract name from Name_Designation
+          phone: doctorData.Phone,
+          role: "doctor",
+          specialization: doctorData.Department,
+        });
+      } catch (userErr: any) {
+        // If user creation fails, delete the doctor record to maintain consistency
+        await Model.findByIdAndDelete(doctor._id);
+        
+        if (userErr.code === 11000) {
+          return res.status(409).json({ message: "User account with this email already exists" });
+        }
+        throw userErr;
+      }
+    }
+
     res.status(201).json(formatDoctorResponse(doctor));
   } catch (err: any) {
     // Handle MongoDB duplicate key error
