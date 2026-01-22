@@ -111,6 +111,13 @@ const NewAppointment = () => {
         return;
       }
 
+      // Find selected doctor to get doctor ID
+      const selectedDoctor = doctors.find((d) => d.Name_Designation === formData.Doctor);
+      if (!selectedDoctor) {
+        alert("Selected doctor not found");
+        return;
+      }
+
       // Combine date and time
       const dateTime = formData.Date
         .hour(formData.Time?.hour() || 0)
@@ -123,11 +130,12 @@ const NewAppointment = () => {
         Patient: formData.Patient,
         Phone: selectedPatient.Phone || "",
         Doctor: formData.Doctor,
+        doctorId: selectedDoctor._id || selectedDoctor.id, // Save doctor's _id
         Mode: formData.Appointment_Type,
         Status: formData.Status,
         // Additional fields
-        role: doctors.find((d) => d.Name_Designation === formData.Doctor)?.role || "",
-        Department: formData.Department || "",
+        role: selectedDoctor.role || "",
+        Department: formData.Department || selectedDoctor.Department || "",
         Reason: formData.Reason || "",
       };
 
