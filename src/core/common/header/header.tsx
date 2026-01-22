@@ -346,7 +346,7 @@ const Header = () => {
               </Link>
             </div>
             {/* Notification Dropdown */}
-            <div className="header-item">
+            {/* <div className="header-item">
               <div className="dropdown me-3">
                 <button
                   className="topbar-link btn btn-icon topbar-link dropdown-toggle drop-arrow-none position-relative"
@@ -387,7 +387,7 @@ const Header = () => {
                       )}
                     </div>
                   </div>
-                  {/* Notification Body */}
+                  
                   <div
                     className="notification-body position-relative z-2 rounded-0"
                     data-simplebar=""
@@ -471,7 +471,7 @@ const Header = () => {
                       ))
                     )}
                   </div>
-                  {/* View All*/}
+                
                   {notifications.length > 0 && (
                     <div className="p-2 rounded-bottom border-top text-center">
                       <Link
@@ -484,7 +484,7 @@ const Header = () => {
                   )}
                 </div>
               </div>
-            </div>
+            </div> */}
             {/* User Dropdown */}
             {user && (
               <div className="dropdown profile-dropdown d-flex align-items-center justify-content-center">

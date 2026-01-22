@@ -175,7 +175,7 @@ const EditPage = () => {
         {/* Footer Start */}
         <div className="footer text-center bg-white p-2 border-top">
           <p className="text-dark mb-0">
-            2025 ©
+            2026©
             <Link to="#;" className="link-primary">
               Preclinic
             </Link>

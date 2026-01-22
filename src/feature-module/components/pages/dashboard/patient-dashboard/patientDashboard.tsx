@@ -964,7 +964,7 @@ const PatientDashboard = () => {
                           </div>
                         </div>
                       </td>
-                      <td>27 May 2025 - 09:30 AM</td>
+                      <td>27 May 2026- 09:30 AM</td>
                       <td className="fw-semibold text-dark">$400</td>
                       <td>Online</td>
                       <td>
@@ -1032,7 +1032,7 @@ const PatientDashboard = () => {
                           </div>
                         </div>
                       </td>
-                      <td>26 May 2025 - 10:15 AM</td>
+                      <td>26 May 2026- 10:15 AM</td>
                       <td className="fw-semibold text-dark">$370</td>
                       <td>Online</td>
                       <td>
@@ -1100,7 +1100,7 @@ const PatientDashboard = () => {
                           </div>
                         </div>
                       </td>
-                      <td>25 May 2025 - 02:40 PM</td>
+                      <td>25 May 2026- 02:40 PM</td>
                       <td className="fw-semibold text-dark">$450</td>
                       <td>In-Person</td>
                       <td>
@@ -1168,7 +1168,7 @@ const PatientDashboard = () => {
                           </div>
                         </div>
                       </td>
-                      <td>24 May 2025 - 11:30 AM</td>
+                      <td>24 May 2026- 11:30 AM</td>
                       <td className="fw-semibold text-dark">$310</td>
                       <td>In-Person</td>
                       <td>
@@ -1236,7 +1236,7 @@ const PatientDashboard = () => {
                           </div>
                         </div>
                       </td>
-                      <td>23 May 2025 - 04:10 PM</td>
+                      <td>23 May 2026- 04:10 PM</td>
                       <td className="fw-semibold text-dark">$400</td>
                       <td>Online</td>
                       <td>
@@ -1296,7 +1296,7 @@ const PatientDashboard = () => {
         {/* Footer Start */}
         <div className="footer text-center bg-white p-2 border-top">
           <p className="text-dark mb-0">
-            2025 ©
+            2026©
             <Link to="#" className="link-primary">
               Preclinic
             </Link>

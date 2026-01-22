@@ -157,13 +157,13 @@ const DoctorDahboard = () => {
                 <i className="ti ti-plus me-1" />
                 New Appointment
               </Link>
-              <Link
+              {/* <Link
                 to="#"
                 className="btn btn-outline-white bg-white d-inline-flex align-items-center"
               >
                 <i className="ti ti-calendar-time me-1" />
                 Schedule Availability
-              </Link>
+              </Link> */}
             </div>
           </div>
           {/* End Page Header */}
@@ -310,7 +310,7 @@ const DoctorDahboard = () => {
                       </button>
                     )}
                   </div>
-                  <div className="d-flex align-items-center gap-2">
+                  {/* <div className="d-flex align-items-center gap-2">
                     <Link to="#" className="btn btn-dark w-100">
                       <i className="ti ti-brand-hipchat me-1" />
                       Chat Now
@@ -319,7 +319,7 @@ const DoctorDahboard = () => {
                       <i className="ti ti-video me-1" />
                       Video Consultation
                     </Link>
-                  </div>
+                  </div> */}
                 </div>
               </div>
               {/* card end */}
@@ -740,7 +740,7 @@ const DoctorDahboard = () => {
         {/* Footer Start */}
         <div className="footer text-center bg-white p-2 border-top">
           <p className="text-dark mb-0">
-            2025 ©
+            2026©
             <Link to="#" className="link-primary">
               Preclinic
             </Link>

@@ -57,7 +57,7 @@ const SearchList = () => {
           <div className="card">
             <div className="card-body">
               <h6 className="mb-3 text-capitalize">
-                Search result for "Preclinic"
+                Search result for "Zaptas"
               </h6>
               {/* start row */}
               <div className="row">
@@ -71,7 +71,7 @@ const SearchList = () => {
                         https://themeforest.net/search/Preclinic
                       </Link>
                       <p className="text-truncate line-clamb-2 mb-2">
-                        Preclinic - Html, Vue 3, Angular 17+, React &amp; Node
+                        Zaptas - Html, Vue 3, Angular 17+, React &amp; Node
                         HR Project Management &amp; CRM Admin Dashboard Template
                       </p>
                       <div className="d-flex align-items-center flex-wrap row-gap-2">
@@ -471,9 +471,9 @@ const SearchList = () => {
         {/* Footer Start */}
         <div className="footer text-center bg-white p-2 border-top">
           <p className="text-dark mb-0">
-            2025 ©{" "}
+            2026©{" "}
             <Link to="#" className="link-primary">
-              Preclinic
+              Zaptas
             </Link>
             , All Rights Reserved
           </p>

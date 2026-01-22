@@ -174,7 +174,7 @@ const SidebarTwo = () => {
                         </Link>
                       </li>
                       <li>
-                        <Link
+                        {/* <Link
                           to={all_routes.onlineconsultations}
                           className={
                             isActive(all_routes.onlineconsultations)
@@ -183,7 +183,7 @@ const SidebarTwo = () => {
                           }
                         >
                           Online Consultations
-                        </Link>
+                        </Link> */}
                       </li>
                     </ul>
                   </li>

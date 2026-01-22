@@ -65,7 +65,7 @@ curl http://localhost:4000/api/appointments/1
 # Create new appointment
 curl -X POST http://localhost:4000/api/appointments \
   -H "Content-Type: application/json" \
-  -d '{"id":"11","Date_Time":"01 May 2025 - 10:00 AM","Patient":"John Doe",...}'
+  -d '{"id":"11","Date_Time":"01 May 2026- 10:00 AM","Patient":"John Doe",...}'
 
 # Update appointment
 curl -X PATCH http://localhost:4000/api/appointments/1 \

@@ -107,7 +107,7 @@ export const DoctorLeaveSchema = new Schema(
     id: { type: String, required: true, unique: true },
     Doctor: { type: String, required: true },
     Doctor_Id: { type: String },
-    Date: { type: String, required: true }, // Format: "15 Apr 2025 - 15 Apr 2025" or date range
+    Date: { type: String, required: true }, // Format: "15 Apr 2026- 15 Apr 2025" or date range
     From_Date: { type: Date },
     To_Date: { type: Date },
     Leave_Type: { type: String, required: true },

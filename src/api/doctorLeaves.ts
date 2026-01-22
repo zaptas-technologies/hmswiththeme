@@ -7,7 +7,7 @@ export interface DoctorLeave {
   id?: string;
   Doctor: string;
   Doctor_Id?: string;
-  Date: string; // Format: "15 Apr 2025 - 15 Apr 2025"
+  Date: string; // Format: "15 Apr 2026- 15 Apr 2025"
   From_Date?: string | Date;
   To_Date?: string | Date;
   Leave_Type: string;
