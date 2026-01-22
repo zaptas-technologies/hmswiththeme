@@ -50,7 +50,7 @@ const SitemapSettings = () => {
                         </thead>
                         <tbody className="border-none">
                           <tr>
-                            <td>https://localhost/Preclinic</td>
+                            <td>https://localhost/Zaptas</td>
                             <td>sitemap18725604.xml</td>
                             <td className="action-item">
                               <Link
@@ -102,9 +102,9 @@ const SitemapSettings = () => {
         {/* Footer Start */}
         <div className="footer text-center bg-white p-2 border-top">
           <p className="text-dark mb-0">
-            2025 ©
+            2026©
             <Link to="#" className="link-primary">
-              Preclinic
+              Zaptas
             </Link>
             , All Rights Reserved
           </p>

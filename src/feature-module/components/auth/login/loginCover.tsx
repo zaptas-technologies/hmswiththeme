@@ -212,7 +212,7 @@ const LoginCover = () => {
                     </div>
                   </form>
                   <p className="fs-14 text-dark text-center mt-4">
-                    Copyright © 2025 - Preclinic.
+                    Copyright © 2026- Zaptas.
                   </p>
                 </div>
                 {/* end row*/}

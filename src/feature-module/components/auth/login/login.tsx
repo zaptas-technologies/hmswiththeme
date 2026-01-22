@@ -229,7 +229,7 @@ const Login = () => {
               </form>
               <p className="text-dark text-center">
                 
-                Copyright © 2025 - Preclinic
+                Copyright © 2026 - Zaptas
               </p>
             </div>
             {/* end col */}

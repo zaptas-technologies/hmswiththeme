@@ -1,7 +1,7 @@
 export const PatientDeatilsData = [
   {
     id: "1",
-    Date_Time: "30 Apr 2025 - 09:30 AM",
+    Date_Time: "30 Apr 2026- 09:30 AM",
     Doctor_Name: "Dr. Mick Thompson ",
     Role: "Cardiologist",
     Doctor_Image: "doctor-01.jpg",
@@ -10,7 +10,7 @@ export const PatientDeatilsData = [
   },
   {
     id: "2",
-    Date_Time: "15 Apr 2025 - 11:20 AM",
+    Date_Time: "15 Apr 2026- 11:20 AM",
     Doctor_Name: "Dr. Sarah Johnson ",
     Role: "Orthopedic Surgeon",
     Doctor_Image: "doctor-02.jpg",
@@ -19,7 +19,7 @@ export const PatientDeatilsData = [
   },
   {
     id: "3",
-    Date_Time: "02 Apr 2025 - 08:15 AM",
+    Date_Time: "02 Apr 2026- 08:15 AM",
     Doctor_Name: "Dr. Emily Carter ",
     Role: "Pediatrician",
     Doctor_Image: "doctor-03.jpg",
@@ -28,7 +28,7 @@ export const PatientDeatilsData = [
   },
   {
     id: "4",
-    Date_Time: "27 Mar 2025 - 02:00 PM",
+    Date_Time: "27 Mar 2026- 02:00 PM",
     Doctor_Name: "Dr. David Lee Gynecologist",
     Role: "Gynecologist",
     Doctor_Image: "doctor-04.jpg",
@@ -37,7 +37,7 @@ export const PatientDeatilsData = [
   },
   {
     id: "5",
-    Date_Time: "12 Mar 2025 - 05:40 PM",
+    Date_Time: "12 Mar 2026- 05:40 PM",
     Doctor_Name: "Dr. Anna Kim ",
     Role: "Psychiatrist",
     Doctor_Image: "doctor-05.jpg",
@@ -46,7 +46,7 @@ export const PatientDeatilsData = [
   },
   {
     id: "6",
-    Date_Time: "24 Feb 2025 - 09:20 AM",
+    Date_Time: "24 Feb 2026- 09:20 AM",
     Doctor_Name: "Dr. John Smith ",
     Role: "Neurosurgeon",
     Doctor_Image: "doctor-06.jpg",
@@ -55,7 +55,7 @@ export const PatientDeatilsData = [
   },
   {
     id: "7",
-    Date_Time: "16 Feb 2025 - 11:40 AM",
+    Date_Time: "16 Feb 2026- 11:40 AM",
     Doctor_Name: "Dr. Lisa White ",
     Role: "Oncologist",
     Doctor_Image: "doctor-07.jpg",
@@ -64,7 +64,7 @@ export const PatientDeatilsData = [
   },
   {
     id: "8",
-    Date_Time: "01 Feb 2025 - 04:00 PM",
+    Date_Time: "01 Feb 2026- 04:00 PM",
     Doctor_Name: "Dr. Patricia Brown ",
     Role: "Pulmonologist",
     Doctor_Image: "doctor-08.jpg",
@@ -73,7 +73,7 @@ export const PatientDeatilsData = [
   },
   {
     id: "9",
-    Date_Time: "25 Jan 2025 - 03:10 PM",
+    Date_Time: "25 Jan 2026- 03:10 PM",
     Doctor_Name: "Dr. Rachel Green ",
     Role: "Urologist",
     Doctor_Image: "doctor-09.jpg",
@@ -82,7 +82,7 @@ export const PatientDeatilsData = [
   },
   {
     id: "10",
-    Date_Time: "12 Jan 2025 - 03:10 PM",
+    Date_Time: "12 Jan 2026- 03:10 PM",
     Doctor_Name: "Dr. Michael Smith ",
     Role: "Cardiologist",
     Doctor_Image: "doctor-10.jpg",

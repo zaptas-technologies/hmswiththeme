@@ -1,7 +1,7 @@
 export const DoctorLeavesData = [
   {
     id: "1",
-    Date: "15 Apr 2025 - 15 Apr 2025",
+    Date: "15 Apr 2026- 15 Apr 2025",
     Leave_Type: "Sick Leave",
     Day: "01 Day",
     Applied_On: "22 Apr 2025",
@@ -9,7 +9,7 @@ export const DoctorLeavesData = [
   },
   {
     id: "2",
-    Date: "30 Apr 2025 - 30 Apr 2025",
+    Date: "30 Apr 2026- 30 Apr 2025",
     Leave_Type: "Sick Leave",
     Day: "01 Day",
     Applied_On: "22 Apr 2025",
@@ -17,7 +17,7 @@ export const DoctorLeavesData = [
   },
   {
     id: "3",
-    Date: "15 Apr 2025 - 15 Apr 2025",
+    Date: "15 Apr 2026- 15 Apr 2025",
     Leave_Type: "Casual Leave",
     Day: "01 Day",
     Applied_On: "12 Apr 2025",
@@ -25,7 +25,7 @@ export const DoctorLeavesData = [
   },
   {
     id: "4",
-    Date: "02 Apr 2025 - 03 Apr 2025",
+    Date: "02 Apr 2026- 03 Apr 2025",
     Leave_Type: "Emergency",
     Day: "02 Days",
     Applied_On: "01 Apr 2025",
@@ -33,7 +33,7 @@ export const DoctorLeavesData = [
   },
   {
     id: "5",
-    Date: "12 Mar 2025 - 13 Mar 2025",
+    Date: "12 Mar 2026- 13 Mar 2025",
     Leave_Type: "Vacation",
     Day: "02 Days",
     Applied_On: "05 Mar 2025",
@@ -41,7 +41,7 @@ export const DoctorLeavesData = [
   },
   {
     id: "6",
-    Date: "27 Mar 2025 - 29 Mar 2025",
+    Date: "27 Mar 2026- 29 Mar 2025",
     Leave_Type: "Maternity",
     Day: "03 Days",
     Applied_On: "20 Mar 2025",
@@ -49,7 +49,7 @@ export const DoctorLeavesData = [
   },
   {
     id: "7",
-    Date: "05 Mar 2025 - 05 Mar 2025",
+    Date: "05 Mar 2026- 05 Mar 2025",
     Leave_Type: "Paternity",
     Day: "01 Day",
     Applied_On: "01 Mar 2025",
@@ -57,7 +57,7 @@ export const DoctorLeavesData = [
   },
   {
     id: "8",
-    Date: "24 Feb 2025 - 25 Feb 2025",
+    Date: "24 Feb 2026- 25 Feb 2025",
     Leave_Type: "Sick Leave",
     Day: "02 Days",
     Applied_On: "15 Feb 2025",
@@ -65,7 +65,7 @@ export const DoctorLeavesData = [
   },
   {
     id: "9",
-    Date: "16 Feb 2025 - 17 Feb 2025",
+    Date: "16 Feb 2026- 17 Feb 2025",
     Leave_Type: "Casual Leave",
     Day: "01 Day",
     Applied_On: "09 Feb 2025",
@@ -73,7 +73,7 @@ export const DoctorLeavesData = [
   },
   {
     id: "10",
-    Date: "01 Feb 2025 - 01 Feb 2025",
+    Date: "01 Feb 2026- 01 Feb 2025",
     Leave_Type: "Emergency",
     Day: "01 Day",
     Applied_On: "01 Feb 2025",
@@ -81,7 +81,7 @@ export const DoctorLeavesData = [
   },
   {
     id: "11",
-    Date: "25 Jan 2025 - 29 Jan 2025",
+    Date: "25 Jan 2026- 29 Jan 2025",
     Leave_Type: "Vacation",
     Day: "05 Days",
     Applied_On: "12 Jan 2025",

@@ -174,7 +174,7 @@ const SidebarTwo = () => {
                         </Link>
                       </li>
                       <li>
-                        <Link
+                        {/* <Link
                           to={all_routes.onlineconsultations}
                           className={
                             isActive(all_routes.onlineconsultations)
@@ -183,7 +183,7 @@ const SidebarTwo = () => {
                           }
                         >
                           Online Consultations
-                        </Link>
+                        </Link> */}
                       </li>
                     </ul>
                   </li>
@@ -314,7 +314,7 @@ const SidebarTwo = () => {
               <div>
                 <h6 className="fs-14 fw-semibold mb-1">Upgrade To Pro</h6>
                 <p className="fs-13 mb-0">
-                  Check 1 min video and begin use Preclinic like a pro
+                  Check 1 min video and begin use Zaptas like a pro
                 </p>
               </div>
               <Link to="#" className="close-icon shadow-sm">

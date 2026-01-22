@@ -134,31 +134,31 @@ export const buildDashboardPayload = async (doctorId: string) => {
       },
       changeSummary: `${pctChange(last7Total, prev7Total) >= 0 ? "+" : ""}${pctChange(last7Total, prev7Total)}% in last 7 days`,
     },
-    {
-      id: "online-consultations",
-      title: "Online Consultations",
-      value: onlineCount,
-      deltaPct: Math.abs(pctChange(last7Online, prev7Online)),
-      deltaDirection: pctChange(last7Online, prev7Online) >= 0 ? "up" : "down",
-      badgeTone: pctChange(last7Online, prev7Online) >= 0 ? "success" : "danger",
-      spark: {
-        data: await (async () => {
-          const start = startOfDay(sevenDaysAgo);
-          const days = Array.from({ length: 7 }).map((_, i) => new Date(start.getTime() + i * 24 * 60 * 60 * 1000));
-          const buckets = new Map<string, number>();
-          allAppointments.forEach((a: any) => {
-            const apptDate = parseAppointmentDate(a.Date_Time);
-            if (a.Mode === "Online" && apptDate >= start && apptDate < now) {
-              const dateKey = apptDate.toISOString().slice(0, 10);
-              buckets.set(dateKey, (buckets.get(dateKey) || 0) + 1);
-            }
-          });
-          return days.map((d) => buckets.get(d.toISOString().slice(0, 10)) || 0);
-        })(),
-        color: "#E04F16",
-      },
-      changeSummary: `${pctChange(last7Online, prev7Online) >= 0 ? "+" : ""}${pctChange(last7Online, prev7Online)}% in last 7 days`,
-    },
+    // {
+    //   id: "online-consultations",
+    //   title: "Online Consultations",
+    //   value: onlineCount,
+    //   deltaPct: Math.abs(pctChange(last7Online, prev7Online)),
+    //   deltaDirection: pctChange(last7Online, prev7Online) >= 0 ? "up" : "down",
+    //   badgeTone: pctChange(last7Online, prev7Online) >= 0 ? "success" : "danger",
+    //   spark: {
+    //     data: await (async () => {
+    //       const start = startOfDay(sevenDaysAgo);
+    //       const days = Array.from({ length: 7 }).map((_, i) => new Date(start.getTime() + i * 24 * 60 * 60 * 1000));
+    //       const buckets = new Map<string, number>();
+    //       allAppointments.forEach((a: any) => {
+    //         const apptDate = parseAppointmentDate(a.Date_Time);
+    //         if (a.Mode === "Online" && apptDate >= start && apptDate < now) {
+    //           const dateKey = apptDate.toISOString().slice(0, 10);
+    //           buckets.set(dateKey, (buckets.get(dateKey) || 0) + 1);
+    //         }
+    //       });
+    //       return days.map((d) => buckets.get(d.toISOString().slice(0, 10)) || 0);
+    //     })(),
+    //     color: "#E04F16",
+    //   },
+    //   changeSummary: `${pctChange(last7Online, prev7Online) >= 0 ? "+" : ""}${pctChange(last7Online, prev7Online)}% in last 7 days`,
+    // },
     {
       id: "cancelled-appointments",
       title: "Cancelled Appointments",
@@ -306,11 +306,11 @@ export const buildDashboardPayload = async (doctorId: string) => {
 
   const tiles = [
     { id: "total-patient", label: "Total Patient", value: totalPatients, trend: "Last 7 days", tone: "success" },
-    { id: "video-consultation", label: "Video Consultation", value: onlineCount, trend: "Last 7 days", tone: "success" },
-    { id: "rescheduled", label: "Rescheduled", value: 0, trend: "Last 7 days", tone: "warning" },
+    // { id: "video-consultation", label: "Video Consultation", value: onlineCount, trend: "Last 7 days", tone: "success" },
+    // { id: "rescheduled", label: "Rescheduled", value: 0, trend: "Last 7 days", tone: "warning" },
     { id: "pre-visit", label: "Pre Visit Bookings", value: last7Total, trend: "Last 7 days", tone: "success" },
-    { id: "walkin", label: "Walkin Bookings", value: 0, trend: "Last 7 days", tone: "info" },
-    { id: "follow-ups", label: "Follow Ups", value: 0, trend: "Last 7 days", tone: "success" },
+    // { id: "walkin", label: "Walkin Bookings", value: 0, trend: "Last 7 days", tone: "info" },
+    // { id: "follow-ups", label: "Follow Ups", value: 0, trend: "Last 7 days", tone: "success" },
   ];
 
   // ensure models are initialized in mongoose for lookups

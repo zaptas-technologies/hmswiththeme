@@ -56,7 +56,7 @@ const Modals = ({ selectedLeave = null, onSuccess, onDelete }: ModalsProps) => {
 
   useEffect(() => {
     if (selectedLeave) {
-      // Parse date from Date string (format: "15 Apr 2025 - 15 Apr 2025")
+      // Parse date from Date string (format: "15 Apr 2026- 15 Apr 2025")
       const dateStr = selectedLeave.Date || "";
       const dateParts = dateStr.split(" - ");
       const fromDateStr = dateParts[0] || "";

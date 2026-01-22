@@ -849,7 +849,7 @@ const PatientDetails = () => {
                   </thead>
                   <tbody>
                     <tr>
-                      <td>30 Apr 2025 - 09:30 AM</td>
+                      <td>30 Apr 2026- 09:30 AM</td>
                       <td>
                         <div className="d-flex align-items-center">
                           <Link
@@ -912,7 +912,7 @@ const PatientDetails = () => {
                       </td>
                     </tr>
                     <tr>
-                      <td>15 Apr 2025 - 11:20 AM</td>
+                      <td>15 Apr 2026- 11:20 AM</td>
                       <td>
                         <div className="d-flex align-items-center">
                           <Link
@@ -975,7 +975,7 @@ const PatientDetails = () => {
                       </td>
                     </tr>
                     <tr>
-                      <td>02 Apr 2025 - 08:15 AM</td>
+                      <td>02 Apr 2026- 08:15 AM</td>
                       <td>
                         <div className="d-flex align-items-center">
                           <Link
@@ -1038,7 +1038,7 @@ const PatientDetails = () => {
                       </td>
                     </tr>
                     <tr>
-                      <td>27 Mar 2025 - 02:00 PM</td>
+                      <td>27 Mar 2026- 02:00 PM</td>
                       <td>
                         <div className="d-flex align-items-center">
                           <Link
@@ -1101,7 +1101,7 @@ const PatientDetails = () => {
                       </td>
                     </tr>
                     <tr>
-                      <td>12 Mar 2025 - 05:40 PM</td>
+                      <td>12 Mar 2026- 05:40 PM</td>
                       <td>
                         <div className="d-flex align-items-center">
                           <Link
@@ -1164,7 +1164,7 @@ const PatientDetails = () => {
                       </td>
                     </tr>
                     <tr>
-                      <td>24 Feb 2025 - 09:20 AM</td>
+                      <td>24 Feb 2026- 09:20 AM</td>
                       <td>
                         <div className="d-flex align-items-center">
                           <Link
@@ -1227,7 +1227,7 @@ const PatientDetails = () => {
                       </td>
                     </tr>
                     <tr>
-                      <td>16 Feb 2025 - 11:40 AM</td>
+                      <td>16 Feb 2026- 11:40 AM</td>
                       <td>
                         <div className="d-flex align-items-center">
                           <Link
@@ -1290,7 +1290,7 @@ const PatientDetails = () => {
                       </td>
                     </tr>
                     <tr>
-                      <td>01 Feb 2025 - 04:00 PM</td>
+                      <td>01 Feb 2026- 04:00 PM</td>
                       <td>
                         <div className="d-flex align-items-center">
                           <Link
@@ -1353,7 +1353,7 @@ const PatientDetails = () => {
                       </td>
                     </tr>
                     <tr>
-                      <td>25 Jan 2025 - 03:10 PM</td>
+                      <td>25 Jan 2026- 03:10 PM</td>
                       <td>
                         <div className="d-flex align-items-center">
                           <Link
@@ -1416,7 +1416,7 @@ const PatientDetails = () => {
                       </td>
                     </tr>
                     <tr>
-                      <td>12 Jan 2025 - 03:10 PM</td>
+                      <td>12 Jan 2026- 03:10 PM</td>
                       <td>
                         <div className="d-flex align-items-center">
                           <Link
@@ -2032,7 +2032,7 @@ const PatientDetails = () => {
                         <Link to="#">#TNX0023</Link>
                       </td>
                       <td className="text-dark"> Eye Checkup </td>
-                      <td className="text-dark"> 02 Apr 2025 </td>
+                      <td className="text-dark"> 02 Apr 2026</td>
                       <td className="text-dark"> Cheque </td>
                       <td className="text-dark"> $850</td>
                       <td>
@@ -2046,7 +2046,7 @@ const PatientDetails = () => {
                         <Link to="#">#TNX0022</Link>
                       </td>
                       <td className="text-dark"> X-Ray </td>
-                      <td className="text-dark"> 27 Mar 2025 </td>
+                      <td className="text-dark"> 27 Mar 2026</td>
                       <td className="text-dark"> Debit Card</td>
                       <td className="text-dark"> $80</td>
                       <td>
@@ -2074,7 +2074,7 @@ const PatientDetails = () => {
                         <Link to="#">#TNX0020</Link>
                       </td>
                       <td className="text-dark">Cardiac Screening</td>
-                      <td className="text-dark"> 05 Mar 2025 </td>
+                      <td className="text-dark"> 05 Mar 2026</td>
                       <td className="text-dark"> Cheque </td>
                       <td className="text-dark"> $430 </td>
                       <td>
@@ -2088,7 +2088,7 @@ const PatientDetails = () => {
                         <Link to="#">#TNX0019</Link>
                       </td>
                       <td className="text-dark">Skin Allergy Test</td>
-                      <td className="text-dark"> 24 Feb 2025 </td>
+                      <td className="text-dark"> 24 Feb 2026</td>
                       <td className="text-dark"> Debit Card </td>
                       <td className="text-dark"> $300</td>
                       <td>
@@ -2102,7 +2102,7 @@ const PatientDetails = () => {
                         <Link to="#">#TNX0018</Link>
                       </td>
                       <td className="text-dark">Blood Test</td>
-                      <td className="text-dark"> 16 Feb 2025 </td>
+                      <td className="text-dark"> 16 Feb 2026</td>
                       <td className="text-dark"> Cheque </td>
                       <td className="text-dark"> $450</td>
                       <td>
@@ -2116,7 +2116,7 @@ const PatientDetails = () => {
                         <Link to="#">#TNX0017</Link>
                       </td>
                       <td className="text-dark">ENT Consultation</td>
-                      <td className="text-dark"> 01 Feb 2025 </td>
+                      <td className="text-dark"> 01 Feb 2026</td>
                       <td className="text-dark"> Debit Card </td>
                       <td className="fw-semibold text-dark"> $570</td>
                       <td>
@@ -2130,7 +2130,7 @@ const PatientDetails = () => {
                         <Link to="#">#TNX0017</Link>
                       </td>
                       <td className="text-dark">Nutrition Counseling</td>
-                      <td className="text-dark"> 25 Jan 2025 </td>
+                      <td className="text-dark"> 25 Jan 2026</td>
                       <td className="text-dark"> PayPal</td>
                       <td className="text-dark"> $800</td>
                       <td>
@@ -2151,9 +2151,9 @@ const PatientDetails = () => {
         {/* Footer Start */}
         <div className="footer text-center bg-white p-2 border-top">
           <p className="text-dark mb-0">
-            2025 ©
+            2026©
             <Link to="#" className="link-primary">
-              Preclinic
+              Zaptas
             </Link>
             , All Rights Reserved
           </p>
