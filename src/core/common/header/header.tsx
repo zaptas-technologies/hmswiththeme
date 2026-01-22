@@ -141,13 +141,13 @@ const Header = () => {
               </button>
             </div>
             {/* AI Assistance */}
-            <Link
+            {/* <Link
               to="#"
               className="btn btn-liner-gradient me-3 d-lg-flex d-none"
             >
               AI Assistance
               <i className="ti ti-chart-bubble-filled ms-1" />
-            </Link>
+            </Link> */}
             {/* AI Assistance */}
             {/* Appointment */}
             <div className="header-item">

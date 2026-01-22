@@ -226,10 +226,10 @@ const SidebarTwo = () => {
                       isActive(all_routes.doctorreviews) ? "active" : ""
                     }
                   >
-                    <Link to={all_routes.doctorreviews}>
+                    {/* <Link to={all_routes.doctorreviews}>
                       <i className="ti ti-star" />
                       <span>Reviews</span>
-                    </Link>
+                    </Link> */}
                   </li>
                   {/* Settings Submenu */}
                   <li
@@ -304,7 +304,7 @@ const SidebarTwo = () => {
             </ul>
           </div>
           <div className="sidebar-footer border-top mt-3">
-            <div className="trial-item mt-0 p-3 text-center">
+            {/* <div className="trial-item mt-0 p-3 text-center">
               <div className="trial-item-icon rounded-4 mb-3 p-2 text-center shadow-sm d-inline-flex">
                 <ImageWithBasePath
                   src="./assets/img/icons/sidebar-icon.svg"
@@ -320,7 +320,7 @@ const SidebarTwo = () => {
               <Link to="#" className="close-icon shadow-sm">
                 <i className="ti ti-x" />
               </Link>
-            </div>
+            </div> */}
           </div>
         </div>
       </div>
