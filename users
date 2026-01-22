@@ -1,0 +1,41 @@
+demo@preclinic.com / password - Dr. Demo User (has dashboard data)
+doctor1@preclinic.com / password123 - Dr. Sarah Johnson (has dashboard data)
+doctor2@preclinic.com / password123 - Dr. Michael Chen
+doctor3@preclinic.com / password123 - Dr. Emily Rodriguez
+
+
+DOCTOR:
+  Email: doctor@preclinic.com | Password: password123
+  Email: doctor2@preclinic.com | Password: password123
+  Email: demo@preclinic.com | Password: password
+
+RECEPTIONIST:
+  Email: receptionist@preclinic.com | Password: password123
+  Email: receptionist2@preclinic.com | Password: password123
+
+ADMIN:
+  Email: admin@preclinic.com | Password: password123
+  Email: admin2@preclinic.com | Password: password123
+
+SUPER_ADMIN:
+  Email: superadmin@preclinic.com | Password: password123
+
+HOSPITAL_ADMIN:
+  Email: hospitaladmin@preclinic.com | Password: password123
+
+NURSE:
+  Email: nurse@preclinic.com | Password: password123
+  Email: nurse2@preclinic.com | Password: password123
+
+PATIENT:
+  Email: patient@preclinic.com | Password: password123
+  Email: patient2@preclinic.com | Password: password123
+
+PHARMACIST:
+  Email: pharmacist@preclinic.com | Password: password123
+
+LAB_TECHNICIAN:
+  Email: labtech@preclinic.com | Password: password123
+
+ACCOUNTANT:
+  Email: accountant@preclinic.com | Password: password123

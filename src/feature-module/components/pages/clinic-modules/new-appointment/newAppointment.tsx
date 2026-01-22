@@ -1,0 +1,380 @@
+import { Link, useNavigate } from "react-router";
+import { all_routes } from "../../../../routes/all_routes";
+import {
+  Appointment_Type,
+  Department,
+  Status_Checkout,
+} from "../../../../../core/common/selectOption";
+import CommonSelect from "../../../../../core/common/common-select/commonSelect";
+import { DatePicker, TimePicker, type TimePickerProps } from "antd";
+import type { Dayjs } from "dayjs";
+import dayjs from "dayjs";
+import { useState, useEffect, useMemo } from "react";
+import Modals from "./modals/modals";
+import { createAppointment, type Appointment } from "../../../../../api/appointments";
+import { fetchDoctors, type Doctor } from "../../../../../api/doctors";
+import { fetchPatients, type Patient } from "../../../../../api/patients";
+import type { Option } from "../../../../../core/common/common-select/commonSelect";
+
+const NewAppointment = () => {
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [formData, setFormData] = useState({
+    Patient: "",
+    Department: "",
+    Doctor: "",
+    Appointment_Type: "",
+    Date: null as Dayjs | null,
+    Time: null as Dayjs | null,
+    Reason: "",
+    Status: "",
+  });
+
+  const [appointmentId] = useState(() => {
+    return `AP${Date.now().toString().slice(-6)}`;
+  });
+
+  const getModalContainer = () => {
+    const modalElement = document.getElementById("modal-datepicker");
+    return modalElement ? modalElement : document.body;
+  };
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [doctorsRes, patientsRes] = await Promise.all([
+          fetchDoctors({ limit: 100, sort: "Name_Designation" }),
+          fetchPatients({ limit: 100, sort: "Patient" }),
+        ]);
+
+        const doctorsList = Array.isArray(doctorsRes) ? doctorsRes : doctorsRes.data || [];
+        const patientsList = Array.isArray(patientsRes) ? patientsRes : patientsRes.data || [];
+
+        setDoctors(doctorsList);
+        setPatients(patientsList);
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.error("Failed to load doctors/patients:", error);
+        alert("Failed to load doctors and patients. Please refresh the page.");
+      }
+    };
+
+    loadData();
+  }, []);
+
+  const doctorOptions: Option[] = useMemo(
+    () =>
+      doctors.map((doc) => ({
+        value: doc.Name_Designation || doc.Doctor || "",
+        label: doc.Name_Designation || doc.Doctor || "",
+      })),
+    [doctors]
+  );
+
+  const patientOptions: Option[] = useMemo(
+    () =>
+      patients.map((pat) => ({
+        value: pat.Patient || "",
+        label: pat.Patient || "",
+      })),
+    [patients]
+  );
+
+  const onChangeTime: TimePickerProps["onChange"] = (time) => {
+    setFormData({ ...formData, Time: time });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (
+      !formData.Patient ||
+      !formData.Doctor ||
+      !formData.Appointment_Type ||
+      !formData.Date ||
+      !formData.Time ||
+      !formData.Status
+    ) {
+      alert("Please fill in all required fields");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      // Find selected patient to get phone number
+      const selectedPatient = patients.find((p) => p.Patient === formData.Patient);
+      if (!selectedPatient) {
+        alert("Selected patient not found");
+        return;
+      }
+
+      // Combine date and time
+      const dateTime = formData.Date
+        .hour(formData.Time?.hour() || 0)
+        .minute(formData.Time?.minute() || 0)
+        .second(0);
+
+      const appointmentData: Partial<Appointment> = {
+        id: appointmentId,
+        Date_Time: dateTime.format("DD MMM YYYY, hh:mm A"),
+        Patient: formData.Patient,
+        Phone: selectedPatient.Phone || "",
+        Doctor: formData.Doctor,
+        Mode: formData.Appointment_Type,
+        Status: formData.Status,
+        // Additional fields
+        role: doctors.find((d) => d.Name_Designation === formData.Doctor)?.role || "",
+        Department: formData.Department || "",
+        Reason: formData.Reason || "",
+      };
+
+      await createAppointment(appointmentData);
+      alert("Appointment created successfully!");
+      navigate(all_routes.appointments);
+    } catch (error: any) {
+      // eslint-disable-next-line no-console
+      console.error("Failed to create appointment:", error);
+      alert(
+        `Failed to create appointment: ${
+          error?.response?.data?.message || error?.message || "Unknown error"
+        }`
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePatientCreated = async () => {
+    // Reload patients after new patient is created
+    try {
+      const patientsRes = await fetchPatients({ limit: 100, sort: "Patient" });
+      const patientsList = Array.isArray(patientsRes) ? patientsRes : patientsRes.data || [];
+      setPatients(patientsList);
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error("Failed to reload patients:", error);
+    }
+  };
+  return (
+    <>
+      {/* ========================
+			Start Page Content
+		========================= */}
+      <div className="page-wrapper">
+        {/* Start Content */}
+        <div className="content">
+          {/* row start */}
+          <div className="row justify-content-center">
+            <div className="col-lg-10">
+              {/* page header start */}
+              <div className="mb-4">
+                <h6 className="fw-bold mb-0 d-flex align-items-center">
+                  <Link to={all_routes.appointments} className="text-dark">
+                    <i className="ti ti-chevron-left me-1" />
+                    Appointments
+                  </Link>
+                </h6>
+              </div>
+              {/* page header end */}
+              {/* card start */}
+              <div className="card">
+                <div className="card-body">
+                  <form onSubmit={handleSubmit}>
+                    <div className="mb-3">
+                      <label className="form-label mb-1 fw-medium">
+                        Appointment ID
+                        <span className="text-danger ms-1">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={appointmentId}
+                        disabled
+                      />
+                    </div>
+                    <div className="row">
+                      <div className="col-md-6">
+                        <div className="mb-3">
+                          <div className="d-flex align-items-center justify-content-between mb-1">
+                            <label className="form-label mb-0 fw-medium">
+                              Patient<span className="text-danger ms-1">*</span>
+                            </label>
+                            <Link
+                              to="#"
+                              className="link-primary"
+                              data-bs-toggle="modal"
+                              data-bs-target="#add_modal"
+                            >
+                              <i className="ti ti-circle-plus me-1" />
+                              Add New
+                            </Link>
+                          </div>
+                          <CommonSelect
+                            options={patientOptions}
+                            className="select"
+                            value={formData.Patient}
+                            onChange={(value) => setFormData({ ...formData, Patient: value })}
+                          />
+                        </div>
+                      </div>
+                      <div className="col-md-6">
+                        <div className="mb-3">
+                          <label className="form-label mb-1 fw-medium">
+                            Department
+                            <span className="text-danger ms-1">*</span>
+                          </label>
+                          <CommonSelect
+                            options={Department}
+                            className="select"
+                            value={formData.Department}
+                            onChange={(value) => setFormData({ ...formData, Department: value })}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="row">
+                      <div className="col-md-6">
+                        <div className="mb-3">
+                          <label className="form-label mb-1 fw-medium">
+                            Doctor<span className="text-danger ms-1">*</span>
+                          </label>
+                          <CommonSelect
+                            options={doctorOptions}
+                            className="select"
+                            value={formData.Doctor}
+                            onChange={(value) => setFormData({ ...formData, Doctor: value })}
+                          />
+                        </div>
+                      </div>
+                      <div className="col-md-6">
+                        <div className="mb-3">
+                          <label className="form-label mb-1 fw-medium">
+                            Appointment Type
+                            <span className="text-danger ms-1">*</span>
+                          </label>
+                          <CommonSelect
+                            options={Appointment_Type}
+                            className="select"
+                            value={formData.Appointment_Type}
+                            onChange={(value) =>
+                              setFormData({ ...formData, Appointment_Type: value })
+                            }
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="row">
+                      <div className="col-md-6">
+                        <div className="mb-3">
+                          <label className="form-label mb-1 fw-medium">
+                            Date of Appointment
+                            <span className="text-danger ms-1">*</span>
+                          </label>
+                          <div className="input-icon-end position-relative">
+                            <DatePicker
+                              className="form-control datetimepicker"
+                              format={{
+                                format: "DD-MM-YYYY",
+                                type: "mask",
+                              }}
+                              getPopupContainer={getModalContainer}
+                              placeholder="DD-MM-YYYY"
+                              suffixIcon={null}
+                              value={formData.Date}
+                              onChange={(date) => setFormData({ ...formData, Date: date })}
+                            />
+                            <span className="input-icon-addon">
+                              <i className="ti ti-calendar" />
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="col-md-6">
+                        <div className="mb-3">
+                          <label className="form-label mb-1 fw-medium">
+                            Time<span className="text-danger ms-1">*</span>
+                          </label>
+                          <div className="input-icon-end position-relative">
+                            <TimePicker
+                              className="form-control"
+                              onChange={onChangeTime}
+                              value={formData.Time}
+                              defaultOpenValue={dayjs("00:00:00", "HH:mm:ss")}
+                              format="HH:mm"
+                            />
+                            <span className="input-icon-addon">
+                              <i className="ti ti-clock text-gray-7" />
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mb-3">
+                      <label className="form-label mb-1 fw-medium">
+                        Appointment Reason
+                        <span className="text-danger ms-1">*</span>
+                      </label>
+                      <textarea
+                        className="form-control"
+                        rows={3}
+                        value={formData.Reason}
+                        onChange={(e) => setFormData({ ...formData, Reason: e.target.value })}
+                        placeholder="Enter appointment reason"
+                      />
+                    </div>
+                    <div className="mb-0">
+                      <label className="form-label mb-1 fw-medium">
+                        Status<span className="text-danger ms-1">*</span>
+                      </label>
+                      <CommonSelect
+                        options={Status_Checkout}
+                        className="select"
+                        value={formData.Status}
+                        onChange={(value) => setFormData({ ...formData, Status: value })}
+                      />
+                    </div>
+                  </div>
+                  <div className="d-flex align-items-center justify-content-end mt-4">
+                    <Link to={all_routes.appointments} className="btn btn-light me-2">
+                      Cancel
+                    </Link>
+                    <button
+                      type="submit"
+                      className="btn btn-primary"
+                      disabled={loading}
+                    >
+                      {loading ? "Creating..." : "Create Appointment"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+              {/* card end */}
+            </div>
+          </div>
+          {/* row end */}
+        </div>
+        {/* End Content */}
+        {/* Footer Start */}
+        <div className="footer text-center bg-white p-2 border-top">
+          <p className="text-dark mb-0">
+            2025 ©
+            <Link to="#" className="link-primary">
+              Preclinic
+            </Link>
+            , All Rights Reserved
+          </p>
+        </div>
+        {/* Footer End */}
+      </div>
+      {/* ========================
+			End Page Content
+		========================= */}
+      <Modals onPatientCreated={handlePatientCreated} />
+    </>
+  );
+};
+
+export default NewAppointment;
