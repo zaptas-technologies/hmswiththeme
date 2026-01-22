@@ -43,7 +43,7 @@ const SearchList = () => {
                   <input
                     type="text"
                     className="form-control flex-fill me-3"
-                    defaultValue="Preclinic"
+                    defaultValue="Zaptas"
                   />
                   <button type="submit" className="btn btn-primary">
                     Search
@@ -68,7 +68,7 @@ const SearchList = () => {
                         to="#"
                         className="text-info text-truncate mb-2 text-wrap"
                       >
-                        https://themeforest.net/search/Preclinic
+                        https://themeforest.net/search/Zaptas
                       </Link>
                       <p className="text-truncate line-clamb-2 mb-2">
                         Zaptas - Html, Vue 3, Angular 17+, React &amp; Node

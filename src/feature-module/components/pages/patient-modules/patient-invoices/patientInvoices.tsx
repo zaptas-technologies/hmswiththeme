@@ -199,7 +199,7 @@ const PatientInvoices = () => {
           <p className="text-dark mb-0">
             2026©
             <Link to="#" className="link-primary">
-              Preclinic
+              Zaptas
             </Link>
             , All Rights Reserved
           </p>

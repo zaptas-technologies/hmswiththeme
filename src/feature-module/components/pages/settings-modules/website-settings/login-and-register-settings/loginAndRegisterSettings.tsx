@@ -259,7 +259,7 @@ const LoginAndRegisterSettings = () => {
           <p className="text-dark mb-0">
             2026©
             <Link to="#" className="Link-primary">
-              Preclinic
+              Zaptas
             </Link>
             , All Rights Reserved
           </p>

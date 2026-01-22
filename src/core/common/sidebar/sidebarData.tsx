@@ -1842,7 +1842,7 @@ export const SidebarData = [
   //   submenuItems: [
   //     {
   //       label: "Documentation",
-  //       link: "https://preclinic.dreamstechnologies.com/documentation/react.html",
+  //       link: "https://Zaptas.dreamstechnologies.com/documentation/react.html",
   //       submenu: false,
   //       showSubRoute: false,
   //       icon: "file-dots",
@@ -1853,7 +1853,7 @@ export const SidebarData = [
   //     },
   //     {
   //       label: "Changelog",
-  //       link: "https://preclinic.dreamstechnologies.com/documentation/changelog.html",
+  //       link: "https://Zaptas.dreamstechnologies.com/documentation/changelog.html",
   //       submenu: false,
   //       showSubRoute: false,
   //       icon: "status-change",
