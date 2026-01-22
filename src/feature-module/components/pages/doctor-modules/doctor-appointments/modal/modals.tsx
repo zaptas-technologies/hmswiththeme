@@ -3,8 +3,14 @@ import ImageWithBasePath from "../../../../../../core/imageWithBasePath";
 import { DatePicker, TimePicker, type TimePickerProps } from "antd";
 import dayjs from "dayjs";
 import { all_routes } from "../../../../../routes/all_routes";
+import type { Appointment } from "../../../../../../api/appointments";
 
-const Modal = () => {
+interface ModalProps {
+  selectedAppointment?: Appointment | null;
+  onAppointmentUpdated?: () => void;
+}
+
+const Modal = ({ selectedAppointment, onAppointmentUpdated }: ModalProps = {} as ModalProps) => {
   const getModalContainer = () => {
     const modalElement = document.getElementById("modal-datepicker");
     return modalElement ? modalElement : document.body; // Fallback to document.body if modalElement is null

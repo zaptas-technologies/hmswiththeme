@@ -1,4 +1,5 @@
-import { Link } from "react-router";
+import { Link, useSearchParams, useNavigate } from "react-router";
+import { useEffect, useState } from "react";
 import ImageWithBasePath from "../../../../../core/imageWithBasePath";
 import CommonSelect from "../../../../../core/common/common-select/commonSelect";
 import { empty_Stomach } from "../../../../../core/common/selectOption";
@@ -8,8 +9,146 @@ import MedicalForm from "../../../../../core/common/dynamic-list/medicalForm";
 import AdviceForm from "../../../../../core/common/dynamic-list/AdviceForm";
 import InvestigationList from "../../../../../core/common/dynamic-list/InvestigationForm";
 import InvoiceList from "../../../../../core/common/dynamic-list/InvoiceList";
+import {
+  fetchAppointmentForConsultation,
+  saveConsultation,
+  type ConsultationData,
+  type AppointmentWithPatient,
+} from "../../../../../api/consultations";
+import { all_routes } from "../../../../routes/all_routes";
+import dayjs from "dayjs";
 
 const OnlineConsultations = () => {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const appointmentId = searchParams.get("appointmentId");
+
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [data, setData] = useState<AppointmentWithPatient | null>(null);
+
+  const [vitals, setVitals] = useState({
+    temperature: "",
+    pulse: "",
+    respiratoryRate: "",
+    spo2: "",
+    height: "",
+    weight: "",
+    bmi: "",
+    waist: "",
+  });
+
+  const [followUp, setFollowUp] = useState({
+    nextConsultation: "",
+    emptyStomach: "",
+  });
+
+  // Fetch appointment and patient data
+  useEffect(() => {
+    const loadData = async () => {
+      if (!appointmentId) {
+        setError("Appointment ID is required");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await fetchAppointmentForConsultation(appointmentId);
+        setData(response);
+
+        // Load existing consultation data if available
+        if (response.appointment.Vitals) {
+          setVitals(response.appointment.Vitals);
+        }
+        if (response.appointment.FollowUp) {
+          setFollowUp(response.appointment.FollowUp);
+        }
+      } catch (err: any) {
+        setError(err?.response?.data?.message || err?.message || "Failed to load appointment data");
+        // eslint-disable-next-line no-console
+        console.error("Failed to load appointment:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [appointmentId]);
+
+  const handleCompleteAppointment = async () => {
+    if (!appointmentId || !data) return;
+
+    if (!window.confirm("Are you sure you want to complete this appointment? This action cannot be undone.")) {
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const consultationData: ConsultationData = {
+        appointmentId,
+        vitals,
+        complaints: data.appointment.Complaints || [],
+        diagnosis: data.appointment.Diagnosis || [],
+        medications: data.appointment.Medications || [],
+        advice: data.appointment.Advice || [],
+        investigations: data.appointment.Investigations || [],
+        followUp,
+        invoice: data.appointment.Invoice || [],
+      };
+
+      await saveConsultation(appointmentId, consultationData, true);
+      alert("Appointment completed successfully!");
+      navigate(all_routes.doctordashboard);
+    } catch (err: any) {
+      alert(`Failed to complete appointment: ${err?.response?.data?.message || err?.message || "Unknown error"}`);
+      // eslint-disable-next-line no-console
+      console.error("Failed to complete appointment:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const formatDateTime = (dateTimeStr: string) => {
+    try {
+      return dayjs(dateTimeStr).format("DD MMM YYYY, hh:mm A");
+    } catch {
+      return dateTimeStr;
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="page-wrapper consultation-custom">
+        <div className="content d-flex justify-content-center align-items-center" style={{ minHeight: "60vh" }}>
+          <div className="text-center">
+            <div className="spinner-border text-primary mb-3" role="status" />
+            <p className="mb-0">Loading consultation data...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="page-wrapper consultation-custom">
+        <div className="content d-flex justify-content-center align-items-center" style={{ minHeight: "60vh" }}>
+          <div className="text-center">
+            <p className="text-danger fw-semibold mb-3">{error || "Unable to load appointment data."}</p>
+            <Link to={all_routes.doctordashboard} className="btn btn-primary">
+              Back to Dashboard
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const appointment = data.appointment;
+  const patient = data.patient;
   return (
     <>
       {/* ========================
@@ -63,19 +202,19 @@ const OnlineConsultations = () => {
                   <div className="d-flex align-items-center gap-3">
                     <div className="avatar avatar-xxxl">
                       <ImageWithBasePath
-                        src="assets/img/users/user-04.jpg"
-                        alt="user-01"
+                        src={appointment.Patient_Image || patient?.Patient_Image || "assets/img/users/user-04.jpg"}
+                        alt={appointment.Patient || "Patient"}
                         className="img-fluid img1 rounded"
                       />
                     </div>
                     <div className="">
                       <span className="badge badge-md text-info border border-info mb-1 fs-13 fw-medium px-2 ">
-                        #AP02254
+                        #{appointment.id || appointment._id || "N/A"}
                       </span>
-                      <h5 className="text-dark mb-1 fw-bold"> James Carter </h5>
+                      <h5 className="text-dark mb-1 fw-bold">{appointment.Patient || "N/A"}</h5>
                       <p className="text-dark m-0">
-                        <span className="text-body"> Reason : </span> Pain near
-                        left chest, Pelvic salinity
+                        <span className="text-body"> Reason : </span>{" "}
+                        {appointment.Reason || "General Consultation"}
                       </p>
                     </div>
                   </div>
@@ -89,13 +228,17 @@ const OnlineConsultations = () => {
                         <h6 className="text-dark fs-14 fw-semibold mb-1">
                           Age
                         </h6>
-                        <p className="text-body fs-13 m-0"> 28 Years </p>
+                        <p className="text-body fs-13 m-0">
+                          {patient?.Age || "N/A"}
+                        </p>
                       </div>
                       <div>
                         <h6 className="text-dark fs-14 fw-semibold mb-1">
                           Department
                         </h6>
-                        <p className="text-body fs-13 m-0"> Cardiology </p>
+                        <p className="text-body fs-13 m-0">
+                          {appointment.Department || "General"}
+                        </p>
                       </div>
                     </div>
                     {/* Items */}
@@ -105,14 +248,16 @@ const OnlineConsultations = () => {
                           Date
                         </h6>
                         <p className="text-body fs-13 m-0">
-                          25 Jan 2024, 07:00
+                          {formatDateTime(appointment.Date_Time)}
                         </p>
                       </div>
                       <div>
                         <h6 className="text-dark fs-14 fw-semibold mb-1">
                           Gender
                         </h6>
-                        <p className="text-body fs-13 m-0"> Male</p>
+                        <p className="text-body fs-13 m-0">
+                          {patient?.Gender || "N/A"}
+                        </p>
                       </div>
                     </div>
                     {/* Items */}
@@ -121,14 +266,16 @@ const OnlineConsultations = () => {
                         <h6 className="text-dark fs-14 fw-semibold mb-1">
                           Blood Group
                         </h6>
-                        <p className="text-body fs-13 m-0"> O+ve</p>
+                        <p className="text-body fs-13 m-0">
+                          {patient?.Blood_Group || "N/A"}
+                        </p>
                       </div>
                       <div>
                         <h6 className="text-dark fs-14 fw-semibold mb-1">
                           Consultation Type
                         </h6>
                         <p className="text-body fs-13 m-0">
-                          Online Consultation
+                          {appointment.Mode || "In-Person"}
                         </p>
                       </div>
                     </div>
@@ -159,7 +306,12 @@ const OnlineConsultations = () => {
                       Temperature
                     </label>
                     <div className="input-group">
-                      <input type="text" className="form-control" />
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={vitals.temperature}
+                        onChange={(e) => setVitals({ ...vitals, temperature: e.target.value })}
+                      />
                       <span className="input-group-text bg-transparent text-dark fs-14">
                         F
                       </span>
@@ -172,7 +324,12 @@ const OnlineConsultations = () => {
                       Pulse
                     </label>
                     <div className="input-group">
-                      <input type="text" className="form-control" />
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={vitals.pulse}
+                        onChange={(e) => setVitals({ ...vitals, pulse: e.target.value })}
+                      />
                       <span className="input-group-text bg-transparent text-dark fs-14">
                         mmHg
                       </span>
@@ -185,7 +342,12 @@ const OnlineConsultations = () => {
                       Respiratory Rate
                     </label>
                     <div className="input-group">
-                      <input type="text" className="form-control" />
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={vitals.respiratoryRate}
+                        onChange={(e) => setVitals({ ...vitals, respiratoryRate: e.target.value })}
+                      />
                       <span className="input-group-text bg-transparent text-dark fs-14">
                         rpm
                       </span>
@@ -197,7 +359,12 @@ const OnlineConsultations = () => {
                       SPO2
                     </label>
                     <div className="input-group">
-                      <input type="text" className="form-control" />
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={vitals.spo2}
+                        onChange={(e) => setVitals({ ...vitals, spo2: e.target.value })}
+                      />
                       <span className="input-group-text bg-transparent text-dark fs-14">
                         %
                       </span>
@@ -209,7 +376,12 @@ const OnlineConsultations = () => {
                       Height
                     </label>
                     <div className="input-group">
-                      <input type="text" className="form-control" />
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={vitals.height}
+                        onChange={(e) => setVitals({ ...vitals, height: e.target.value })}
+                      />
                       <span className="input-group-text bg-transparent text-dark fs-14">
                         cm
                       </span>
@@ -221,7 +393,12 @@ const OnlineConsultations = () => {
                       Weight
                     </label>
                     <div className="input-group">
-                      <input type="text" className="form-control" />
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={vitals.weight}
+                        onChange={(e) => setVitals({ ...vitals, weight: e.target.value })}
+                      />
                       <span className="input-group-text bg-transparent text-dark fs-14">
                         kg
                       </span>
@@ -233,7 +410,12 @@ const OnlineConsultations = () => {
                       BMI
                     </label>
                     <div className="input-group">
-                      <input type="text" className="form-control" />
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={vitals.bmi}
+                        onChange={(e) => setVitals({ ...vitals, bmi: e.target.value })}
+                      />
                       <span className="input-group-text bg-transparent text-dark fs-14">
                         %
                       </span>
@@ -245,21 +427,14 @@ const OnlineConsultations = () => {
                       Waist
                     </label>
                     <div className="input-group">
-                      <input type="text" className="form-control" />
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={vitals.waist}
+                        onChange={(e) => setVitals({ ...vitals, waist: e.target.value })}
+                      />
                       <span className="input-group-text bg-transparent text-dark fs-14">
                         cm
-                      </span>
-                    </div>
-                  </div>
-                  {/* end col */}
-                  <div className="col-md-4 mb-3">
-                    <label className="form-label mb-1 text-dark fs-14 fw-medium">
-                      Weight
-                    </label>
-                    <div className="input-group">
-                      <input type="text" className="form-control" />
-                      <span className="input-group-text bg-transparent text-dark fs-14">
-                        kg
                       </span>
                     </div>
                   </div>
@@ -353,7 +528,12 @@ const OnlineConsultations = () => {
                       Next Consultation
                     </label>
                     <div className="input-group">
-                      <input type="text" className="form-control rounded" />
+                      <input
+                        type="text"
+                        className="form-control rounded"
+                        value={followUp.nextConsultation}
+                        onChange={(e) => setFollowUp({ ...followUp, nextConsultation: e.target.value })}
+                      />
                     </div>
                   </div>
                 </div>
@@ -366,7 +546,8 @@ const OnlineConsultations = () => {
                     <CommonSelect
                       options={empty_Stomach}
                       className="select"
-                      defaultValue={empty_Stomach[0]}
+                      value={followUp.emptyStomach || empty_Stomach[0]?.value}
+                      onChange={(value) => setFollowUp({ ...followUp, emptyStomach: value })}
                     />
                   </div>
                 </div>
@@ -393,19 +574,19 @@ const OnlineConsultations = () => {
           {/* End Complaint */}
           <div className="d-flex gap-2 align-items-center justify-content-end mb-4">
             <Link
-              to=""
+              to={all_routes.doctordashboard}
               className="btn btn-md bg-light text-dark fs-13 fw-medium rounded"
             >
               Cancel
             </Link>
-            <Link
-              to=""
+            <button
+              type="button"
               className="btn btn-md btn-primary fs-13 fw-medium rounded"
-              data-bs-toggle="modal"
-              data-bs-target="#cancel-reason"
+              onClick={handleCompleteAppointment}
+              disabled={saving || appointment.Status === "Checked Out"}
             >
-              Complete Appointment
-            </Link>
+              {saving ? "Completing..." : "Complete Appointment"}
+            </button>
           </div>
         </div>
         {/* End Content */}

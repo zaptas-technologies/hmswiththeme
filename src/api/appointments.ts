@@ -18,9 +18,11 @@ export interface Appointment {
   Patient_Image?: string;
   Doctor_Image?: string;
   Doctor: string;
+  doctorId?: string; // Doctor's _id for dashboard sync
   role?: string;
   Mode?: string;
   Status: AppointmentStatus;
+  Fees?: string | number; // Fee for dashboard sync
   [key: string]: any;
 }
 

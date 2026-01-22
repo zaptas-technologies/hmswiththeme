@@ -1,6 +1,9 @@
 import { RequestHandler } from "express";
 import { getResourceModel } from "../models/resourceRegistry";
 import mongoose from "mongoose";
+import { DashboardAppointment } from "../models/dashboardAppointmentModel";
+import { DashboardPatient } from "../models/dashboardPatientModel";
+import { User } from "../models/userModel";
  
 export interface AppointmentRequest {
   _id?: string;
@@ -11,9 +14,11 @@ export interface AppointmentRequest {
   Patient_Image?: string;
   Doctor_Image?: string;
   Doctor: string;
+  doctorId?: string; // Doctor's _id for dashboard sync
   role?: string;
   Mode?: string;
   Status: string;
+  Fees?: string | number; // Fee for dashboard sync
   [key: string]: any;
 }
  
@@ -129,8 +134,161 @@ export const createAppointment: RequestHandler = async (req, res, next) => {
     if (existingById) {
       return res.status(409).json({ message: "Appointment with this ID already exists" });
     }
- 
+
     const created = await Model.create(apptData);
+
+    // Sync to DashboardAppointment for doctor dashboard if doctorId is provided
+    // IMPORTANT: doctorId from frontend is Doctor._id, but dashboard uses User._id (from login)
+    // We need to find the User record by the doctor's email to get the correct User._id
+    const doctorIdStr = apptData.doctorId 
+      ? String(apptData.doctorId).trim() 
+      : null;
+    
+    if (doctorIdStr) {
+      try {
+        // eslint-disable-next-line no-console
+        console.log("[Appointment Sync] Starting sync for doctorId (Doctor._id):", doctorIdStr);
+        
+        // Find the Doctor record to get the email
+        const DoctorModel = getResourceModel("doctors");
+        const doctor = await DoctorModel.findById(doctorIdStr);
+        
+        if (!doctor) {
+          // eslint-disable-next-line no-console
+          console.warn("[Appointment Sync] Doctor not found with id:", doctorIdStr);
+          // Skip sync if doctor not found
+        } else {
+          // Get doctor's email (try both Email and email fields)
+          const doctorEmail = (doctor.Email || doctor.email || "").toLowerCase().trim();
+          
+          if (!doctorEmail) {
+            // eslint-disable-next-line no-console
+            console.warn("[Appointment Sync] Doctor has no email, cannot find User record");
+          } else {
+            // Find User record by email (this is the ID used in dashboard - req.userId)
+            const user = await User.findOne({ email: doctorEmail });
+            
+            if (!user) {
+              // eslint-disable-next-line no-console
+              console.warn("[Appointment Sync] User not found with email:", doctorEmail, "- Dashboard sync will use Doctor._id");
+            }
+            
+            // Use User._id if found, otherwise fallback to Doctor._id
+            const dashboardDoctorId = user ? String(user._id) : doctorIdStr;
+            
+            // eslint-disable-next-line no-console
+            console.log("[Appointment Sync] Using dashboard doctorId (User._id):", dashboardDoctorId);
+            
+            // Find or create DashboardPatient
+            let dashboardPatient = await DashboardPatient.findOne({
+              doctorId: dashboardDoctorId,
+              name: apptData.Patient,
+              phone: apptData.Phone,
+            });
+
+            if (!dashboardPatient) {
+              // eslint-disable-next-line no-console
+              console.log("[Appointment Sync] Creating new DashboardPatient");
+              dashboardPatient = await DashboardPatient.create({
+                doctorId: dashboardDoctorId,
+                name: apptData.Patient,
+                phone: apptData.Phone,
+                avatar: apptData.Patient_Image || "assets/img/profiles/avatar-02.jpg",
+              });
+            } else {
+              // eslint-disable-next-line no-console
+              console.log("[Appointment Sync] Found existing DashboardPatient:", dashboardPatient._id);
+            }
+
+            // Parse Date_Time string to Date object
+            // Format: "DD MMM YYYY, hh:mm A" (e.g., "15 Jan 2025, 02:30 PM")
+            let appointmentDate: Date;
+            try {
+              const dateStr = apptData.Date_Time;
+              // Try to parse the formatted date string
+              // First try native Date parsing
+              appointmentDate = new Date(dateStr);
+              
+              // If that fails, try manual parsing for "DD MMM YYYY, hh:mm A" format
+              if (isNaN(appointmentDate.getTime())) {
+                const monthMap: Record<string, number> = {
+                  "Jan": 0, "Feb": 1, "Mar": 2, "Apr": 3, "May": 4, "Jun": 5,
+                  "Jul": 6, "Aug": 7, "Sep": 8, "Oct": 9, "Nov": 10, "Dec": 11
+                };
+                
+                // Match pattern: "DD MMM YYYY, hh:mm A"
+                const match = dateStr.match(/(\d{1,2})\s+(\w{3})\s+(\d{4}),\s+(\d{1,2}):(\d{2})\s+(AM|PM)/i);
+                if (match) {
+                  const [, day, month, year, hour, minute, ampm] = match;
+                  const monthNum = monthMap[month];
+                  if (monthNum !== undefined) {
+                    let hour24 = parseInt(hour, 10);
+                    if (ampm.toUpperCase() === "PM" && hour24 !== 12) hour24 += 12;
+                    if (ampm.toUpperCase() === "AM" && hour24 === 12) hour24 = 0;
+                    appointmentDate = new Date(parseInt(year, 10), monthNum, parseInt(day, 10), hour24, parseInt(minute, 10));
+                  } else {
+                    appointmentDate = new Date();
+                  }
+                } else {
+                  appointmentDate = new Date();
+                }
+              }
+            } catch {
+              appointmentDate = new Date();
+            }
+
+            // Map status to DashboardAppointment status enum
+            const statusMap: Record<string, "Schedule" | "Checked in" | "Checked Out" | "Cancelled"> = {
+              "Schedule": "Schedule",
+              "Scheduled": "Schedule",
+              "Checked In": "Checked in",
+              "Checked Out": "Checked Out",
+              "Completed": "Checked Out",
+              "Confirmed": "Schedule",
+              "Cancelled": "Cancelled",
+            };
+            const dashboardStatus = statusMap[apptData.Status] || "Schedule";
+
+            // Map mode to DashboardAppointment mode enum
+            const modeMap: Record<string, "Online" | "In-Person"> = {
+              "Online": "Online",
+              "In-Person": "In-Person",
+              "In Person": "In-Person",
+            };
+            const dashboardMode = modeMap[apptData.Mode || ""] || "In-Person";
+
+            // Get fee from Fees field or default to 0
+            const fee = parseFloat(apptData.Fees as string) || 0;
+
+            // Create DashboardAppointment using User._id (dashboardDoctorId)
+            const dashboardAppt = await DashboardAppointment.create({
+              doctorId: dashboardDoctorId,
+              patientId: dashboardPatient._id,
+              datetime: appointmentDate,
+              mode: dashboardMode,
+              status: dashboardStatus,
+              fee: fee,
+            });
+            // eslint-disable-next-line no-console
+            console.log("[Appointment Sync] Successfully created DashboardAppointment:", dashboardAppt._id);
+          }
+        }
+      } catch (dashboardErr: any) {
+        // Log error but don't fail the appointment creation
+        // eslint-disable-next-line no-console
+        console.error("[Appointment Sync] Failed to sync appointment to dashboard:", {
+          error: dashboardErr.message,
+          stack: dashboardErr.stack,
+          doctorId: doctorIdStr,
+          patient: apptData.Patient,
+          doctorIdFromRequest: apptData.doctorId,
+        });
+      }
+    } else {
+      // eslint-disable-next-line no-console
+      console.warn("[Appointment Sync] No doctorId provided, skipping dashboard sync. doctorId value:", apptData.doctorId);
+    }
+
     res.status(201).json(formatAppointmentResponse(created));
   } catch (err: any) {
     if (err?.code === 11000) {

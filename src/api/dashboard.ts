@@ -27,6 +27,7 @@ export type HeroCard = {
 };
 
 export type Upcoming = {
+  appointmentId?: string;
   patientName: string;
   patientCode: string;
   visitType: string;
