@@ -226,10 +226,10 @@ const SidebarTwo = () => {
                       isActive(all_routes.doctorreviews) ? "active" : ""
                     }
                   >
-                    <Link to={all_routes.doctorreviews}>
+                    {/* <Link to={all_routes.doctorreviews}>
                       <i className="ti ti-star" />
                       <span>Reviews</span>
-                    </Link>
+                    </Link> */}
                   </li>
                   {/* Settings Submenu */}
                   <li
