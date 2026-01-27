@@ -243,11 +243,9 @@ export const createDoctor: RequestHandler = async (req, res, next) => {
     }
 
     // Extract password and schedule-related fields before creating doctor
-    // Also remove id field if present
     const { 
       password, 
       email,
-      id: _ignoredId,
       schedules,
       scheduleLocation,
       scheduleFromDate,
@@ -288,10 +286,10 @@ export const createDoctor: RequestHandler = async (req, res, next) => {
     }
     
     // Remove hospital from doctorRecordData if it exists (we'll add it separately)
-    const { hospital, ...cleanDoctorData } = doctorRecordData;
+    const { hospital, ...finalDoctorData } = doctorRecordData;
     
     const doctor = await Doctor.create({
-      ...cleanDoctorData,
+      ...finalDoctorData,
       ...(hospitalId && { hospital: hospitalId }),
     });
 

@@ -49,7 +49,7 @@ const DayScheduleSchema = new mongoose_1.Schema({
     timeSlots: { type: [TimeSlotSchema], default: [] },
 }, { _id: false });
 const DoctorScheduleSchema = new mongoose_1.Schema({
-    doctorId: { type: String, required: true, index: true },
+    doctorId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Doctor", required: true, index: true },
     location: { type: String, required: true },
     fromDate: { type: Date, required: true },
     toDate: { type: Date, required: true },

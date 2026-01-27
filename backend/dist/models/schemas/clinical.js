@@ -3,7 +3,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.GRNSchema = exports.InventorySchema = exports.ConsultationSchema = exports.DoctorLeaveSchema = exports.PatientPrescriptionSchema = exports.DoctorPrescriptionSchema = exports.PatientAppointmentSchema = exports.DoctorAppointmentSchema = exports.PatientSchema = exports.DoctorSchema = exports.AppointmentSchema = void 0;
 const mongoose_1 = require("mongoose");
 exports.AppointmentSchema = new mongoose_1.Schema({
-    id: { type: String, required: true, unique: true },
     Date_Time: { type: String, required: true },
     Patient: { type: String, required: true },
     Phone: { type: String, required: true },
@@ -14,9 +13,12 @@ exports.AppointmentSchema = new mongoose_1.Schema({
     Mode: { type: String },
     Status: { type: String, required: true },
     Consultation_ID: { type: String, index: true }, // Reference to consultation document
+    Fees: { type: mongoose_1.Schema.Types.Mixed },
+    doctorId: { type: String },
+    hospital: { type: mongoose_1.Schema.Types.ObjectId, ref: "Hospital", index: true },
+    user: { type: mongoose_1.Schema.Types.ObjectId, ref: "User", index: true },
 }, { timestamps: true, strict: false });
 exports.DoctorSchema = new mongoose_1.Schema({
-    id: { type: String, required: true, unique: true },
     Name_Designation: { type: String, required: true },
     img: { type: String },
     role: { type: String },
@@ -25,9 +27,10 @@ exports.DoctorSchema = new mongoose_1.Schema({
     Email: { type: String, required: true },
     Fees: { type: String },
     Status: { type: String, enum: ["Available", "Unavailable"], required: true },
+    hospital: { type: mongoose_1.Schema.Types.ObjectId, ref: "Hospital", index: true },
+    user: { type: mongoose_1.Schema.Types.ObjectId, ref: "User", index: true },
 }, { timestamps: true, strict: false });
 exports.PatientSchema = new mongoose_1.Schema({
-    id: { type: String, required: true, unique: true },
     Patient: { type: String, required: true },
     Gender: { type: String },
     Patient_img: { type: String },
@@ -38,9 +41,10 @@ exports.PatientSchema = new mongoose_1.Schema({
     Address: { type: String },
     Last_Visit: { type: String },
     Status: { type: String, enum: ["Available", "Unavailable"], required: true },
+    hospital: { type: mongoose_1.Schema.Types.ObjectId, ref: "Hospital", index: true },
+    user: { type: mongoose_1.Schema.Types.ObjectId, ref: "User", index: true },
 }, { timestamps: true, strict: false });
 exports.DoctorAppointmentSchema = new mongoose_1.Schema({
-    id: { type: String, required: true, unique: true },
     Date_Time: { type: String, required: true },
     Patient: { type: String, required: true },
     Phone: { type: String },
@@ -52,7 +56,6 @@ exports.DoctorAppointmentSchema = new mongoose_1.Schema({
     Status: { type: String, required: true },
 }, { timestamps: true, strict: false });
 exports.PatientAppointmentSchema = new mongoose_1.Schema({
-    id: { type: String, required: true, unique: true },
     Date_Time: { type: String, required: true },
     Doctor: { type: String, required: true },
     Doctor_Image: { type: String },
@@ -61,7 +64,6 @@ exports.PatientAppointmentSchema = new mongoose_1.Schema({
     Status: { type: String, required: true },
 }, { timestamps: true, strict: false });
 exports.DoctorPrescriptionSchema = new mongoose_1.Schema({
-    id: { type: String, required: true, unique: true },
     Date: { type: String, required: true },
     Patient: { type: String, required: true },
     Patient_Image: { type: String },
@@ -70,7 +72,6 @@ exports.DoctorPrescriptionSchema = new mongoose_1.Schema({
     Status: { type: String, required: true },
 }, { timestamps: true, strict: false });
 exports.PatientPrescriptionSchema = new mongoose_1.Schema({
-    id: { type: String, required: true, unique: true },
     Date: { type: String, required: true },
     Doctor: { type: String, required: true },
     Doctor_Image: { type: String },
@@ -78,7 +79,6 @@ exports.PatientPrescriptionSchema = new mongoose_1.Schema({
     Status: { type: String, required: true },
 }, { timestamps: true, strict: false });
 exports.DoctorLeaveSchema = new mongoose_1.Schema({
-    id: { type: String, required: true, unique: true },
     Doctor: { type: String, required: true },
     Doctor_Id: { type: String },
     Date: { type: String, required: true }, // Format: "15 Apr 2026- 15 Apr 2025" or date range
@@ -100,7 +100,6 @@ exports.DoctorLeaveSchema = new mongoose_1.Schema({
     Designation: { type: String },
 }, { timestamps: true, strict: false });
 exports.ConsultationSchema = new mongoose_1.Schema({
-    id: { type: String, required: true, unique: true },
     Consultation_ID: { type: String, required: true, unique: true },
     Appointment_ID: { type: String, required: true, index: true }, // Reference to appointment
     Patient: { type: String, required: true },
@@ -168,7 +167,6 @@ exports.ConsultationSchema = new mongoose_1.Schema({
     Completed_At: { type: Date },
 }, { timestamps: true, strict: false });
 exports.InventorySchema = new mongoose_1.Schema({
-    id: { type: String, required: true, unique: true },
     Item_Name: { type: String, required: true },
     Item_Code: { type: String },
     Category: { type: String },
@@ -191,7 +189,6 @@ exports.InventorySchema = new mongoose_1.Schema({
     user: { type: mongoose_1.Schema.Types.ObjectId, index: true },
 }, { timestamps: true, strict: false });
 exports.GRNSchema = new mongoose_1.Schema({
-    id: { type: String, required: true, unique: true },
     GRN_Number: { type: String, required: true, unique: true },
     GRN_Date: { type: Date, required: true, default: Date.now },
     Supplier: { type: String, required: true },

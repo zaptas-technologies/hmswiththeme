@@ -212,7 +212,7 @@ export const saveConsultation: RequestHandler = async (req, res, next) => {
       return res.status(404).json({ message: "Appointment not found" });
     }
 
-    const appointmentIdValue = appointment.id || appointment._id?.toString() || appointmentId;
+    const appointmentIdValue = appointment._id?.toString() || appointmentId;
     
     // Generate Consultation ID
     const consultationId = `CONS${Date.now().toString().slice(-8)}`;
@@ -276,22 +276,31 @@ export const saveConsultation: RequestHandler = async (req, res, next) => {
     }
 
     // Update appointment with consultation ID reference
-    appointment.Consultation_ID = consultation.Consultation_ID || consultation.id;
+    appointment.Consultation_ID = consultation.Consultation_ID || consultation._id?.toString();
 
     // If completing appointment, update status
     if (completeAppointment) {
       appointment.Status = "Checked Out";
       
       try {
-        const doctorFilter = buildAccessFilter(req.user);
-        doctorFilter.$or = [
-          { _id: appointment.doctorId || appointment.Doctor },
-          { id: appointment.doctorId || appointment.Doctor },
-        ];
-        const doctor = await Doctor.findOne(doctorFilter)
-          .select("_id Email email Name_Designation")
-          .lean()
-          .exec() as { Email?: string; email?: string } | null;
+        // Find doctor by doctorId (which is stored as string _id) or by name
+        let doctor = null;
+        if (appointment.doctorId && mongoose.Types.ObjectId.isValid(appointment.doctorId)) {
+          doctor = await Doctor.findById(appointment.doctorId)
+            .select("_id Email email Name_Designation")
+            .lean()
+            .exec() as { Email?: string; email?: string } | null;
+        }
+        
+        // If not found by ID, try finding by name
+        if (!doctor && appointment.Doctor) {
+          const doctorFilter = buildAccessFilter(req.user);
+          doctorFilter.Name_Designation = appointment.Doctor;
+          doctor = await Doctor.findOne(doctorFilter)
+            .select("_id Email email Name_Designation")
+            .lean()
+            .exec() as { Email?: string; email?: string } | null;
+        }
         
         if (doctor) {
           const doctorEmail = (doctor.Email || doctor.email || "").toLowerCase().trim();
@@ -371,7 +380,7 @@ export const saveConsultation: RequestHandler = async (req, res, next) => {
             continue;
           }
 
-          const appointmentIdValue = appointment.id || appointment._id?.toString() || appointmentId;
+          const appointmentIdValue = appointment._id?.toString() || appointmentId;
           
           const prescriptionData = {
             Prescription_ID: prescriptionId,
@@ -386,25 +395,20 @@ export const saveConsultation: RequestHandler = async (req, res, next) => {
             Frequency: medication.frequency || medication.Frequency || "",
             Duration: medication.duration || medication.Duration || "",
             Appointment_ID: appointmentIdValue,
-            Consultation_ID: consultation?.Consultation_ID || consultation?.id || "",
+            Consultation_ID: consultation?.Consultation_ID || "",
             appointmentId: appointmentIdValue,
           };
 
           const existingPrescription = await Prescription.findOne({
-            $or: [
-              { id: prescriptionData.id },
+            $and: [
               {
-                $and: [
-                  {
-                    $or: [
-                      { Appointment_ID: prescriptionData.Appointment_ID },
-                      { appointmentId: appointmentIdValue }
-                    ]
-                  },
-                  { Medicine: prescriptionData.Medicine },
-                  { Patient: prescriptionData.Patient },
+                $or: [
+                  { Appointment_ID: prescriptionData.Appointment_ID },
+                  { appointmentId: appointmentIdValue }
                 ]
-              }
+              },
+              { Medicine: prescriptionData.Medicine },
+              { Patient: prescriptionData.Patient },
             ]
           }).lean().exec();
 

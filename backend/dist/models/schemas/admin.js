@@ -3,7 +3,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.DesignationSchema = exports.SpecializationSchema = exports.ServiceSchema = exports.LeaveSchema = exports.StaffSchema = exports.AssetSchema = void 0;
 const mongoose_1 = require("mongoose");
 exports.AssetSchema = new mongoose_1.Schema({
-    id: { type: String, required: true, unique: true },
     AssetID: { type: String, required: true, unique: true },
     AssetUser: { type: String, required: true },
     Image: { type: String },
@@ -19,7 +18,6 @@ exports.AssetSchema = new mongoose_1.Schema({
     },
 }, { timestamps: true, strict: false });
 exports.StaffSchema = new mongoose_1.Schema({
-    id: { type: String, required: true, unique: true },
     Staff: { type: String, required: true },
     Image: { type: String },
     Designation: { type: String, required: true },
@@ -39,14 +37,12 @@ exports.LeaveSchema = new mongoose_1.Schema({
     Status: { type: String, enum: ["Approved", "Rejected"], required: true },
 }, { timestamps: true, strict: false });
 exports.ServiceSchema = new mongoose_1.Schema({
-    id: { type: String, required: true, unique: true },
     ServiceName: { type: String, required: true },
     Department: { type: String, required: true },
     Price: { type: String, required: true },
     Status: { type: String, enum: ["Active", "Inactive"], required: true },
 }, { timestamps: true, strict: false });
 exports.SpecializationSchema = new mongoose_1.Schema({
-    id: { type: String, required: true, unique: true },
     Specialization: { type: String, required: true },
     img: { type: String },
     Image: { type: String },
@@ -56,7 +52,6 @@ exports.SpecializationSchema = new mongoose_1.Schema({
     Status: { type: String, enum: ["Active", "Inactive"], required: true },
 }, { timestamps: true, strict: false });
 exports.DesignationSchema = new mongoose_1.Schema({
-    id: { type: String, required: true, unique: true },
     Designation: { type: String, required: true },
     Department: { type: String, required: true },
     Status: { type: String, enum: ["Active", "Inactive"], required: true },

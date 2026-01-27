@@ -1,12 +1,16 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getScheduleHistory = exports.deleteSchedule = exports.updateSchedule = exports.saveSchedule = exports.getSchedule = void 0;
+const mongoose_1 = __importDefault(require("mongoose"));
 const doctorScheduleModel_1 = require("../models/doctorScheduleModel");
 // Helper to format schedule response
 const formatScheduleResponse = (schedule) => {
     return {
         id: schedule._id.toString(),
-        doctorId: schedule.doctorId,
+        doctorId: schedule.doctorId.toString(),
         location: schedule.location,
         fromDate: schedule.fromDate.toISOString().split("T")[0],
         toDate: schedule.toDate.toISOString().split("T")[0],
@@ -34,10 +38,12 @@ const getDefaultSchedule = () => ({
 });
 const getSchedule = async (req, res, next) => {
     try {
-        const doctorId = req.userId;
-        if (!doctorId) {
+        const doctorIdStr = req.userId;
+        if (!doctorIdStr) {
             return res.status(401).json({ message: "Unauthorized" });
         }
+        // Convert string doctorId to ObjectId
+        const doctorId = new mongoose_1.default.Types.ObjectId(doctorIdStr);
         // Get the most recent active schedule for this doctor
         const schedule = await doctorScheduleModel_1.DoctorSchedule.findOne({ doctorId })
             .sort({ createdAt: -1 })
@@ -55,10 +61,12 @@ const getSchedule = async (req, res, next) => {
 exports.getSchedule = getSchedule;
 const saveSchedule = async (req, res, next) => {
     try {
-        const doctorId = req.userId;
-        if (!doctorId) {
+        const doctorIdStr = req.userId;
+        if (!doctorIdStr) {
             return res.status(401).json({ message: "Unauthorized" });
         }
+        // Convert string doctorId to ObjectId
+        const doctorId = new mongoose_1.default.Types.ObjectId(doctorIdStr);
         const { location, fromDate, toDate, recursEvery, schedules } = req.body;
         // Validation is handled by middleware, but double-check here for safety
         if (!location || !fromDate || !toDate || !recursEvery) {
@@ -153,10 +161,12 @@ const saveSchedule = async (req, res, next) => {
 exports.saveSchedule = saveSchedule;
 const updateSchedule = async (req, res, next) => {
     try {
-        const doctorId = req.userId;
-        if (!doctorId) {
+        const doctorIdStr = req.userId;
+        if (!doctorIdStr) {
             return res.status(401).json({ message: "Unauthorized" });
         }
+        // Convert string doctorId to ObjectId
+        const doctorId = new mongoose_1.default.Types.ObjectId(doctorIdStr);
         const updateData = req.body;
         // Find existing schedule
         const schedule = await doctorScheduleModel_1.DoctorSchedule.findOne({ doctorId })
@@ -208,10 +218,12 @@ const updateSchedule = async (req, res, next) => {
 exports.updateSchedule = updateSchedule;
 const deleteSchedule = async (req, res, next) => {
     try {
-        const doctorId = req.userId;
-        if (!doctorId) {
+        const doctorIdStr = req.userId;
+        if (!doctorIdStr) {
             return res.status(401).json({ message: "Unauthorized" });
         }
+        // Convert string doctorId to ObjectId
+        const doctorId = new mongoose_1.default.Types.ObjectId(doctorIdStr);
         const schedule = await doctorScheduleModel_1.DoctorSchedule.findOne({ doctorId })
             .sort({ createdAt: -1 })
             .exec();
@@ -228,10 +240,12 @@ const deleteSchedule = async (req, res, next) => {
 exports.deleteSchedule = deleteSchedule;
 const getScheduleHistory = async (req, res, next) => {
     try {
-        const doctorId = req.userId;
-        if (!doctorId) {
+        const doctorIdStr = req.userId;
+        if (!doctorIdStr) {
             return res.status(401).json({ message: "Unauthorized" });
         }
+        // Convert string doctorId to ObjectId
+        const doctorId = new mongoose_1.default.Types.ObjectId(doctorIdStr);
         const limit = Number(req.query.limit) || 10;
         const page = Number(req.query.page) || 1;
         const skip = (page - 1) * limit;

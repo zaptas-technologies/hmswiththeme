@@ -216,15 +216,12 @@ export const updateInventory: RequestHandler = async (req, res, next) => {
       cleanUpdateData.Expiry_Date = new Date(cleanUpdateData.Expiry_Date);
     }
 
-    // Find inventory by _id or id
-    let inventory;
-    if (mongoose.Types.ObjectId.isValid(id)) {
-      inventory = await Inventory.findById(id);
+    // Use _id only (MongoDB ObjectId)
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid inventory ID format" });
     }
 
-    if (!inventory) {
-      inventory = await Inventory.findOne({ id });
-    }
+    const inventory = await Inventory.findById(id);
 
     if (!inventory) {
       return res.status(404).json({ message: "Inventory item not found" });

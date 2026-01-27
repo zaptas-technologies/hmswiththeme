@@ -26,7 +26,6 @@ exports.TransactionSchema = new mongoose_1.Schema({
     Status: { type: String, enum: ["Completed", "Pending"], required: true },
 }, { timestamps: true, strict: false });
 exports.ExpenseSchema = new mongoose_1.Schema({
-    id: { type: String, required: true, unique: true },
     Expense: { type: String, required: true },
     Category: { type: String, required: true },
     Amount: { type: String, required: true },
@@ -64,7 +63,6 @@ exports.PaymentSchema = new mongoose_1.Schema({
     Status: { type: String, required: true },
 }, { timestamps: true, strict: false });
 exports.PayrollSchema = new mongoose_1.Schema({
-    id: { type: String, required: true, unique: true },
     Employee: { type: String, required: true },
     Image: { type: String },
     EmployeeID: { type: String },

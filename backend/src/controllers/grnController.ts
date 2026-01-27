@@ -13,8 +13,8 @@ export interface GRNRequest {
   Status?: "Draft" | "Received" | "Cancelled";
   Received_By?: string;
   Notes?: string;
-  hospital?: string;
-  user?: string;
+  hospital?: string | mongoose.Types.ObjectId;
+  user?: string | mongoose.Types.ObjectId;
   [key: string]: any;
 }
 
@@ -176,19 +176,13 @@ export const getGRNById: RequestHandler = async (req, res, next) => {
   try {
     const { id } = req.params;
 
+    // Use _id or GRN_Number (business identifier)
     let grn;
     if (mongoose.Types.ObjectId.isValid(id)) {
       grn = await GRN.findById(id);
-    }
-
-    if (!grn) {
-      // Use _id or GRN_Number (business identifier)
-      if (mongoose.Types.ObjectId.isValid(id)) {
-        grn = await GRN.findById(id);
-      } else {
-        // Try GRN_Number if not a valid ObjectId
-        grn = await GRN.findOne({ GRN_Number: id });
-      }
+    } else {
+      // Try GRN_Number if not a valid ObjectId
+      grn = await GRN.findOne({ GRN_Number: id });
     }
 
     if (!grn) {
@@ -244,8 +238,8 @@ export const createGRN: RequestHandler = async (req, res, next) => {
     if (hospitalId) {
       cleanGRNData.hospital = hospitalId;
     }
-    if (req.user && (req.user as any).id) {
-      cleanGRNData.user = new mongoose.Types.ObjectId((req.user as any).id);
+    if (req.user && (req.user as any).userId) {
+      cleanGRNData.user = new mongoose.Types.ObjectId((req.user as any).userId);
     }
 
     const grn = await GRN.create(cleanGRNData);

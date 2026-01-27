@@ -1,8 +1,13 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteDoctor = exports.updateDoctor = exports.createDoctor = exports.getDoctorById = exports.getAllDoctors = void 0;
+const mongoose_1 = __importDefault(require("mongoose"));
 const doctorModel_1 = require("../models/doctorModel");
 const userModel_1 = require("../models/userModel");
+const doctorScheduleModel_1 = require("../models/doctorScheduleModel");
 const authMiddleware_1 = require("../middlewares/authMiddleware");
 // Helper to format doctor response
 const formatDoctorResponse = (doctor) => {
@@ -10,7 +15,7 @@ const formatDoctorResponse = (doctor) => {
     return {
         ...doc,
         _id: doc._id?.toString() || doc._id,
-        id: doc.id || doc._id?.toString(),
+        id: doc._id?.toString() || doc._id, // For backward compatibility, map _id to id
         // Ensure img field is included (use img or avatar field)
         img: doc.img || doc.avatar || "assets/img/doctors/doctor-01.jpg",
         // Map role to Designation if needed
@@ -56,7 +61,7 @@ const getAllDoctors = async (req, res, next) => {
         const filter = (0, authMiddleware_1.buildAccessFilter)(req.user);
         const [doctors, total] = await Promise.all([
             doctorModel_1.Doctor.find(filter)
-                .select("_id id Name_Designation img role Department Phone Email Fees Status createdAt updatedAt")
+                .select("_id Name_Designation img role Department Phone Email Fees Status createdAt updatedAt")
                 .sort(sort)
                 .skip(skip)
                 .limit(limit)
@@ -86,9 +91,15 @@ const getDoctorById = async (req, res, next) => {
         }
         const { id } = req.params;
         const filter = (0, authMiddleware_1.buildAccessFilter)(req.user);
-        filter.$or = [{ _id: id }, { id }];
+        // Use _id only (MongoDB ObjectId)
+        if (mongoose_1.default.Types.ObjectId.isValid(id)) {
+            filter._id = new mongoose_1.default.Types.ObjectId(id);
+        }
+        else {
+            return res.status(400).json({ message: "Invalid doctor ID format" });
+        }
         const doctor = await doctorModel_1.Doctor.findOne(filter)
-            .select("_id id Name_Designation img role Department Phone Email Fees Status createdAt updatedAt")
+            .select("_id Name_Designation img role Department Phone Email Fees Status createdAt updatedAt")
             .lean()
             .exec();
         if (!doctor) {
@@ -112,12 +123,10 @@ const createDoctor = async (req, res, next) => {
         if (!validation.isValid) {
             return res.status(400).json({ message: validation.error });
         }
-        // Generate ID if not provided
-        if (!doctorData.id) {
-            doctorData.id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
-        }
+        // Remove id field if present (we use MongoDB's _id)
+        const { id: _ignoredId, ...cleanDoctorData } = doctorData;
         // Normalize email for checking (lowercase, trim)
-        const normalizedEmail = doctorData.Email.toLowerCase().trim();
+        const normalizedEmail = cleanDoctorData.Email.toLowerCase().trim();
         // Check if doctor with same email already exists (case-insensitive using regex)
         // Check both Email and email fields since schema might use either
         const emailRegex = new RegExp(`^${normalizedEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
@@ -135,10 +144,6 @@ const createDoctor = async (req, res, next) => {
                 email: normalizedEmail
             });
         }
-        const existingById = await doctorModel_1.Doctor.findOne({ id: doctorData.id }).lean().exec();
-        if (existingById) {
-            return res.status(409).json({ message: "Doctor with this ID already exists" });
-        }
         // Check if user account already exists with this email
         const existingUser = await userModel_1.User.findOne({ email: normalizedEmail });
         if (existingUser) {
@@ -147,14 +152,96 @@ const createDoctor = async (req, res, next) => {
                 email: normalizedEmail
             });
         }
-        // Extract password before creating doctor (password is only for User account, not doctor record)
-        const { password, email, ...doctorRecordData } = doctorData; // Remove email (lowercase) if present
+        // Extract password and schedule-related fields before creating doctor
+        const { password, email, schedules, scheduleLocation, scheduleFromDate, scheduleToDate, scheduleRecursEvery, ...doctorRecordData } = cleanDoctorData;
         doctorRecordData.Email = normalizedEmail;
         const accessFilter = (0, authMiddleware_1.buildAccessFilter)(req.user);
+        // Ensure hospital is ObjectId if provided
+        // Priority: accessFilter (from user role) > doctorRecordData (from request body)
+        let hospitalId;
+        if (accessFilter.hospital) {
+            // Hospital from user role (should be string from buildAccessFilter)
+            if (typeof accessFilter.hospital === 'string') {
+                if (mongoose_1.default.Types.ObjectId.isValid(accessFilter.hospital)) {
+                    hospitalId = new mongoose_1.default.Types.ObjectId(accessFilter.hospital);
+                }
+                else {
+                    return res.status(400).json({ message: "Invalid hospital ID format from user role" });
+                }
+            }
+            else if (accessFilter.hospital instanceof mongoose_1.default.Types.ObjectId) {
+                hospitalId = accessFilter.hospital;
+            }
+        }
+        else if (doctorRecordData.hospital) {
+            // Hospital from request body (could be string or ObjectId)
+            if (typeof doctorRecordData.hospital === 'string') {
+                if (mongoose_1.default.Types.ObjectId.isValid(doctorRecordData.hospital)) {
+                    hospitalId = new mongoose_1.default.Types.ObjectId(doctorRecordData.hospital);
+                }
+                else {
+                    return res.status(400).json({ message: "Invalid hospital ID format in request body" });
+                }
+            }
+            else if (doctorRecordData.hospital instanceof mongoose_1.default.Types.ObjectId) {
+                hospitalId = doctorRecordData.hospital;
+            }
+        }
+        // Remove hospital from doctorRecordData if it exists (we'll add it separately)
+        const { hospital, ...finalDoctorData } = doctorRecordData;
         const doctor = await doctorModel_1.Doctor.create({
-            ...doctorRecordData,
-            ...accessFilter,
+            ...finalDoctorData,
+            ...(hospitalId && { hospital: hospitalId }),
         });
+        // Save schedules to DoctorSchedule model if schedules are provided
+        if (schedules && schedules.length > 0) {
+            try {
+                // Validate required schedule metadata
+                if (!scheduleLocation || scheduleLocation.trim() === "") {
+                    throw new Error("Schedule location is required when schedules are provided");
+                }
+                if (!scheduleFromDate || !scheduleToDate) {
+                    throw new Error("Schedule start date and end date are required when schedules are provided");
+                }
+                // Parse dates
+                const fromDate = new Date(scheduleFromDate);
+                const toDate = new Date(scheduleToDate);
+                // Validate dates
+                if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+                    throw new Error("Invalid date format for schedule dates");
+                }
+                if (toDate < fromDate) {
+                    throw new Error("Schedule end date must be after start date");
+                }
+                const location = scheduleLocation.trim();
+                const recursEvery = scheduleRecursEvery || "1 Week";
+                // Use doctor._id as ObjectId for DoctorSchedule
+                const doctorId = doctor._id;
+                await doctorScheduleModel_1.DoctorSchedule.create({
+                    doctorId,
+                    location,
+                    fromDate,
+                    toDate,
+                    recursEvery,
+                    schedules: schedules.map(schedule => ({
+                        day: schedule.day,
+                        timeSlots: schedule.timeSlots.map(slot => ({
+                            session: slot.session,
+                            from: slot.from,
+                            to: slot.to,
+                        })),
+                    })),
+                });
+            }
+            catch (scheduleErr) {
+                // If schedule creation fails, delete the doctor and return error
+                await doctorModel_1.Doctor.findByIdAndDelete(doctor._id);
+                console.error("Failed to create doctor schedule:", scheduleErr);
+                return res.status(400).json({
+                    message: `Failed to create doctor schedule: ${scheduleErr.message || "Unknown error"}`
+                });
+            }
+        }
         // Create user account for login if password is provided
         if (password) {
             try {
@@ -169,6 +256,10 @@ const createDoctor = async (req, res, next) => {
             }
             catch (userErr) {
                 await doctorModel_1.Doctor.findByIdAndDelete(doctor._id);
+                // Also delete schedule if it was created
+                if (schedules && schedules.length > 0) {
+                    await doctorScheduleModel_1.DoctorSchedule.deleteMany({ doctorId: doctor._id });
+                }
                 if (userErr.code === 11000) {
                     return res.status(409).json({ message: "User account with this email already exists" });
                 }
@@ -216,7 +307,13 @@ const updateDoctor = async (req, res, next) => {
             }
         }
         const filter = (0, authMiddleware_1.buildAccessFilter)(req.user);
-        filter.$or = [{ _id: id }, { id }];
+        // Use _id only (MongoDB ObjectId)
+        if (mongoose_1.default.Types.ObjectId.isValid(id)) {
+            filter._id = new mongoose_1.default.Types.ObjectId(id);
+        }
+        else {
+            return res.status(400).json({ message: "Invalid doctor ID format" });
+        }
         const doctor = await doctorModel_1.Doctor.findOne(filter).exec();
         if (!doctor) {
             return res.status(404).json({ message: "Doctor not found" });
@@ -319,14 +416,20 @@ const deleteDoctor = async (req, res, next) => {
         }
         const { id } = req.params;
         const filter = (0, authMiddleware_1.buildAccessFilter)(req.user);
-        filter.$or = [{ _id: id }, { id }];
+        // Use _id only (MongoDB ObjectId)
+        if (mongoose_1.default.Types.ObjectId.isValid(id)) {
+            filter._id = new mongoose_1.default.Types.ObjectId(id);
+        }
+        else {
+            return res.status(400).json({ message: "Invalid doctor ID format" });
+        }
         const doctor = await doctorModel_1.Doctor.findOneAndDelete(filter)
             .lean()
             .exec();
         if (!doctor) {
             return res.status(404).json({ message: "Doctor not found" });
         }
-        res.json({ message: "Doctor deleted successfully", id: doctor._id?.toString() || doctor.id || "" });
+        res.json({ message: "Doctor deleted successfully", id: doctor._id?.toString() || "" });
     }
     catch (err) {
         next(err);
