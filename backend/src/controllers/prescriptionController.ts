@@ -84,11 +84,12 @@ export const getAllPrescriptions: RequestHandler = async (req, res, next) => {
     
     if (Doctor) {
       // Decode URL-encoded doctor name (e.g., "Priyanshu+Tyagi+-+Cardiologist" -> "Priyanshu Tyagi - Cardiologist")
-      const decodedDoctor = decodeURIComponent(Doctor.replace(/\+/g, " "));
+      const decodedDoctor = decodeURIComponent(Doctor.replace(/\+/g, " ")).trim();
       
       // Try multiple matching strategies:
       // 1. Match full name (e.g., "Priyanshu Tyagi - Cardiologist")
       // 2. Match base name without department (e.g., "Priyanshu Tyagi")
+      // 3. Match any part of the name
       const doctorNameParts = decodedDoctor.split(/\s*-\s*/);
       const baseDoctorName = doctorNameParts[0]?.trim() || decodedDoctor;
       
@@ -96,12 +97,18 @@ export const getAllPrescriptions: RequestHandler = async (req, res, next) => {
       const escapedFull = decodedDoctor.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const escapedBase = baseDoctorName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       
-      // Match either full name or base name (case-insensitive)
+      // Create flexible matching - try exact match, base name, or partial match
+      const doctorRegexPatterns = [
+        escapedFull, // Full name
+        escapedBase, // Base name
+        baseDoctorName.split(/\s+/).map(part => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join(".*"), // Partial match
+      ];
+      
+      // Match either full name, base name, or partial (case-insensitive)
       andConditions.push({
-        $or: [
-          { Doctor: { $regex: escapedFull, $options: "i" } },
-          { Doctor: { $regex: escapedBase, $options: "i" } }
-        ]
+        $or: doctorRegexPatterns.map(pattern => ({
+          Doctor: { $regex: pattern, $options: "i" }
+        }))
       });
       
       // eslint-disable-next-line no-console
@@ -109,8 +116,7 @@ export const getAllPrescriptions: RequestHandler = async (req, res, next) => {
         original: Doctor,
         decoded: decodedDoctor,
         baseName: baseDoctorName,
-        escapedFull,
-        escapedBase,
+        patterns: doctorRegexPatterns,
       });
     }
     
@@ -169,7 +175,7 @@ export const getAllPrescriptions: RequestHandler = async (req, res, next) => {
     }
 
     const [prescriptions, total] = await Promise.all([
-      Model.find(filter).sort(sort).skip(skip).limit(limit).exec(),
+      Model.find(filter).sort(sort).skip(skip).limit(limit).lean().exec(),
       Model.countDocuments(filter),
     ]);
 
@@ -178,6 +184,12 @@ export const getAllPrescriptions: RequestHandler = async (req, res, next) => {
       found: prescriptions.length,
       total,
       filterApplied: Object.keys(filter).length > 0,
+      samplePrescriptions: prescriptions.slice(0, 3).map((p: any) => ({
+        id: p.id || p._id,
+        Doctor: p.Doctor,
+        Patient: p.Patient,
+        Medicine: p.Medicine,
+      })),
     });
 
     res.json({

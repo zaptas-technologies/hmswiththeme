@@ -37,32 +37,93 @@ const DoctorAppointments = () => {
   const [pageSize] = useState(10);
   const [total, setTotal] = useState(0);
 
-  // Find doctor by user email to get doctor name
+  // Find doctor by user email/name to get doctor name
   useEffect(() => {
     const findDoctor = async () => {
-      if (!user?.email) return;
+      // If user is not a doctor, don't proceed
+      if (!user || user.role !== "doctor") {
+        setLoading(false);
+        if (user && user.role !== "doctor") {
+          setError("Access denied. Doctor role required.");
+        }
+        return;
+      }
       
       try {
         const doctors = await fetchDoctors();
         const doctorsList = Array.isArray(doctors) ? doctors : doctors.data || [];
-        const doctor = doctorsList.find(
-          (d: any) => (d.Email || d.email || "").toLowerCase() === user.email.toLowerCase()
+        
+        // Try to find doctor by email first
+        let doctor = doctorsList.find(
+          (d: any) => (d.Email || d.email || "").toLowerCase() === (user.email || "").toLowerCase()
         );
+        
+        // If not found by email, try to find by name (for logged-in doctors)
+        if (!doctor && user.name) {
+          doctor = doctorsList.find(
+            (d: any) => {
+              const doctorName = (d.Name_Designation || d.name || "").toLowerCase().trim();
+              const userName = user.name.toLowerCase().trim();
+              // Check if names match (exact or partial)
+              return doctorName === userName || doctorName.includes(userName) || userName.includes(doctorName);
+            }
+          );
+        }
+        
+        // If still not found, use the user's name directly (for doctors logged in)
+        if (!doctor) {
+          // Use the logged-in doctor's name directly
+          const doctorName = user.name || "";
+          if (doctorName) {
+            setDoctorName(doctorName);
+            // eslint-disable-next-line no-console
+            console.log("Using logged-in doctor name:", doctorName);
+            return;
+          }
+        }
+        
         if (doctor) {
-          setDoctorName(doctor.Name_Designation || "");
+          const name = doctor.Name_Designation || doctor.name || "";
+          setDoctorName(name);
+          // eslint-disable-next-line no-console
+          console.log("Doctor found:", name);
+        } else {
+          // Last resort: use user's name if available
+          if (user.name) {
+            setDoctorName(user.name);
+            // eslint-disable-next-line no-console
+            console.log("Using user name as doctor name:", user.name);
+          } else {
+            setLoading(false);
+            setError("Doctor profile not found. Please contact administrator.");
+            // eslint-disable-next-line no-console
+            console.warn("Doctor not found for email:", user.email, "and name:", user.name);
+          }
         }
       } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error("Failed to find doctor:", err);
+        // If error occurs, try using user's name directly as fallback
+        if (user.name && user.role === "doctor") {
+          setDoctorName(user.name);
+          // eslint-disable-next-line no-console
+          console.log("Error fetching doctors, using user name as fallback:", user.name);
+        } else {
+          setLoading(false);
+          setError("Failed to load doctor information");
+          // eslint-disable-next-line no-console
+          console.error("Failed to find doctor:", err);
+        }
       }
     };
     
     findDoctor();
   }, [user]);
 
-  // Load appointments
+  // Load appointments with proper server-side pagination
   const loadAppointments = useCallback(async () => {
-    if (!doctorName) return;
+    if (!doctorName) {
+      setLoading(false);
+      return;
+    }
     
     try {
       setLoading(true);
@@ -70,66 +131,106 @@ const DoctorAppointments = () => {
       
       const sortParam = sortBy === "Recent" ? "-createdAt" : sortBy === "Ascending" ? "createdAt" : "-createdAt";
       
-      // Fetch all appointments for the doctor (we'll filter client-side for multiple selections)
-      const response = await fetchAppointments({
-        page: 1,
-        limit: 1000, // Get more data for client-side filtering
-        sort: sortParam,
-        search: searchText || undefined,
-        status: selectedStatus.length === 1 ? selectedStatus[0] : undefined,
-        mode: selectedMode.length === 1 ? selectedMode[0] : undefined,
-        doctor: doctorName,
-      });
+      // For multiple status/mode selections, we need to fetch all and filter client-side
+      // For single selections or no filters, use server-side pagination
+      const hasMultipleFilters = selectedStatus.length > 1 || selectedMode.length > 1 || selectedDate !== null;
       
-      // Apply client-side filtering for multiple selections
-      let filteredData = response.data || [];
-      
-      if (selectedStatus.length > 1) {
-        filteredData = filteredData.filter((appt) => selectedStatus.includes(appt.Status));
-      }
-      
-      if (selectedMode.length > 1) {
-        filteredData = filteredData.filter((appt) => selectedMode.includes(appt.Mode || ""));
-      }
-      
-      // Apply date filter if selected
-      if (selectedDate) {
-        const filterDate = selectedDate.format("YYYY-MM-DD");
-        filteredData = filteredData.filter((appt) => {
-          try {
-            const apptDate = dayjs(appt.Date_Time).format("YYYY-MM-DD");
-            return apptDate === filterDate;
-          } catch {
-            return false;
-          }
+      if (hasMultipleFilters) {
+        // Fetch all matching records for client-side filtering
+        const response = await fetchAppointments({
+          page: 1,
+          limit: 1000, // Get enough data for filtering
+          sort: sortParam,
+          search: searchText || undefined,
+          status: selectedStatus.length === 1 ? selectedStatus[0] : undefined,
+          mode: selectedMode.length === 1 ? selectedMode[0] : undefined,
+          doctor: doctorName,
         });
+        
+        // Apply client-side filtering
+        let filteredData = response.data || [];
+        
+        if (selectedStatus.length > 1) {
+          filteredData = filteredData.filter((appt) => selectedStatus.includes(appt.Status));
+        }
+        
+        if (selectedMode.length > 1) {
+          filteredData = filteredData.filter((appt) => selectedMode.includes(appt.Mode || ""));
+        }
+        
+        // Apply date filter if selected
+        if (selectedDate) {
+          const filterDate = dayjs(selectedDate).format("YYYY-MM-DD");
+          filteredData = filteredData.filter((appt) => {
+            try {
+              const apptDate = dayjs(appt.Date_Time).format("YYYY-MM-DD");
+              return apptDate === filterDate;
+            } catch {
+              return false;
+            }
+          });
+        }
+        
+        // Apply client-side pagination
+        const startIndex = (page - 1) * pageSize;
+        const endIndex = startIndex + pageSize;
+        const paginatedData = filteredData.slice(startIndex, endIndex);
+        
+        setAppointments(paginatedData);
+        setTotal(filteredData.length);
+      } else {
+        // Use server-side pagination for better performance
+        const response = await fetchAppointments({
+          page,
+          limit: pageSize,
+          sort: sortParam,
+          search: searchText || undefined,
+          status: selectedStatus.length === 1 ? selectedStatus[0] : undefined,
+          mode: selectedMode.length === 1 ? selectedMode[0] : undefined,
+          doctor: doctorName,
+        });
+        
+        // Apply date filter client-side if needed (backend doesn't support date filtering yet)
+        let filteredData = response.data || [];
+        
+        if (selectedDate) {
+          const filterDate = dayjs(selectedDate).format("YYYY-MM-DD");
+          filteredData = filteredData.filter((appt) => {
+            try {
+              const apptDate = dayjs(appt.Date_Time).format("YYYY-MM-DD");
+              return apptDate === filterDate;
+            } catch {
+              return false;
+            }
+          });
+        }
+        
+        setAppointments(filteredData);
+        setTotal(response.pagination?.total || filteredData.length);
       }
-      
-      // Apply pagination
-      const startIndex = (page - 1) * pageSize;
-      const endIndex = startIndex + pageSize;
-      const paginatedData = filteredData.slice(startIndex, endIndex);
-      
-      setAppointments(paginatedData);
-      setTotal(filteredData.length);
     } catch (err: any) {
       setError(err?.response?.data?.message || err?.message || "Failed to load appointments");
+      setAppointments([]);
+      setTotal(0);
       // eslint-disable-next-line no-console
       console.error("Failed to load appointments:", err);
     } finally {
       setLoading(false);
     }
-  }, [doctorName, page, pageSize, searchText, selectedStatus, selectedMode, sortBy]);
+  }, [doctorName, page, pageSize, searchText, selectedStatus, selectedMode, selectedDate, sortBy]);
 
   useEffect(() => {
+    if (!doctorName) {
+      setLoading(false);
+      return;
+    }
+
     const timer = setTimeout(() => {
-      if (doctorName) {
-        loadAppointments();
-      }
+      loadAppointments();
     }, searchText ? 500 : 0);
 
     return () => clearTimeout(timer);
-  }, [loadAppointments, doctorName]);
+  }, [loadAppointments, doctorName, searchText]);
 
   const handleSearch = (value: string) => {
     setSearchText(value);
@@ -647,6 +748,29 @@ const DoctorAppointments = () => {
                 </button>
               </div>
             </div>
+          ) : appointments.length === 0 ? (
+            <div className="d-flex justify-content-center align-items-center py-5">
+              <div className="text-center">
+                <i className="ti ti-calendar-off fs-48 text-muted mb-3 d-block" />
+                <p className="text-muted fw-semibold mb-2">No appointments found</p>
+                <p className="text-muted fs-13 mb-3">
+                  {searchText || selectedStatus.length > 0 || selectedMode.length > 0 || selectedDate
+                    ? "Try adjusting your filters"
+                    : "Start by creating a new appointment"}
+                </p>
+                {(!searchText && selectedStatus.length === 0 && selectedMode.length === 0 && !selectedDate) && (
+                  <Link
+                    to="#"
+                    className="btn btn-primary btn-md"
+                    data-bs-toggle="offcanvas"
+                    data-bs-target="#new_appointment"
+                  >
+                    <i className="ti ti-plus me-1" />
+                    New Appointment
+                  </Link>
+                )}
+              </div>
+            </div>
           ) : (
             <>
               <div className="table-responsive">
@@ -657,25 +781,106 @@ const DoctorAppointments = () => {
                   searchText={searchText}
                 />
               </div>
-              {total > pageSize && (
-                <div className="d-flex justify-content-between align-items-center mt-3">
-                  <div className="text-muted">
+              {total > 0 && (
+                <div className="d-flex justify-content-between align-items-center mt-3 pt-3 border-top">
+                  <div className="text-muted fs-13">
                     Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, total)} of {total} appointments
                   </div>
-                  <div className="d-flex gap-2">
+                  <div className="d-flex align-items-center gap-2">
                     <button
                       className="btn btn-sm btn-outline-primary"
-                      disabled={page === 1}
+                      disabled={page === 1 || loading}
                       onClick={() => setPage(page - 1)}
+                      title="Previous page"
                     >
+                      <i className="ti ti-chevron-left me-1" />
                       Previous
                     </button>
+                    
+                    {/* Page numbers */}
+                    <div className="d-flex gap-1">
+                      {(() => {
+                        const totalPages = Math.ceil(total / pageSize);
+                        const maxVisiblePages = 5;
+                        const pages: (number | string)[] = [];
+                        
+                        if (totalPages <= maxVisiblePages) {
+                          // Show all pages if total pages is less than max
+                          for (let i = 1; i <= totalPages; i++) {
+                            pages.push(i);
+                          }
+                        } else {
+                          // Show first page
+                          pages.push(1);
+                          
+                          // Calculate start and end of visible page range
+                          let start = Math.max(2, page - 1);
+                          let end = Math.min(totalPages - 1, page + 1);
+                          
+                          // Adjust if we're near the start
+                          if (page <= 3) {
+                            end = Math.min(maxVisiblePages - 1, totalPages - 1);
+                          }
+                          
+                          // Adjust if we're near the end
+                          if (page >= totalPages - 2) {
+                            start = Math.max(2, totalPages - maxVisiblePages + 2);
+                          }
+                          
+                          // Add ellipsis after first page if needed
+                          if (start > 2) {
+                            pages.push("...");
+                          }
+                          
+                          // Add page numbers in range
+                          for (let i = start; i <= end; i++) {
+                            pages.push(i);
+                          }
+                          
+                          // Add ellipsis before last page if needed
+                          if (end < totalPages - 1) {
+                            pages.push("...");
+                          }
+                          
+                          // Show last page
+                          pages.push(totalPages);
+                        }
+                        
+                        return pages.map((pageNum, idx) => {
+                          if (pageNum === "...") {
+                            return (
+                              <span key={`ellipsis-${idx}`} className="px-2 text-muted">
+                                ...
+                              </span>
+                            );
+                          }
+                          
+                          const pageNumber = pageNum as number;
+                          const isActive = pageNumber === page;
+                          
+                          return (
+                            <button
+                              key={pageNumber}
+                              className={`btn btn-sm ${isActive ? "btn-primary" : "btn-outline-primary"}`}
+                              disabled={loading}
+                              onClick={() => setPage(pageNumber)}
+                              title={`Go to page ${pageNumber}`}
+                            >
+                              {pageNumber}
+                            </button>
+                          );
+                        });
+                      })()}
+                    </div>
+                    
                     <button
                       className="btn btn-sm btn-outline-primary"
-                      disabled={page * pageSize >= total}
+                      disabled={page * pageSize >= total || loading}
                       onClick={() => setPage(page + 1)}
+                      title="Next page"
                     >
                       Next
+                      <i className="ti ti-chevron-right ms-1" />
                     </button>
                   </div>
                 </div>

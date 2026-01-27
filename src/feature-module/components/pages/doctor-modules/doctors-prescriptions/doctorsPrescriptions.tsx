@@ -41,97 +41,263 @@ const DoctorsPrescriptions = () => {
   // Pagination
   const [page, setPage] = useState(1);
   const [pageSize] = useState(10);
+  const [total, setTotal] = useState(0);
 
-  // Find doctor by user email to get doctor name
+  // Find doctor by user email/name to get doctor name
   useEffect(() => {
     const findDoctor = async () => {
-      if (!user?.email) return;
+      // If user is not a doctor, don't proceed
+      if (!user || user.role !== "doctor") {
+        setLoading(false);
+        if (user && user.role !== "doctor") {
+          setError("Access denied. Doctor role required.");
+        }
+        return;
+      }
       
       try {
         const doctors = await fetchDoctors();
         const doctorsList = Array.isArray(doctors) ? doctors : doctors.data || [];
-        const doctor = doctorsList.find(
-          (d: any) => (d.Email || d.email || "").toLowerCase() === user.email.toLowerCase()
+        
+        // Try to find doctor by email first
+        let doctor = doctorsList.find(
+          (d: any) => (d.Email || d.email || "").toLowerCase() === (user.email || "").toLowerCase()
         );
+        
+        // If not found by email, try to find by name (for logged-in doctors)
+        if (!doctor && user.name) {
+          doctor = doctorsList.find(
+            (d: any) => {
+              const doctorName = (d.Name_Designation || d.name || "").toLowerCase().trim();
+              const userName = user.name.toLowerCase().trim();
+              // Check if names match (exact or partial)
+              return doctorName === userName || doctorName.includes(userName) || userName.includes(doctorName);
+            }
+          );
+        }
+        
+        // If still not found, use the user's name directly (for doctors logged in)
+        if (!doctor) {
+          // Use the logged-in doctor's name directly
+          const doctorName = user.name || "";
+          if (doctorName) {
+            setDoctorName(doctorName);
+            // eslint-disable-next-line no-console
+            console.log("Using logged-in doctor name:", doctorName);
+            return;
+          }
+        }
+        
         if (doctor) {
-          setDoctorName(doctor.Name_Designation || doctor.Name || "");
+          const name = doctor.Name_Designation || doctor.name || "";
+          setDoctorName(name);
+          // eslint-disable-next-line no-console
+          console.log("Doctor found:", name);
+        } else {
+          // Last resort: use user's name if available
+          if (user.name) {
+            setDoctorName(user.name);
+            // eslint-disable-next-line no-console
+            console.log("Using user name as doctor name:", user.name);
+          } else {
+            setLoading(false);
+            setError("Doctor profile not found. Please contact administrator.");
+            // eslint-disable-next-line no-console
+            console.warn("Doctor not found for email:", user.email, "and name:", user.name);
+          }
         }
       } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error("Failed to find doctor:", err);
+        // If error occurs, try using user's name directly as fallback
+        if (user.name && user.role === "doctor") {
+          setDoctorName(user.name);
+          // eslint-disable-next-line no-console
+          console.log("Error fetching doctors, using user name as fallback:", user.name);
+        } else {
+          setLoading(false);
+          setError("Failed to load doctor information");
+          // eslint-disable-next-line no-console
+          console.error("Failed to find doctor:", err);
+        }
       }
     };
     
     findDoctor();
   }, [user]);
 
-  // Load prescriptions
+  // Load prescriptions with proper server-side pagination
   const loadPrescriptions = useCallback(async () => {
+    // If user is not a doctor, don't proceed
+    if (!user || user.role !== "doctor") {
+      setLoading(false);
+      return;
+    }
+    
     try {
       setLoading(true);
       setError(null);
       
       const sortParam = sortBy === "Recent" ? "-createdAt" : sortBy === "Oldest" ? "createdAt" : "-createdAt";
       
-      // Fetch prescriptions from database
-      const response = await fetchPrescriptions({
-        page: 1,
-        limit: 1000, // Get more data for client-side filtering
+      // eslint-disable-next-line no-console
+      console.log("[Prescriptions] Loading with params:", {
+        doctorName,
+        page,
+        pageSize,
+        searchText,
+        selectedStatuses,
+        selectedDoctors,
+        selectedDate,
+        sortBy,
+      });
+      
+      // For multiple filters, we need to fetch all and filter client-side
+      // For single filters or no filters, use server-side pagination
+      const hasMultipleFilters = selectedStatuses.length > 1 || selectedDoctors.length > 1 || selectedDate !== null;
+      
+      // Try with doctor filter if available, otherwise fetch all
+      let response = await fetchPrescriptions({
+        page: hasMultipleFilters ? 1 : page,
+        limit: hasMultipleFilters ? 1000 : pageSize,
         sort: sortParam,
         search: searchText || undefined,
         doctor: doctorName || undefined,
         status: selectedStatuses.length === 1 ? selectedStatuses[0] : undefined,
-        date: selectedDate ? selectedDate.format("YYYY-MM-DD") : undefined,
+        date: selectedDate ? dayjs(selectedDate).format("YYYY-MM-DD") : undefined,
       });
       
-      // Apply client-side filtering for multiple selections
-      let filteredData = response.data || [];
+      // eslint-disable-next-line no-console
+      console.log("[Prescriptions] Response with doctor filter:", {
+        dataCount: response.data?.length || 0,
+        total: response.pagination?.total || 0,
+        doctorName: doctorName || "Not set",
+        hasDoctorName: !!doctorName,
+      });
       
-      if (selectedStatuses.length > 1) {
-        filteredData = filteredData.filter((p) => selectedStatuses.includes(p.Status || ""));
-      }
-      
-      if (selectedDoctors.length > 0) {
-        filteredData = filteredData.filter((p) => 
-          selectedDoctors.some((doc) => (p.Doctor || "").includes(doc))
-        );
-      }
-      
-      // Apply date filter if selected
-      if (selectedDate) {
-        const filterDate = selectedDate.format("YYYY-MM-DD");
-        filteredData = filteredData.filter((p) => {
-          try {
-            const prescDate = dayjs(p.Date || p.Prescribed_On).format("YYYY-MM-DD");
-            return prescDate === filterDate;
-          } catch {
-            return false;
-          }
+      // If no results with doctor filter and we have a doctor name, try without doctor filter to debug
+      if ((!response.data || response.data.length === 0) && doctorName) {
+        // eslint-disable-next-line no-console
+        console.log("[Prescriptions] No results with doctor filter, trying without filter to check if prescriptions exist...");
+        const responseWithoutDoctor = await fetchPrescriptions({
+          page: 1,
+          limit: 10,
+          sort: sortParam,
+        });
+        
+        // eslint-disable-next-line no-console
+        console.log("[Prescriptions] Response without doctor filter:", {
+          dataCount: responseWithoutDoctor.data?.length || 0,
+          total: responseWithoutDoctor.pagination?.total || 0,
+          sampleDoctors: responseWithoutDoctor.data?.slice(0, 5).map((p: any) => ({
+            Doctor: p.Doctor,
+            Patient: p.Patient,
+            Medicine: p.Medicine,
+          })) || [],
+        });
+        
+        // If we have prescriptions but doctor name doesn't match, show them anyway for debugging
+        // This helps identify doctor name matching issues
+        if (responseWithoutDoctor.data && responseWithoutDoctor.data.length > 0) {
+          // eslint-disable-next-line no-console
+          console.warn("[Prescriptions] Found prescriptions in DB but doctor name filter didn't match.");
+          // eslint-disable-next-line no-console
+          console.warn("[Prescriptions] Searching for:", doctorName);
+          // eslint-disable-next-line no-console
+          console.warn("[Prescriptions] Found doctor names:", responseWithoutDoctor.data.map((p: any) => p.Doctor));
+          
+          // Still use the filtered response (empty) to maintain proper filtering
+          // But log the mismatch for debugging
+        }
+      } else if (!doctorName) {
+        // If no doctor name, fetch all prescriptions (for debugging/admin view)
+        // eslint-disable-next-line no-console
+        console.log("[Prescriptions] No doctor name set, fetching all prescriptions...");
+        response = await fetchPrescriptions({
+          page: hasMultipleFilters ? 1 : page,
+          limit: hasMultipleFilters ? 1000 : pageSize,
+          sort: sortParam,
+          search: searchText || undefined,
+          status: selectedStatuses.length === 1 ? selectedStatuses[0] : undefined,
+          date: selectedDate ? dayjs(selectedDate).format("YYYY-MM-DD") : undefined,
         });
       }
       
-      // Apply pagination
-      const startIndex = (page - 1) * pageSize;
-      const endIndex = startIndex + pageSize;
-      const paginatedData = filteredData.slice(startIndex, endIndex);
+      // Apply client-side filtering
+      let filteredData = response.data || [];
       
-      setPrescriptions(paginatedData);
+      if (hasMultipleFilters) {
+        if (selectedStatuses.length > 1) {
+          filteredData = filteredData.filter((p) => selectedStatuses.includes(p.Status || ""));
+        }
+        
+        if (selectedDoctors.length > 0) {
+          filteredData = filteredData.filter((p) => 
+            selectedDoctors.some((doc) => (p.Doctor || "").includes(doc))
+          );
+        }
+        
+        // Apply date filter if selected
+        if (selectedDate) {
+          const filterDate = dayjs(selectedDate).format("YYYY-MM-DD");
+          filteredData = filteredData.filter((p) => {
+            try {
+              const prescDate = dayjs(p.Date || p.Prescribed_On).format("YYYY-MM-DD");
+              return prescDate === filterDate;
+            } catch {
+              return false;
+            }
+          });
+        }
+        
+        // Apply client-side pagination
+        const startIndex = (page - 1) * pageSize;
+        const endIndex = startIndex + pageSize;
+        const paginatedData = filteredData.slice(startIndex, endIndex);
+        
+        setPrescriptions(paginatedData);
+        setTotal(filteredData.length);
+      } else {
+        // Apply date filter client-side if needed
+        if (selectedDate) {
+          const filterDate = dayjs(selectedDate).format("YYYY-MM-DD");
+          filteredData = filteredData.filter((p) => {
+            try {
+              const prescDate = dayjs(p.Date || p.Prescribed_On).format("YYYY-MM-DD");
+              return prescDate === filterDate;
+            } catch {
+              return false;
+            }
+          });
+        }
+        
+        setPrescriptions(filteredData);
+        setTotal(response.pagination?.total || filteredData.length);
+      }
+      
+      // eslint-disable-next-line no-console
+      console.log("[Prescriptions] Final result:", {
+        prescriptionsCount: filteredData.length,
+        total,
+        page,
+      });
     } catch (err: any) {
       setError(err?.response?.data?.message || err?.message || "Failed to load prescriptions");
+      setPrescriptions([]);
+      setTotal(0);
       // eslint-disable-next-line no-console
-      console.error("Failed to load prescriptions:", err);
+      console.error("[Prescriptions] Failed to load prescriptions:", err);
     } finally {
       setLoading(false);
     }
-  }, [doctorName, page, pageSize, searchText, selectedStatuses, selectedDoctors, selectedDate, sortBy]);
+  }, [doctorName, page, pageSize, searchText, selectedStatuses, selectedDoctors, selectedDate, sortBy, user]);
 
   useEffect(() => {
+    // Load prescriptions even if doctorName is not set yet (will retry)
     const timer = setTimeout(() => {
       loadPrescriptions();
     }, searchText ? 500 : 0);
 
     return () => clearTimeout(timer);
-  }, [loadPrescriptions]);
+  }, [loadPrescriptions, doctorName, searchText]);
 
   const handleSearch = (value: string) => {
     setSearchText(value);
@@ -198,6 +364,7 @@ const DoctorsPrescriptions = () => {
     {
       title: "Prescription ID",
       dataIndex: "Prescription_ID",
+      width: 150,
       render: (text: string, record: Prescription) => (
         <Link 
           to={`${all_routes.doctorsprescriptiondetails}?id=${record._id || record.id}`}
@@ -215,6 +382,7 @@ const DoctorsPrescriptions = () => {
     {
       title: "Patient",
       dataIndex: "Patient",
+      width: 180,
       render: (text: string, record: any) => (
         <div className="d-flex align-items-center">
           <Link
@@ -240,8 +408,42 @@ const DoctorsPrescriptions = () => {
       sorter: (a: any, b: any) => (a.Patient || "").localeCompare(b.Patient || ""),
     },
     {
+      title: "Medicine",
+      dataIndex: "Medicine",
+      width: 200,
+      render: (text: string) => (
+        <span className="fw-medium">{text || "N/A"}</span>
+      ),
+      sorter: (a: any, b: any) => (a.Medicine || "").localeCompare(b.Medicine || ""),
+    },
+    {
+      title: "Dosage",
+      dataIndex: "Dosage",
+      width: 120,
+      render: (text: string) => (
+        <span className="text-body">{text || "N/A"}</span>
+      ),
+    },
+    {
+      title: "Frequency",
+      dataIndex: "Frequency",
+      width: 120,
+      render: (text: string) => (
+        <span className="text-body">{text || "N/A"}</span>
+      ),
+    },
+    {
+      title: "Duration",
+      dataIndex: "Duration",
+      width: 120,
+      render: (text: string) => (
+        <span className="text-body">{text || "N/A"}</span>
+      ),
+    },
+    {
       title: "Prescribed On",
       dataIndex: "Prescribed_On",
+      width: 150,
       render: (text: string, record: any) => {
         const dateStr = text || record.Date || "";
         return dateStr ? formatDate(dateStr) : "N/A";
@@ -253,21 +455,51 @@ const DoctorsPrescriptions = () => {
       },
     },
     {
-      title: "",
+      title: "Status",
+      dataIndex: "Status",
+      width: 120,
+      render: (text: string) => {
+        const getStatusClass = (status: string) => {
+          if (status === "Active") return "badge-soft-success text-success";
+          if (status === "Completed") return "badge-soft-primary text-primary";
+          if (status === "Cancelled") return "badge-soft-danger text-danger";
+          return "badge-soft-secondary text-secondary";
+        };
+        
+        return (
+          <span className={`badge ${getStatusClass(text)} rounded fw-medium fs-13`}>
+            {text || "N/A"}
+          </span>
+        );
+      },
+      sorter: (a: any, b: any) => (a.Status || "").localeCompare(b.Status || ""),
+    },
+    {
+      title: "Actions",
+      width: 100,
       render: (_: any, record: Prescription) => (
-        <div className="action-item">
-          <>
-            <Link to="#" data-bs-toggle="dropdown">
+        <div className="action-item d-flex align-items-center gap-2">
+          <div className="dropdown">
+            <Link
+              to="#"
+              className="btn btn-sm btn-outline-secondary"
+              data-bs-toggle="dropdown"
+              title="More options"
+            >
               <i className="ti ti-dots-vertical" />
             </Link>
-            <ul className="dropdown-menu p-2">
+            <ul className="dropdown-menu dropdown-menu-end p-2">
               <li>
                 <Link
                   to={`${all_routes.doctorsprescriptiondetails}?id=${record._id || record.id}`}
                   className="dropdown-item d-flex align-items-center"
                 >
-                  View
+                  <i className="ti ti-eye me-2" />
+                  View Details
                 </Link>
+              </li>
+              <li>
+                <hr className="dropdown-divider" />
               </li>
               <li>
                 <Link
@@ -278,11 +510,12 @@ const DoctorsPrescriptions = () => {
                     handleDelete(record);
                   }}
                 >
+                  <i className="ti ti-trash me-2" />
                   Delete
                 </Link>
               </li>
             </ul>
-          </>
+          </div>
         </div>
       ),
     },
@@ -639,24 +872,132 @@ const DoctorsPrescriptions = () => {
               <p className="mt-3 text-muted">Loading prescriptions...</p>
             </div>
           ) : prescriptions.length === 0 ? (
-            <div className="text-center py-5">
-              <i className="ti ti-file-off fs-48 text-muted mb-3 d-block" />
-              <p className="text-muted mb-0">No prescriptions found</p>
-              {doctorName && (
-                <p className="text-muted fs-14 mt-2">
-                  Prescriptions will appear here after completing consultations with medications.
+            <div className="d-flex justify-content-center align-items-center py-5">
+              <div className="text-center">
+                <i className="ti ti-file-off fs-48 text-muted mb-3 d-block" />
+                <p className="text-muted fw-semibold mb-2">No prescriptions found</p>
+                <p className="text-muted fs-13 mb-3">
+                  {searchText || selectedStatuses.length > 0 || selectedDoctors.length > 0 || selectedDate
+                    ? "Try adjusting your filters"
+                    : "Prescriptions will appear here after completing consultations with medications."}
                 </p>
-              )}
+              </div>
             </div>
           ) : (
-            <div className="table-responsive">
-              <Datatable
-                columns={columns}
-                dataSource={tableData}
-                Selection={false}
-                searchText={searchText}
-              />
-            </div>
+            <>
+              <div className="table-responsive">
+                <Datatable
+                  columns={columns}
+                  dataSource={tableData}
+                  Selection={false}
+                  searchText={searchText}
+                />
+              </div>
+              {total > 0 && (
+                <div className="d-flex justify-content-between align-items-center mt-3 pt-3 border-top">
+                  <div className="text-muted fs-13">
+                    Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, total)} of {total} prescriptions
+                  </div>
+                  <div className="d-flex align-items-center gap-2">
+                    <button
+                      className="btn btn-sm btn-outline-primary"
+                      disabled={page === 1 || loading}
+                      onClick={() => setPage(page - 1)}
+                      title="Previous page"
+                    >
+                      <i className="ti ti-chevron-left me-1" />
+                      Previous
+                    </button>
+                    
+                    {/* Page numbers */}
+                    <div className="d-flex gap-1">
+                      {(() => {
+                        const totalPages = Math.ceil(total / pageSize);
+                        const maxVisiblePages = 5;
+                        const pages: (number | string)[] = [];
+                        
+                        if (totalPages <= maxVisiblePages) {
+                          // Show all pages if total pages is less than max
+                          for (let i = 1; i <= totalPages; i++) {
+                            pages.push(i);
+                          }
+                        } else {
+                          // Show first page
+                          pages.push(1);
+                          
+                          // Calculate start and end of visible page range
+                          let start = Math.max(2, page - 1);
+                          let end = Math.min(totalPages - 1, page + 1);
+                          
+                          // Adjust if we're near the start
+                          if (page <= 3) {
+                            end = Math.min(maxVisiblePages - 1, totalPages - 1);
+                          }
+                          
+                          // Adjust if we're near the end
+                          if (page >= totalPages - 2) {
+                            start = Math.max(2, totalPages - maxVisiblePages + 2);
+                          }
+                          
+                          // Add ellipsis after first page if needed
+                          if (start > 2) {
+                            pages.push("...");
+                          }
+                          
+                          // Add page numbers in range
+                          for (let i = start; i <= end; i++) {
+                            pages.push(i);
+                          }
+                          
+                          // Add ellipsis before last page if needed
+                          if (end < totalPages - 1) {
+                            pages.push("...");
+                          }
+                          
+                          // Show last page
+                          pages.push(totalPages);
+                        }
+                        
+                        return pages.map((pageNum, idx) => {
+                          if (pageNum === "...") {
+                            return (
+                              <span key={`ellipsis-${idx}`} className="px-2 text-muted">
+                                ...
+                              </span>
+                            );
+                          }
+                          
+                          const pageNumber = pageNum as number;
+                          const isActive = pageNumber === page;
+                          
+                          return (
+                            <button
+                              key={pageNumber}
+                              className={`btn btn-sm ${isActive ? "btn-primary" : "btn-outline-primary"}`}
+                              disabled={loading}
+                              onClick={() => setPage(pageNumber)}
+                              title={`Go to page ${pageNumber}`}
+                            >
+                              {pageNumber}
+                            </button>
+                          );
+                        });
+                      })()}
+                    </div>
+                    
+                    <button
+                      className="btn btn-sm btn-outline-primary"
+                      disabled={page * pageSize >= total || loading}
+                      onClick={() => setPage(page + 1)}
+                      title="Next page"
+                    >
+                      Next
+                      <i className="ti ti-chevron-right ms-1" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
         {/* End Content */}

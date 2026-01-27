@@ -25,7 +25,22 @@ export interface AppointmentRequest {
 const formatAppointmentResponse = (appt: any) => {
   if (!appt) return appt;
   const obj = typeof appt.toObject === "function" ? appt.toObject() : appt;
-  return obj;
+  
+  // Return only relevant fields for list view
+  return {
+    _id: obj._id,
+    id: obj.id,
+    Date_Time: obj.Date_Time,
+    Patient: obj.Patient,
+    Phone: obj.Phone,
+    Patient_Image: obj.Patient_Image,
+    Doctor: obj.Doctor,
+    Mode: obj.Mode,
+    Status: obj.Status,
+    Fees: obj.Fees,
+    createdAt: obj.createdAt,
+    updatedAt: obj.updatedAt,
+  };
 };
  
 const validateAppointmentData = (
@@ -65,23 +80,35 @@ export const getAllAppointments: RequestHandler = async (req, res, next) => {
     const Mode = (req.query.mode as string) || "";
     const Doctor = (req.query.doctor as string) || "";
     const Patient = (req.query.patient as string) || "";
- 
+
     const filter: Record<string, any> = {};
     if (Status) filter.Status = Status;
     if (Mode) filter.Mode = Mode;
-    if (Doctor) filter.Doctor = Doctor;
     if (Patient) filter.Patient = Patient;
- 
+
+    // Support flexible doctor name matching (exact or partial)
+    if (Doctor) {
+      const doctorRx = new RegExp(Doctor.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      filter.Doctor = doctorRx;
+    }
+
     if (search) {
       const rx = new RegExp(search, "i");
       filter.$or = [{ Patient: rx }, { Doctor: rx }, { Phone: rx }];
     }
  
+    // Use select to only fetch necessary fields from database
     const [appts, total] = await Promise.all([
-      Model.find(filter).sort(sort).skip(skip).limit(limit).exec(),
+      Model.find(filter)
+        .select("_id id Date_Time Patient Phone Patient_Image Doctor Mode Status Fees createdAt updatedAt")
+        .sort(sort)
+        .skip(skip)
+        .limit(limit)
+        .lean()
+        .exec(),
       Model.countDocuments(filter),
     ]);
- 
+
     res.json({
       data: appts.map(formatAppointmentResponse),
       pagination: {
