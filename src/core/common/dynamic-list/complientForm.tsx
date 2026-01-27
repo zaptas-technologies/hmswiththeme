@@ -1,31 +1,34 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 
-interface ComplaintItem {
+export interface ComplaintItem {
   id: number;
   value: string;
 }
 
-const ComplaintForm: React.FC = () => {
+interface ComplaintFormProps {
+  value?: Array<{ complaint: string; duration?: string }>;
+  onChange?: (complaints: Array<{ complaint: string; duration?: string }>) => void;
+}
+
+const ComplaintForm: React.FC<ComplaintFormProps> = ({ value, onChange }) => {
   const [complaints, setComplaints] = useState<ComplaintItem[]>([
-    { id: Date.now(), value: 'Headache in Leftside' },
+    { id: Date.now(), value: '' },
   ]);
 
-  const handleAddAboveLast = () => {
-    const newComplaint: ComplaintItem = {
-      id: Date.now() + Math.random(),
-      value: '',
-    };
+  // Sync with external value prop
+  useEffect(() => {
+    if (value && Array.isArray(value) && value.length > 0) {
+      const mappedComplaints = value.map((item, idx) => ({
+        id: Date.now() + idx,
+        value: item.complaint || '',
+      }));
+      if (mappedComplaints.length > 0) {
+        setComplaints(mappedComplaints);
+      }
+    }
+  }, [value]);
 
-    setComplaints((prev) => {
-      const lastItem = prev[prev.length - 1];
-      return [...prev.slice(0, -1), newComplaint, lastItem];
-    });
-  };
-
-  const handleRemove = (id: number) => {
-    setComplaints((prev) => prev.filter((item) => item.id !== id));
-  };
 
   const handleChange = (id: number, value: string) => {
     setComplaints((prev) =>

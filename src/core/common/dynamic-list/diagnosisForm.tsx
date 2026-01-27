@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Diagnosis_Type } from "../selectOption";
 import CommonSelect from "../common-select/commonSelect";
@@ -6,15 +6,36 @@ import CommonSelect from "../common-select/commonSelect";
 interface DiagnosisItem {
   id: number;
   complaintText: string;
+  type?: string;
 }
 
-const DiagnosisForm: React.FC = () => {
+interface DiagnosisFormProps {
+  value?: Array<{ diagnosis: string; type?: string }>;
+  onChange?: (diagnoses: Array<{ diagnosis: string; type?: string }>) => void;
+}
+
+const DiagnosisForm: React.FC<DiagnosisFormProps> = ({ value, onChange }) => {
   const [diagnoses, setDiagnoses] = useState<DiagnosisItem[]>([
     {
       id: Date.now(),
       complaintText: "",
+      type: Diagnosis_Type[0]?.value || "",
     },
   ]);
+
+  // Sync with external value prop
+  useEffect(() => {
+    if (value && Array.isArray(value) && value.length > 0) {
+      const mappedDiagnoses = value.map((item, idx) => ({
+        id: Date.now() + idx,
+        complaintText: item.diagnosis || "",
+        type: item.type || Diagnosis_Type[0]?.value || "",
+      }));
+      if (mappedDiagnoses.length > 0) {
+        setDiagnoses(mappedDiagnoses);
+      }
+    }
+  }, [value]);
 
   const handleAddAboveLast = () => {
     const newDiagnosis: DiagnosisItem = {
@@ -54,11 +75,11 @@ const DiagnosisForm: React.FC = () => {
                     Diagnosis Type
                   </label>
                 )}
-                {/* YOUR CommonSelect usage UNCHANGED */}
                 <CommonSelect
                   options={Diagnosis_Type}
                   className="select"
-                  defaultValue={Diagnosis_Type[0]}
+                  value={item.type || Diagnosis_Type[0]?.value}
+                  onChange={(val) => handleTypeChange(item.id, val)}
                 />
               </div>
             </div>

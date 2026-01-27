@@ -1,25 +1,77 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 
-const InvestigationList: React.FC = () => {
+interface InvestigationListProps {
+  value?: Array<{ investigation: string; notes?: string }>;
+  onChange?: (investigations: Array<{ investigation: string; notes?: string }>) => void;
+}
+
+const InvestigationList: React.FC<InvestigationListProps> = ({ value, onChange }) => {
   const [investigations, setInvestigations] = useState([
     { id: Date.now(), value: "" },
   ]);
 
+  // Sync with external value prop
+  useEffect(() => {
+    if (value && Array.isArray(value) && value.length > 0) {
+      const mappedInvestigations = value.map((item, idx) => ({
+        id: Date.now() + idx,
+        value: item.investigation || "",
+      }));
+      if (mappedInvestigations.length > 0) {
+        setInvestigations(mappedInvestigations);
+      }
+    }
+  }, [value]);
+
   const handleAddInvestigation = () => {
     const newItem = { id: Date.now() + Math.random(), value: "" };
     const last = investigations[investigations.length - 1];
-    setInvestigations([...investigations.slice(0, -1), newItem, last]);
+    const updated = [...investigations.slice(0, -1), newItem, last];
+    setInvestigations(updated);
+    
+    // Notify parent component
+    if (onChange) {
+      const formatted = updated
+        .filter((item) => item.value && item.value.trim() !== "")
+        .map((item) => ({
+          investigation: item.value.trim(),
+          notes: "",
+        }));
+      onChange(formatted);
+    }
   };
 
   const handleRemoveInvestigation = (id: number) => {
-    setInvestigations((prev) => prev.filter((item) => item.id !== id));
+    const updated = investigations.filter((item) => item.id !== id);
+    setInvestigations(updated);
+    
+    // Notify parent component
+    if (onChange) {
+      const formatted = updated
+        .filter((item) => item.value && item.value.trim() !== "")
+        .map((item) => ({
+          investigation: item.value.trim(),
+          notes: "",
+        }));
+      onChange(formatted);
+    }
   };
 
-  const handleChangeInvestigation = (id: number, value: string) => {
-    setInvestigations((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, value } : item))
-    );
+  const handleChangeInvestigation = (id: number, newValue: string) => {
+    const updated = investigations.map((item) => (item.id === id ? { ...item, value: newValue } : item));
+    setInvestigations(updated);
+    
+    // Notify parent component
+    if (onChange) {
+      const formatted = updated
+        .filter((item) => item.value && item.value.trim() !== "")
+        .map((item) => ({
+          investigation: item.value.trim(),
+          notes: "",
+        }));
+      onChange(formatted);
+    }
   };
 
   return (

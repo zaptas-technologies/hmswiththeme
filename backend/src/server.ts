@@ -15,6 +15,7 @@ import { buildConsultationRouter } from "./routes/consultationRoutes";
 import { buildPrescriptionRouter } from "./routes/prescriptionRoutes";
 import { scanResourceFiles } from "./utils/resourceLoader";
 import { initResourceModels } from "./models/resourceRegistry";
+import { schemaMap } from "./models/schemas";
 
 dotenv.config();
 
@@ -52,8 +53,20 @@ const start = async () => {
   app.use(express.json({ limit: "1mb" }));
   app.use(morgan("dev"));
 
-  const descriptors = await scanResourceFiles();
-  const resources = await initResourceModels(descriptors);
+  const discoveredDescriptors = await scanResourceFiles();
+  // Ensure core schemas (e.g. "consultations") are always initialized even if
+  // there is no corresponding dataset file under `src/core/json`.
+  const schemaDescriptors = Object.keys(schemaMap).map((name) => ({
+    name,
+    filePath: "<schema>",
+  }));
+  const mergedDescriptors = [
+    ...discoveredDescriptors,
+    ...schemaDescriptors.filter(
+      (d) => !discoveredDescriptors.some((x) => x.name === d.name)
+    ),
+  ];
+  const resources = await initResourceModels(mergedDescriptors);
   app.use("/api/auth", buildAuthRouter());
   app.use("/api/dashboard", buildDashboardRouter());
   app.use("/api/schedule", buildScheduleRouter());

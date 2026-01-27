@@ -1,23 +1,66 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 
-const AdviceForm: React.FC = () => {
+interface AdviceFormProps {
+  value?: Array<{ advice: string }>;
+  onChange?: (advices: Array<{ advice: string }>) => void;
+}
+
+const AdviceForm: React.FC<AdviceFormProps> = ({ value, onChange }) => {
   const [advices, setAdvices] = useState([{ id: Date.now(), text: "" }]);
+
+  // Sync with external value prop
+  useEffect(() => {
+    if (value && Array.isArray(value) && value.length > 0) {
+      const mappedAdvices = value.map((item, idx) => ({
+        id: Date.now() + idx,
+        text: item.advice || "",
+      }));
+      if (mappedAdvices.length > 0) {
+        setAdvices(mappedAdvices);
+      }
+    }
+  }, [value]);
 
   const handleAddAdvice = () => {
     const newAdvice = { id: Date.now() + Math.random(), text: "" };
     const last = advices[advices.length - 1];
-    setAdvices([...advices.slice(0, -1), newAdvice, last]);
+    const updated = [...advices.slice(0, -1), newAdvice, last];
+    setAdvices(updated);
+    
+    // Notify parent component
+    if (onChange) {
+      const formatted = updated
+        .filter((item) => item.text && item.text.trim() !== "")
+        .map((item) => ({ advice: item.text.trim() }));
+      onChange(formatted);
+    }
   };
 
   const handleRemoveAdvice = (id: number) => {
-    setAdvices((prev) => prev.filter((item) => item.id !== id));
+    const updated = advices.filter((item) => item.id !== id);
+    setAdvices(updated);
+    
+    // Notify parent component
+    if (onChange) {
+      const formatted = updated
+        .filter((item) => item.text && item.text.trim() !== "")
+        .map((item) => ({ advice: item.text.trim() }));
+      onChange(formatted);
+    }
   };
 
-  const handleChangeAdvice = (id: number, value: string) => {
-    setAdvices((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, text: value } : item))
-    );
+  const handleChangeAdvice = (id: number, newValue: string) => {
+    const updated = advices.map((item) => (item.id === id ? { ...item, text: newValue } : item));
+    setAdvices(updated);
+    
+    // Notify parent component
+    if (onChange) {
+      const formatted = updated
+        .filter((item) => item.text && item.text.trim() !== "")
+        .map((item) => ({ advice: item.text.trim() }));
+      onChange(formatted);
+    }
   };
 
   return (

@@ -9,6 +9,7 @@ import {
   DoctorPrescriptionSchema,
   PatientPrescriptionSchema,
   DoctorLeaveSchema,
+  ConsultationSchema,
 } from "./clinical";
 import {
   InvoiceSchema,
@@ -56,6 +57,7 @@ export const schemaMap: Record<string, Schema> = {
   doctorprescriptions: DoctorPrescriptionSchema,
   patientprescriptions: PatientPrescriptionSchema,
   doctorleaves: DoctorLeaveSchema,
+  consultations: ConsultationSchema,
 
   // finance
   invoices: InvoiceSchema,

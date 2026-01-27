@@ -23,7 +23,28 @@ export interface PrescriptionRequest {
 const formatPrescriptionResponse = (presc: any) => {
   if (!presc) return presc;
   const obj = typeof presc.toObject === "function" ? presc.toObject() : presc;
-  return obj;
+  
+  // Return only relevant fields for list view
+  return {
+    _id: obj._id,
+    id: obj.id,
+    Prescription_ID: obj.Prescription_ID,
+    Date: obj.Date,
+    Prescribed_On: obj.Prescribed_On,
+    Patient: obj.Patient,
+    Patient_Image: obj.Patient_Image,
+    Doctor: obj.Doctor,
+    Medicine: obj.Medicine,
+    Status: obj.Status,
+    Dosage: obj.Dosage || "",
+    Frequency: obj.Frequency || "",
+    Duration: obj.Duration || "",
+    Appointment_ID: obj.Appointment_ID || obj.appointmentId || "",
+    appointmentId: obj.appointmentId || obj.Appointment_ID || "",
+    Amount: obj.Amount,
+    createdAt: obj.createdAt,
+    updatedAt: obj.updatedAt,
+  };
 };
 
 const validatePrescriptionData = (
@@ -53,6 +74,9 @@ export const getAllPrescriptions: RequestHandler = async (req, res, next) => {
     console.log(`[Prescription Controller] Database: ${dbName} - Fetching prescriptions`);
     
     const Model = getResourceModel("doctorprescriptions");
+    const includeConsultations =
+      String(req.query.includeConsultations ?? "").toLowerCase() === "true" ||
+      String(req.query.includeConsultations ?? "") === "1";
 
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
@@ -93,16 +117,26 @@ export const getAllPrescriptions: RequestHandler = async (req, res, next) => {
       const doctorNameParts = decodedDoctor.split(/\s*-\s*/);
       const baseDoctorName = doctorNameParts[0]?.trim() || decodedDoctor;
       
+      // Get individual words for flexible matching
+      const doctorWords = baseDoctorName.split(/\s+/).filter(w => w.length > 0);
+      
       // Escape special regex characters
       const escapedFull = decodedDoctor.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const escapedBase = baseDoctorName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       
-      // Create flexible matching - try exact match, base name, or partial match
-      const doctorRegexPatterns = [
-        escapedFull, // Full name
-        escapedBase, // Base name
-        baseDoctorName.split(/\s+/).map(part => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join(".*"), // Partial match
+      // Create flexible matching patterns
+      const doctorRegexPatterns: string[] = [
+        escapedFull, // Full name exact match
+        escapedBase, // Base name exact match
       ];
+      
+      // Add patterns for each word (for partial matching)
+      doctorWords.forEach(word => {
+        if (word.length > 2) { // Only add words longer than 2 characters
+          const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          doctorRegexPatterns.push(escapedWord);
+        }
+      });
       
       // Match either full name, base name, or partial (case-insensitive)
       andConditions.push({
@@ -116,6 +150,7 @@ export const getAllPrescriptions: RequestHandler = async (req, res, next) => {
         original: Doctor,
         decoded: decodedDoctor,
         baseName: baseDoctorName,
+        words: doctorWords,
         patterns: doctorRegexPatterns,
       });
     }
@@ -165,17 +200,238 @@ export const getAllPrescriptions: RequestHandler = async (req, res, next) => {
 
     // If doctor filter is applied, also check what doctor names exist
     if (Doctor) {
-      const samplePrescriptions = await Model.find({}).limit(10).select("Doctor").exec();
-      const uniqueDoctors = [...new Set(samplePrescriptions.map((p: any) => {
-        const obj = typeof p.toObject === "function" ? p.toObject() : p;
-        return obj.Doctor;
-      }))];
+      const samplePrescriptions = await Model.find({}).limit(10).select("Doctor").lean().exec();
+      const uniqueDoctors = [...new Set(samplePrescriptions.map((p: any) => p.Doctor).filter(Boolean))];
       // eslint-disable-next-line no-console
       console.log(`[Prescription Controller] Database: ${dbName} - Sample doctor names in DB:`, uniqueDoctors);
+      // eslint-disable-next-line no-console
+      console.log(`[Prescription Controller] Database: ${dbName} - Searching for doctor:`, Doctor);
+    }
+    
+    // Also log total count without any filters for debugging
+    const totalAllPrescriptions = await Model.countDocuments({});
+    // eslint-disable-next-line no-console
+    console.log(`[Prescription Controller] Database: ${dbName} - Total prescriptions in collection: ${totalAllPrescriptions}`);
+
+    // If there are no prescriptions yet, optionally derive "prescription-like" rows
+    // from completed consultations (unwind Medications).
+    if (includeConsultations && totalAllPrescriptions === 0) {
+      const ConsultationModel = getResourceModel("consultations");
+
+      // Sort parsing (supports "createdAt", "-createdAt", etc.)
+      const sortField = String(sort || "-createdAt").startsWith("-")
+        ? String(sort).slice(1)
+        : String(sort);
+      const sortDir = String(sort || "-createdAt").startsWith("-") ? -1 : 1;
+
+      // For consultations we treat "createdAt" as consultation.createdAt
+      // (and expose it similarly on derived rows).
+      const consultationMatch: Record<string, any> = {};
+      const consultationAnd: any[] = [];
+
+      // Doctor filter (reuse same flexible patterns but match on consultations.Doctor)
+      if (Doctor) {
+        const decodedDoctor = decodeURIComponent(Doctor.replace(/\+/g, " ")).trim();
+        const doctorNameParts = decodedDoctor.split(/\s*-\s*/);
+        const baseDoctorName = doctorNameParts[0]?.trim() || decodedDoctor;
+        const doctorWords = baseDoctorName.split(/\s+/).filter((w) => w.length > 0);
+
+        const escapedFull = decodedDoctor.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const escapedBase = baseDoctorName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const doctorRegexPatterns: string[] = [escapedFull, escapedBase];
+        doctorWords.forEach((word) => {
+          if (word.length > 2) {
+            doctorRegexPatterns.push(word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+          }
+        });
+
+        consultationAnd.push({
+          $or: doctorRegexPatterns.map((pattern) => ({
+            Doctor: { $regex: pattern, $options: "i" },
+          })),
+        });
+      }
+
+      if (Patient) consultationMatch.Patient = { $regex: Patient, $options: "i" };
+
+      // Status mapping: prescriptions use "Active", consultations use "Completed"
+      if (Status) {
+        const normalized = String(Status).toLowerCase();
+        if (normalized === "active" || normalized === "completed") {
+          consultationMatch.Status = "Completed";
+        } else if (normalized === "cancelled") {
+          consultationMatch.Status = "Cancelled";
+        } else if (normalized === "draft") {
+          consultationMatch.Status = "Draft";
+        } else {
+          // fallback: try direct match
+          consultationMatch.Status = Status;
+        }
+      }
+
+      // Date filter: query param is typically YYYY-MM-DD.
+      // We match either Consultation_Date or Completed_At within that day.
+      if (date) {
+        const parsed = new Date(date);
+        if (!isNaN(parsed.getTime())) {
+          const start = new Date(parsed);
+          start.setHours(0, 0, 0, 0);
+          const end = new Date(parsed);
+          end.setHours(23, 59, 59, 999);
+          consultationAnd.push({
+            $or: [
+              { Consultation_Date: { $gte: start, $lte: end } },
+              { Completed_At: { $gte: start, $lte: end } },
+              { createdAt: { $gte: start, $lte: end } },
+            ],
+          });
+        }
+      }
+
+      if (search) {
+        const rx = new RegExp(search, "i");
+        consultationAnd.push({
+          $or: [
+            { Patient: rx },
+            { Doctor: rx },
+            { Consultation_ID: rx },
+            { Appointment_ID: rx },
+            { "Medications.medicine": rx },
+          ],
+        });
+      }
+
+      const consultationPipelineBase: any[] = [];
+      const initialMatch: Record<string, any> = { ...consultationMatch };
+      if (consultationAnd.length > 0) initialMatch.$and = consultationAnd;
+      if (Object.keys(initialMatch).length > 0) {
+        consultationPipelineBase.push({ $match: initialMatch });
+      }
+
+      consultationPipelineBase.push({
+        $unwind: {
+          path: "$Medications",
+          includeArrayIndex: "medIndex",
+          // If a consultation has no medications, still return one row so
+          // the doctor can see the consultation in the prescriptions list.
+          preserveNullAndEmptyArrays: true,
+        },
+      });
+
+      // Project into "prescription-like" shape
+      consultationPipelineBase.push({
+        $addFields: {
+          _derivedDate: {
+            $ifNull: ["$Completed_At", { $ifNull: ["$Consultation_Date", "$createdAt"] }],
+          },
+          _amount: {
+            $sum: {
+              $map: {
+                input: { $ifNull: ["$Invoice", []] },
+                as: "i",
+                in: { $ifNull: ["$$i.total", 0] },
+              },
+            },
+          },
+        },
+      });
+
+      consultationPipelineBase.push({
+        $project: {
+          _id: 0,
+          // stable synthetic ids
+          id: {
+            $concat: [
+              { $toString: "$_id" },
+              "-med-",
+              { $toString: { $ifNull: ["$medIndex", 0] } },
+            ],
+          },
+          Prescription_ID: {
+            $concat: [
+              "CONS-",
+              { $ifNull: ["$Consultation_ID", { $toString: "$_id" }] },
+              "-",
+              { $toString: { $add: [{ $ifNull: ["$medIndex", 0] }, 1] } },
+            ],
+          },
+          Date: { $dateToString: { format: "%Y-%m-%d", date: "$_derivedDate" } },
+          Prescribed_On: { $dateToString: { format: "%Y-%m-%d", date: "$_derivedDate" } },
+          Patient: "$Patient",
+          Patient_Image: "$Patient_Image",
+          Doctor: "$Doctor",
+          Medicine: {
+            $let: {
+              vars: { med: { $ifNull: ["$Medications.medicine", ""] } },
+              in: {
+                $cond: [
+                  { $eq: ["$$med", ""] },
+                  "Consultation",
+                  "$$med",
+                ],
+              },
+            },
+          },
+          Dosage: { $ifNull: ["$Medications.dosage", ""] },
+          Frequency: { $ifNull: ["$Medications.frequency", ""] },
+          Duration: { $ifNull: ["$Medications.duration", ""] },
+          Appointment_ID: { $ifNull: ["$Appointment_ID", ""] },
+          appointmentId: { $ifNull: ["$Appointment_ID", ""] },
+          // map consultation status to prescription-like status
+          Status: {
+            $cond: [{ $eq: ["$Status", "Completed"] }, "Active", "$Status"],
+          },
+          Amount: "$_amount",
+          createdAt: "$createdAt",
+          updatedAt: "$updatedAt",
+        },
+      });
+
+      const sortStage: any = {};
+      // allow createdAt, updatedAt, Date, Prescribed_On sorts
+      sortStage[sortField] = sortDir;
+
+      const dataPipeline = [
+        ...consultationPipelineBase,
+        { $sort: sortStage },
+        { $skip: skip },
+        { $limit: limit },
+      ];
+      const countPipeline = [...consultationPipelineBase, { $count: "total" }];
+
+      const [derivedRows, countRows] = await Promise.all([
+        (ConsultationModel as any).aggregate(dataPipeline).exec(),
+        (ConsultationModel as any).aggregate(countPipeline).exec(),
+      ]);
+
+      const derivedTotal = countRows?.[0]?.total ?? 0;
+
+      // eslint-disable-next-line no-console
+      console.log(
+        `[Prescription Controller] Database: ${dbName} - Derived from consultations:`,
+        { found: derivedRows.length, total: derivedTotal }
+      );
+
+      return res.json({
+        data: derivedRows.map(formatPrescriptionResponse),
+        pagination: {
+          total: derivedTotal,
+          page,
+          limit,
+          pages: Math.ceil(derivedTotal / limit),
+        },
+      });
     }
 
+    // Use select to only fetch necessary fields from database
     const [prescriptions, total] = await Promise.all([
-      Model.find(filter).sort(sort).skip(skip).limit(limit).lean().exec(),
+      Model.find(filter)
+        .select("_id id Prescription_ID Date Prescribed_On Patient Patient_Image Doctor Medicine Status Dosage Frequency Duration Appointment_ID appointmentId Amount createdAt updatedAt")
+        .sort(sort)
+        .skip(skip)
+        .limit(limit)
+        .lean()
+        .exec(),
       Model.countDocuments(filter),
     ]);
 

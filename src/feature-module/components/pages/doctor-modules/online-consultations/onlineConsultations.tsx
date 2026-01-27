@@ -51,6 +51,25 @@ const OnlineConsultations = () => {
     duration?: string;
   }>>([]);
 
+  const [complaints, setComplaints] = useState<Array<{
+    complaint: string;
+    duration?: string;
+  }>>([]);
+
+  const [diagnosis, setDiagnosis] = useState<Array<{
+    diagnosis: string;
+    type?: string;
+  }>>([]);
+
+  const [advice, setAdvice] = useState<Array<{
+    advice: string;
+  }>>([]);
+
+  const [investigations, setInvestigations] = useState<Array<{
+    investigation: string;
+    notes?: string;
+  }>>([]);
+
   const [invoice, setInvoice] = useState<Array<{
     id: number;
     service: string;
@@ -83,6 +102,18 @@ const OnlineConsultations = () => {
         if (response.appointment.Medications && Array.isArray(response.appointment.Medications)) {
           setMedications(response.appointment.Medications);
         }
+        if (response.appointment.Complaints && Array.isArray(response.appointment.Complaints)) {
+          setComplaints(response.appointment.Complaints);
+        }
+        if (response.appointment.Diagnosis && Array.isArray(response.appointment.Diagnosis)) {
+          setDiagnosis(response.appointment.Diagnosis);
+        }
+        if (response.appointment.Advice && Array.isArray(response.appointment.Advice)) {
+          setAdvice(response.appointment.Advice);
+        }
+        if (response.appointment.Investigations && Array.isArray(response.appointment.Investigations)) {
+          setInvestigations(response.appointment.Investigations);
+        }
         if (response.appointment.Invoice && Array.isArray(response.appointment.Invoice)) {
           // Convert invoice data to match InvoiceList format
           const invoiceData = response.appointment.Invoice.map((inv: any, idx: number) => ({
@@ -107,8 +138,65 @@ const OnlineConsultations = () => {
     loadData();
   }, [appointmentId]);
 
+  const validateConsultationData = (): { isValid: boolean; errors: string[] } => {
+    const errors: string[] = [];
+
+    // Validate vitals (optional but if provided, should be valid)
+    if (vitals.temperature && isNaN(parseFloat(vitals.temperature))) {
+      errors.push("Temperature must be a valid number");
+    }
+    if (vitals.pulse && isNaN(parseFloat(vitals.pulse))) {
+      errors.push("Pulse must be a valid number");
+    }
+    if (vitals.weight && isNaN(parseFloat(vitals.weight))) {
+      errors.push("Weight must be a valid number");
+    }
+    if (vitals.height && isNaN(parseFloat(vitals.height))) {
+      errors.push("Height must be a valid number");
+    }
+
+    // Validate medications (if provided, medicine name is required)
+    const invalidMedications = medications.filter(
+      (med) => med.medicine && med.medicine.trim() !== "" && !med.medicine.trim()
+    );
+    if (invalidMedications.length > 0) {
+      errors.push("All medications must have a valid medicine name");
+    }
+
+    // Validate invoice (if provided, service and amount are required)
+    const invalidInvoices = invoice.filter(
+      (inv) => (inv.service && inv.service.trim() !== "") !== (inv.amount && inv.amount.trim() !== "")
+    );
+    if (invalidInvoices.length > 0) {
+      errors.push("Invoice items must have both service and amount");
+    }
+
+    // Validate invoice amounts are numbers
+    const invalidAmounts = invoice.filter(
+      (inv) => inv.amount && inv.amount.trim() !== "" && isNaN(parseFloat(inv.amount))
+    );
+    if (invalidAmounts.length > 0) {
+      errors.push("All invoice amounts must be valid numbers");
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors,
+    };
+  };
+
   const handleCompleteAppointment = async () => {
-    if (!appointmentId || !data) return;
+    if (!appointmentId || !data) {
+      alert("Missing appointment information. Please refresh the page.");
+      return;
+    }
+
+    // Validate data before saving
+    const validation = validateConsultationData();
+    if (!validation.isValid) {
+      alert(`Please fix the following errors:\n${validation.errors.join("\n")}`);
+      return;
+    }
 
     if (!window.confirm("Are you sure you want to complete this appointment? This action cannot be undone.")) {
       return;
@@ -116,29 +204,47 @@ const OnlineConsultations = () => {
 
     try {
       setSaving(true);
+      
       // Format medications for API
       const formattedMedications = medications
         .filter((med) => med.medicine && med.medicine.trim() !== "")
         .map((med) => ({
-          medicine: med.medicine,
-          dosage: med.dosage || "",
-          frequency: med.frequency || "",
-          duration: med.duration || "",
+          medicine: med.medicine.trim(),
+          dosage: (med.dosage || "").trim(),
+          frequency: (med.frequency || "").trim(),
+          duration: (med.duration || "").trim(),
         }));
 
-      // Get medications from state or existing appointment data
-      const medicationsToSave = formattedMedications.length > 0 
-        ? formattedMedications 
-        : (data.appointment.Medications || []);
+      // Format complaints for API
+      const formattedComplaints = complaints
+        .filter((comp) => comp.complaint && comp.complaint.trim() !== "")
+        .map((comp) => ({
+          complaint: comp.complaint.trim(),
+          duration: (comp.duration || "").trim(),
+        }));
 
-      // eslint-disable-next-line no-console
-      console.log("[Frontend] Medications state:", {
-        medicationsState: medications,
-        formattedMedications,
-        existingMedications: data.appointment.Medications,
-        medicationsToSave,
-        medicationsCount: medicationsToSave.length,
-      });
+      // Format diagnosis for API
+      const formattedDiagnosis = diagnosis
+        .filter((diag) => diag.diagnosis && diag.diagnosis.trim() !== "")
+        .map((diag) => ({
+          diagnosis: diag.diagnosis.trim(),
+          type: (diag.type || "").trim(),
+        }));
+
+      // Format advice for API
+      const formattedAdvice = advice
+        .filter((adv) => adv.advice && adv.advice.trim() !== "")
+        .map((adv) => ({
+          advice: adv.advice.trim(),
+        }));
+
+      // Format investigations for API
+      const formattedInvestigations = investigations
+        .filter((inv) => inv.investigation && inv.investigation.trim() !== "")
+        .map((inv) => ({
+          investigation: inv.investigation.trim(),
+          notes: (inv.notes || "").trim(),
+        }));
 
       // Format invoice for API - convert from InvoiceList format to API format
       const formattedInvoice = invoice
@@ -146,33 +252,36 @@ const OnlineConsultations = () => {
         .map((inv) => {
           const price = parseFloat(inv.amount) || 0;
           return {
-            item: inv.service,
+            item: inv.service.trim(),
             quantity: 1,
             price: price,
             total: price,
-            paymentMode: inv.paymentMode || "",
+            paymentMode: (inv.paymentMode || "").trim(),
           };
         });
 
       const consultationData: ConsultationData = {
         appointmentId,
-        vitals,
-        complaints: data.appointment.Complaints || [],
-        diagnosis: data.appointment.Diagnosis || [],
-        medications: medicationsToSave,
-        advice: data.appointment.Advice || [],
-        investigations: data.appointment.Investigations || [],
-        followUp,
-        invoice: formattedInvoice.length > 0 ? formattedInvoice : [],
+        vitals: Object.keys(vitals).some((key) => vitals[key as keyof typeof vitals]) ? vitals : undefined,
+        complaints: formattedComplaints.length > 0 ? formattedComplaints : undefined,
+        diagnosis: formattedDiagnosis.length > 0 ? formattedDiagnosis : undefined,
+        medications: formattedMedications.length > 0 ? formattedMedications : undefined,
+        advice: formattedAdvice.length > 0 ? formattedAdvice : undefined,
+        investigations: formattedInvestigations.length > 0 ? formattedInvestigations : undefined,
+        followUp: Object.keys(followUp).some((key) => followUp[key as keyof typeof followUp]) ? followUp : undefined,
+        invoice: formattedInvoice.length > 0 ? formattedInvoice : undefined,
       };
 
       // eslint-disable-next-line no-console
       console.log("[Frontend] Saving consultation data:", {
         appointmentId,
+        vitals: consultationData.vitals,
+        complaintsCount: consultationData.complaints?.length || 0,
+        diagnosisCount: consultationData.diagnosis?.length || 0,
         medicationsCount: consultationData.medications?.length || 0,
-        medications: consultationData.medications,
-        invoiceItems: invoice,
-        formattedInvoice,
+        adviceCount: consultationData.advice?.length || 0,
+        investigationsCount: consultationData.investigations?.length || 0,
+        invoiceCount: consultationData.invoice?.length || 0,
         completeAppointment: true,
       });
 
@@ -530,7 +639,10 @@ const OnlineConsultations = () => {
             </div>
             {/* end card header */}
             <div className="card-body">
-              <ComplaintForm />
+              <ComplaintForm 
+                value={complaints}
+                onChange={setComplaints}
+              />
             </div>
             {/* end card-body */}
           </div>
@@ -544,7 +656,10 @@ const OnlineConsultations = () => {
             {/* end card header */}
             <div className="card-body pb-0">
               <div className="">
-                <DiagnosisForm />
+                <DiagnosisForm 
+                  value={diagnosis}
+                  onChange={setDiagnosis}
+                />
               </div>
             </div>
             {/* end card-body */}
@@ -589,7 +704,10 @@ const OnlineConsultations = () => {
             </div>
             {/* end card header */}
             <div className="card-body advices-list pb-0">
-              <AdviceForm />
+              <AdviceForm 
+                value={advice}
+                onChange={setAdvice}
+              />
             </div>
             {/* end card body */}
           </div>
@@ -602,7 +720,10 @@ const OnlineConsultations = () => {
             </div>
             {/* end card header */}
             <div className="card-body invest-list pb-0">
-              <InvestigationList />
+              <InvestigationList 
+                value={investigations}
+                onChange={setInvestigations}
+              />
             </div>
             {/* end card body */}
           </div>

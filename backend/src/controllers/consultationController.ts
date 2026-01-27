@@ -51,6 +51,7 @@ export const getAppointmentForConsultation: RequestHandler = async (req, res, ne
     
     const AppointmentModel = getResourceModel("appointments");
     const PatientModel = getResourceModel("patients");
+    const ConsultationModel = getResourceModel("consultations");
     const { id } = req.params;
 
     // Find appointment
@@ -70,20 +71,48 @@ export const getAppointmentForConsultation: RequestHandler = async (req, res, ne
       }).exec();
     }
 
+    // Find consultation if exists
+    let consultation = null;
+    const consultationId = appointment.Consultation_ID;
+    if (consultationId) {
+      consultation = await ConsultationModel.findOne({
+        $or: [
+          { Consultation_ID: consultationId },
+          { id: consultationId },
+          { Appointment_ID: appointment.id || appointment._id?.toString() },
+        ],
+      }).exec();
+    }
+
     // Format response
     const appointmentObj = typeof appointment.toObject === "function" ? appointment.toObject() : appointment;
+    const consultationObj = consultation ? (typeof consultation.toObject === "function" ? consultation.toObject() : consultation) : null;
+    
+    // Merge consultation data into appointment object for backward compatibility
+    if (consultationObj) {
+      if (consultationObj.Vitals) appointmentObj.Vitals = consultationObj.Vitals;
+      if (consultationObj.Complaints) appointmentObj.Complaints = consultationObj.Complaints;
+      if (consultationObj.Diagnosis) appointmentObj.Diagnosis = consultationObj.Diagnosis;
+      if (consultationObj.Medications) appointmentObj.Medications = consultationObj.Medications;
+      if (consultationObj.Advice) appointmentObj.Advice = consultationObj.Advice;
+      if (consultationObj.Investigations) appointmentObj.Investigations = consultationObj.Investigations;
+      if (consultationObj.FollowUp) appointmentObj.FollowUp = consultationObj.FollowUp;
+      if (consultationObj.Invoice) appointmentObj.Invoice = consultationObj.Invoice;
+    }
     
     // eslint-disable-next-line no-console
     console.log(`[Consultation Controller] Database: ${dbName} - Appointment data loaded:`, {
       appointmentId: appointmentObj.id || appointmentObj._id,
+      consultationId: consultationObj?.Consultation_ID || consultationObj?.id,
+      hasConsultation: !!consultationObj,
       hasInvoice: !!appointmentObj.Invoice,
       invoiceCount: appointmentObj.Invoice?.length || 0,
-      invoiceItems: appointmentObj.Invoice || [],
     });
     
     res.json({
       appointment: appointmentObj,
       patient: patient ? (typeof patient.toObject === "function" ? patient.toObject() : patient) : null,
+      consultation: consultationObj,
     });
   } catch (err: any) {
     if (err?.name === "CastError") {
@@ -118,8 +147,68 @@ export const saveConsultation: RequestHandler = async (req, res, next) => {
       completeAppointment,
     });
 
+    // Validation
     if (!appointmentId) {
       return res.status(400).json({ message: "Appointment ID is required" });
+    }
+
+    if (!consultationData || typeof consultationData !== "object") {
+      return res.status(400).json({ message: "Consultation data is required" });
+    }
+
+    // Validate vitals if provided
+    if (consultationData.vitals) {
+      const vitals = consultationData.vitals;
+      if (vitals.temperature && isNaN(parseFloat(vitals.temperature))) {
+        return res.status(400).json({ message: "Temperature must be a valid number" });
+      }
+      if (vitals.pulse && isNaN(parseFloat(vitals.pulse))) {
+        return res.status(400).json({ message: "Pulse must be a valid number" });
+      }
+      if (vitals.weight && isNaN(parseFloat(vitals.weight))) {
+        return res.status(400).json({ message: "Weight must be a valid number" });
+      }
+      if (vitals.height && isNaN(parseFloat(vitals.height))) {
+        return res.status(400).json({ message: "Height must be a valid number" });
+      }
+    }
+
+    // Validate medications if provided
+    if (consultationData.medications && Array.isArray(consultationData.medications)) {
+      for (const med of consultationData.medications) {
+        if (!med.medicine || typeof med.medicine !== "string" || med.medicine.trim() === "") {
+          return res.status(400).json({ message: "All medications must have a valid medicine name" });
+        }
+      }
+    }
+
+    // Validate invoice if provided
+    if (consultationData.invoice && Array.isArray(consultationData.invoice)) {
+      for (const inv of consultationData.invoice) {
+        if (!inv.item || typeof inv.item !== "string" || inv.item.trim() === "") {
+          return res.status(400).json({ message: "All invoice items must have a service/item name" });
+        }
+        if (inv.price === undefined || inv.price === null || isNaN(Number(inv.price))) {
+          return res.status(400).json({ message: "All invoice items must have a valid price" });
+        }
+        if (Number(inv.price) < 0) {
+          return res.status(400).json({ message: "Invoice prices cannot be negative" });
+        }
+      }
+    }
+
+    // Validate arrays are actually arrays
+    if (consultationData.complaints && !Array.isArray(consultationData.complaints)) {
+      return res.status(400).json({ message: "Complaints must be an array" });
+    }
+    if (consultationData.diagnosis && !Array.isArray(consultationData.diagnosis)) {
+      return res.status(400).json({ message: "Diagnosis must be an array" });
+    }
+    if (consultationData.advice && !Array.isArray(consultationData.advice)) {
+      return res.status(400).json({ message: "Advice must be an array" });
+    }
+    if (consultationData.investigations && !Array.isArray(consultationData.investigations)) {
+      return res.status(400).json({ message: "Investigations must be an array" });
     }
 
     // Find appointment
@@ -140,36 +229,100 @@ export const saveConsultation: RequestHandler = async (req, res, next) => {
       status: appointment.Status,
     });
 
-    // Save consultation data to appointment
-    const consultationFields: any = {};
-    if (consultationData?.vitals) consultationFields.Vitals = consultationData.vitals;
-    if (consultationData?.complaints) consultationFields.Complaints = consultationData.complaints;
-    if (consultationData?.diagnosis) consultationFields.Diagnosis = consultationData.diagnosis;
-    if (consultationData?.medications) consultationFields.Medications = consultationData.medications;
-    if (consultationData?.advice) consultationFields.Advice = consultationData.advice;
-    if (consultationData?.investigations) consultationFields.Investigations = consultationData.investigations;
-    if (consultationData?.followUp) consultationFields.FollowUp = consultationData.followUp;
-    if (consultationData?.invoice) consultationFields.Invoice = consultationData.invoice;
+    // Get Consultation Model
+    const ConsultationModel = getResourceModel("consultations");
+    const appointmentIdValue = appointment.id || appointment._id?.toString() || appointmentId;
+    
+    // Generate Consultation ID
+    const consultationId = `CONS${Date.now().toString().slice(-8)}`;
+    const consultationIdValue = `${consultationId}-${Math.random().toString(36).slice(2, 7)}`;
+
+    // Prepare consultation document data
+    const consultationDocument: any = {
+      id: consultationIdValue,
+      Consultation_ID: consultationId,
+      Appointment_ID: appointmentIdValue,
+      Patient: appointment.Patient || "",
+      Patient_Image: appointment.Patient_Image || "",
+      Doctor: appointment.Doctor || "",
+      Doctor_Image: appointment.Doctor_Image || "",
+      Status: completeAppointment ? "Completed" : "Draft",
+      Consultation_Date: new Date(),
+    };
+
+    // Add consultation data fields
+    if (consultationData?.vitals && Object.keys(consultationData.vitals).length > 0) {
+      consultationDocument.Vitals = consultationData.vitals;
+    }
+    if (consultationData?.complaints && Array.isArray(consultationData.complaints) && consultationData.complaints.length > 0) {
+      consultationDocument.Complaints = consultationData.complaints;
+    }
+    if (consultationData?.diagnosis && Array.isArray(consultationData.diagnosis) && consultationData.diagnosis.length > 0) {
+      consultationDocument.Diagnosis = consultationData.diagnosis;
+    }
+    if (consultationData?.medications && Array.isArray(consultationData.medications) && consultationData.medications.length > 0) {
+      consultationDocument.Medications = consultationData.medications;
+    }
+    if (consultationData?.advice && Array.isArray(consultationData.advice) && consultationData.advice.length > 0) {
+      consultationDocument.Advice = consultationData.advice;
+    }
+    if (consultationData?.investigations && Array.isArray(consultationData.investigations) && consultationData.investigations.length > 0) {
+      consultationDocument.Investigations = consultationData.investigations;
+    }
+    if (consultationData?.followUp && Object.keys(consultationData.followUp).length > 0) {
+      consultationDocument.FollowUp = consultationData.followUp;
+    }
+    if (consultationData?.invoice && Array.isArray(consultationData.invoice) && consultationData.invoice.length > 0) {
+      consultationDocument.Invoice = consultationData.invoice;
+    }
+
+    if (completeAppointment) {
+      consultationDocument.Completed_At = new Date();
+    }
 
     // eslint-disable-next-line no-console
-    console.log(`[Consultation Controller] Database: ${dbName} - Consultation fields to save:`, {
-      hasVitals: !!consultationFields.Vitals,
-      hasComplaints: !!consultationFields.Complaints,
-      hasDiagnosis: !!consultationFields.Diagnosis,
-      hasMedications: !!consultationFields.Medications,
-      medicationsCount: consultationData?.medications?.length || 0,
-      medications: consultationData?.medications || [],
-      hasAdvice: !!consultationFields.Advice,
-      hasInvestigations: !!consultationFields.Investigations,
-      hasFollowUp: !!consultationFields.FollowUp,
-      hasInvoice: !!consultationFields.Invoice,
-      invoiceData: consultationFields.Invoice || [],
-      invoiceCount: consultationFields.Invoice?.length || 0,
-      completeAppointment,
+    console.log(`[Consultation Controller] Database: ${dbName} - Creating consultation document:`, {
+      consultationId: consultationDocument.Consultation_ID,
+      appointmentId: consultationDocument.Appointment_ID,
+      hasVitals: !!consultationDocument.Vitals,
+      hasComplaints: !!consultationDocument.Complaints,
+      hasDiagnosis: !!consultationDocument.Diagnosis,
+      hasMedications: !!consultationDocument.Medications,
+      medicationsCount: consultationDocument.Medications?.length || 0,
+      hasAdvice: !!consultationDocument.Advice,
+      hasInvestigations: !!consultationDocument.Investigations,
+      hasFollowUp: !!consultationDocument.FollowUp,
+      hasInvoice: !!consultationDocument.Invoice,
+      invoiceCount: consultationDocument.Invoice?.length || 0,
+      status: consultationDocument.Status,
     });
 
-    // Update appointment with consultation data
-    Object.assign(appointment, consultationFields);
+    // Check if consultation already exists for this appointment
+    let consultation = await ConsultationModel.findOne({
+      Appointment_ID: appointmentIdValue,
+    }).exec();
+
+    if (consultation) {
+      // Update existing consultation
+      Object.assign(consultation, consultationDocument);
+      await consultation.save();
+      // eslint-disable-next-line no-console
+      console.log(`[Consultation Controller] Database: ${dbName} - Updated existing consultation:`, {
+        consultationId: consultation.Consultation_ID || consultation.id,
+        appointmentId: consultation.Appointment_ID,
+      });
+    } else {
+      // Create new consultation
+      consultation = await ConsultationModel.create(consultationDocument);
+      // eslint-disable-next-line no-console
+      console.log(`[Consultation Controller] Database: ${dbName} - Created new consultation:`, {
+        consultationId: consultation.Consultation_ID || consultation.id,
+        appointmentId: consultation.Appointment_ID,
+      });
+    }
+
+    // Update appointment with consultation ID reference
+    appointment.Consultation_ID = consultation.Consultation_ID || consultation.id;
 
     // If completing appointment, update status
     if (completeAppointment) {
@@ -249,9 +402,8 @@ export const saveConsultation: RequestHandler = async (req, res, next) => {
     // eslint-disable-next-line no-console
     console.log(`[Consultation Controller] Database: ${dbName} - Appointment saved successfully:`, {
       appointmentId: appointment.id || appointment._id,
+      consultationId: appointment.Consultation_ID,
       status: appointment.Status,
-      hasInvoice: !!appointment.Invoice,
-      invoiceCount: appointment.Invoice?.length || 0,
     });
 
     // If completing appointment and medications exist, create prescription records
@@ -261,6 +413,7 @@ export const saveConsultation: RequestHandler = async (req, res, next) => {
       hasMedications: !!consultationData?.medications,
       medicationsLength: consultationData?.medications?.length || 0,
       medications: consultationData?.medications || [],
+      consultationId: consultation?.Consultation_ID || consultation?.id,
       willCreatePrescriptions: !!(completeAppointment && consultationData?.medications && consultationData.medications.length > 0),
     });
 
@@ -292,6 +445,9 @@ export const saveConsultation: RequestHandler = async (req, res, next) => {
             continue;
           }
 
+          // Ensure appointment ID is properly saved - use both id and _id for compatibility
+          const appointmentIdValue = appointment.id || appointment._id?.toString() || appointmentId;
+          
           const prescriptionData = {
             id: `${prescriptionId}-${Math.random().toString(36).slice(2, 7)}`,
             Prescription_ID: prescriptionId,
@@ -306,7 +462,10 @@ export const saveConsultation: RequestHandler = async (req, res, next) => {
             Dosage: medication.dosage || medication.Dosage || "",
             Frequency: medication.frequency || medication.Frequency || "",
             Duration: medication.duration || medication.Duration || "",
-            Appointment_ID: appointment.id || appointment._id?.toString() || "",
+            Appointment_ID: appointmentIdValue,
+            Consultation_ID: consultation?.Consultation_ID || consultation?.id || "",
+            // Also store as appointmentId for consistency
+            appointmentId: appointmentIdValue,
           };
 
           // eslint-disable-next-line no-console
@@ -325,9 +484,16 @@ export const saveConsultation: RequestHandler = async (req, res, next) => {
             $or: [
               { id: prescriptionData.id },
               {
-                Appointment_ID: prescriptionData.Appointment_ID,
-                Medicine: prescriptionData.Medicine,
-                Patient: prescriptionData.Patient,
+                $and: [
+                  {
+                    $or: [
+                      { Appointment_ID: prescriptionData.Appointment_ID },
+                      { appointmentId: appointmentIdValue }
+                    ]
+                  },
+                  { Medicine: prescriptionData.Medicine },
+                  { Patient: prescriptionData.Patient },
+                ]
               }
             ]
           }).exec();

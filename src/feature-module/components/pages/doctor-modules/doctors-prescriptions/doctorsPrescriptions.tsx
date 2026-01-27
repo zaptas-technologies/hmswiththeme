@@ -9,7 +9,6 @@ import {
   Amount,
   Department,
   Designation,
-  Doctor,
   Status,
 } from "../../../../../core/common/selectOption";
 import { useAuth } from "../../../../../core/context/AuthContext";
@@ -131,6 +130,12 @@ const DoctorsPrescriptions = () => {
       setLoading(false);
       return;
     }
+
+    // Enforce doctor-only visibility: do not fetch/show other doctors' data.
+    // Wait until we have a resolved doctor name for the logged-in doctor.
+    if (!doctorName) {
+      return;
+    }
     
     try {
       setLoading(true);
@@ -154,75 +159,52 @@ const DoctorsPrescriptions = () => {
       // For single filters or no filters, use server-side pagination
       const hasMultipleFilters = selectedStatuses.length > 1 || selectedDoctors.length > 1 || selectedDate !== null;
       
-      // Try with doctor filter if available, otherwise fetch all
-      let response = await fetchPrescriptions({
+      // Always fetch scoped to the logged-in doctor.
+      const response = await fetchPrescriptions({
         page: hasMultipleFilters ? 1 : page,
         limit: hasMultipleFilters ? 1000 : pageSize,
         sort: sortParam,
         search: searchText || undefined,
-        doctor: doctorName || undefined,
+        doctor: doctorName,
         status: selectedStatuses.length === 1 ? selectedStatuses[0] : undefined,
         date: selectedDate ? dayjs(selectedDate).format("YYYY-MM-DD") : undefined,
+        // If `doctorprescriptions` is empty, backend will derive rows from `consultations.Medications`.
+        includeConsultations: true,
       });
       
       // eslint-disable-next-line no-console
       console.log("[Prescriptions] Response with doctor filter:", {
         dataCount: response.data?.length || 0,
         total: response.pagination?.total || 0,
-        doctorName: doctorName || "Not set",
-        hasDoctorName: !!doctorName,
+        doctorName,
       });
-      
-      // If no results with doctor filter and we have a doctor name, try without doctor filter to debug
-      if ((!response.data || response.data.length === 0) && doctorName) {
-        // eslint-disable-next-line no-console
-        console.log("[Prescriptions] No results with doctor filter, trying without filter to check if prescriptions exist...");
-        const responseWithoutDoctor = await fetchPrescriptions({
-          page: 1,
-          limit: 10,
-          sort: sortParam,
-        });
-        
-        // eslint-disable-next-line no-console
-        console.log("[Prescriptions] Response without doctor filter:", {
-          dataCount: responseWithoutDoctor.data?.length || 0,
-          total: responseWithoutDoctor.pagination?.total || 0,
-          sampleDoctors: responseWithoutDoctor.data?.slice(0, 5).map((p: any) => ({
-            Doctor: p.Doctor,
-            Patient: p.Patient,
-            Medicine: p.Medicine,
-          })) || [],
-        });
-        
-        // If we have prescriptions but doctor name doesn't match, show them anyway for debugging
-        // This helps identify doctor name matching issues
-        if (responseWithoutDoctor.data && responseWithoutDoctor.data.length > 0) {
-          // eslint-disable-next-line no-console
-          console.warn("[Prescriptions] Found prescriptions in DB but doctor name filter didn't match.");
-          // eslint-disable-next-line no-console
-          console.warn("[Prescriptions] Searching for:", doctorName);
-          // eslint-disable-next-line no-console
-          console.warn("[Prescriptions] Found doctor names:", responseWithoutDoctor.data.map((p: any) => p.Doctor));
-          
-          // Still use the filtered response (empty) to maintain proper filtering
-          // But log the mismatch for debugging
-        }
-      } else if (!doctorName) {
-        // If no doctor name, fetch all prescriptions (for debugging/admin view)
-        // eslint-disable-next-line no-console
-        console.log("[Prescriptions] No doctor name set, fetching all prescriptions...");
-        response = await fetchPrescriptions({
-          page: hasMultipleFilters ? 1 : page,
-          limit: hasMultipleFilters ? 1000 : pageSize,
-          sort: sortParam,
-          search: searchText || undefined,
-          status: selectedStatuses.length === 1 ? selectedStatuses[0] : undefined,
-          date: selectedDate ? dayjs(selectedDate).format("YYYY-MM-DD") : undefined,
-        });
-      }
       
       // Apply client-side filtering
       let filteredData = response.data || [];
+      
+      // Apply additional client-side doctor filtering if needed (for flexible matching)
+      if (doctorName && filteredData.length > 0) {
+        // Double-check doctor name matching client-side for better accuracy
+        const doctorNameLower = doctorName.toLowerCase();
+        filteredData = filteredData.filter((p) => {
+          const prescDoctor = (p.Doctor || "").toLowerCase();
+          if (!prescDoctor) return false;
+          
+          // Try multiple matching strategies
+          return prescDoctor === doctorNameLower ||
+                 prescDoctor.includes(doctorNameLower) ||
+                 doctorNameLower.includes(prescDoctor) ||
+                 prescDoctor.split(/\s+/).some((part: string) => doctorNameLower.includes(part)) ||
+                 doctorNameLower.split(/\s+/).some((part: string) => prescDoctor.includes(part));
+        });
+        
+        // eslint-disable-next-line no-console
+        console.log("[Prescriptions] After client-side doctor filtering:", {
+          before: response.data?.length || 0,
+          after: filteredData.length,
+          doctorName,
+        });
+      }
       
       if (hasMultipleFilters) {
         if (selectedStatuses.length > 1) {
@@ -270,7 +252,12 @@ const DoctorsPrescriptions = () => {
         }
         
         setPrescriptions(filteredData);
-        setTotal(response.pagination?.total || filteredData.length);
+        // Recalculate total based on filtered data if we did client-side filtering
+        if (doctorName && response.data && filteredData.length !== response.data.length) {
+          setTotal(filteredData.length);
+        } else {
+          setTotal(response.pagination?.total || filteredData.length);
+        }
       }
       
       // eslint-disable-next-line no-console
@@ -335,6 +322,7 @@ const DoctorsPrescriptions = () => {
   };
 
   const handleClearFilters = () => {
+    // Doctor filter is not applicable for doctor users (always scoped to logged-in doctor)
     setSelectedDoctors([]);
     setSelectedDesignations([]);
     setSelectedDepartments([]);
@@ -608,32 +596,8 @@ const DoctorsPrescriptions = () => {
                   </div>
                   <form action="#">
                     <div className="filter-body pb-0">
-                      <div className="mb-3">
-                        <div className="d-flex align-items-center justify-content-between">
-                          <label className="form-label mb-1">Doctor</label>
-                          {selectedDoctors.length > 0 && (
-                            <Link 
-                              to="#" 
-                              className="link-primary mb-1"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                setSelectedDoctors([]);
-                              }}
-                            >
-                              Reset
-                            </Link>
-                          )}
-                        </div>
-                        <Select
-                          mode="multiple"
-                          allowClear
-                          style={{ width: "100%" }}
-                          placeholder="Please select"
-                          value={selectedDoctors}
-                          onChange={setSelectedDoctors}
-                          options={Doctor}
-                        />
-                      </div>
+                      {/* Doctor filter intentionally hidden for doctor users:
+                          this page must only show the logged-in doctor's prescriptions. */}
                       <div className="mb-3">
                         <div className="d-flex align-items-center justify-content-between">
                           <label className="form-label">Designation</label>

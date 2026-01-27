@@ -38,6 +38,7 @@ export const fetchPrescriptions = async (params?: {
   patient?: string;
   status?: string;
   date?: string;
+  includeConsultations?: boolean;
 }): Promise<PrescriptionListResponse> => {
   const queryParams = new URLSearchParams();
   if (params?.page) queryParams.append("page", params.page.toString());
@@ -48,6 +49,7 @@ export const fetchPrescriptions = async (params?: {
   if (params?.patient) queryParams.append("patient", params.patient);
   if (params?.status) queryParams.append("status", params.status);
   if (params?.date) queryParams.append("date", params.date);
+  if (params?.includeConsultations) queryParams.append("includeConsultations", "true");
 
   const queryString = queryParams.toString();
   const url = `/prescriptions${queryString ? `?${queryString}` : ""}`;

@@ -12,6 +12,7 @@ export const AppointmentSchema = new Schema(
     role: { type: String },
     Mode: { type: String },
     Status: { type: String, required: true },
+    Consultation_ID: { type: String, index: true }, // Reference to consultation document
   },
   { timestamps: true, strict: false }
 );
@@ -124,6 +125,78 @@ export const DoctorLeaveSchema = new Schema(
     Reason: { type: String },
     Department: { type: String },
     Designation: { type: String },
+  },
+  { timestamps: true, strict: false }
+);
+
+export const ConsultationSchema = new Schema(
+  {
+    id: { type: String, required: true, unique: true },
+    Consultation_ID: { type: String, required: true, unique: true },
+    Appointment_ID: { type: String, required: true, index: true }, // Reference to appointment
+    Patient: { type: String, required: true },
+    Patient_Image: { type: String },
+    Doctor: { type: String, required: true },
+    Doctor_Image: { type: String },
+    // Vitals
+    Vitals: {
+      temperature: { type: String },
+      pulse: { type: String },
+      respiratoryRate: { type: String },
+      spo2: { type: String },
+      height: { type: String },
+      weight: { type: String },
+      bmi: { type: String },
+      waist: { type: String },
+    },
+    // Complaints
+    Complaints: [{
+      complaint: { type: String, required: true },
+      duration: { type: String },
+    }],
+    // Diagnosis
+    Diagnosis: [{
+      diagnosis: { type: String, required: true },
+      type: { type: String },
+    }],
+    // Medications
+    Medications: [{
+      medicine: { type: String, required: true },
+      dosage: { type: String },
+      frequency: { type: String },
+      duration: { type: String },
+    }],
+    // Advice
+    Advice: [{
+      advice: { type: String, required: true },
+    }],
+    // Investigations
+    Investigations: [{
+      investigation: { type: String, required: true },
+      notes: { type: String },
+    }],
+    // Follow Up
+    FollowUp: {
+      nextConsultation: { type: String },
+      emptyStomach: { type: String },
+    },
+    // Invoice
+    Invoice: [{
+      item: { type: String, required: true },
+      quantity: { type: Number, default: 1 },
+      price: { type: Number, required: true },
+      total: { type: Number, required: true },
+      paymentMode: { type: String },
+    }],
+    // Status
+    Status: {
+      type: String,
+      enum: ["Draft", "Completed", "Cancelled"],
+      default: "Draft",
+    },
+    // Consultation Date
+    Consultation_Date: { type: Date, default: Date.now },
+    Completed_At: { type: Date },
   },
   { timestamps: true, strict: false }
 );
