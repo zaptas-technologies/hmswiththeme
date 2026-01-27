@@ -3,6 +3,7 @@ import { Doctor } from "../models/doctorModel";
 import { Patient } from "../models/patientModel";
 import { Appointment } from "../models/appointmentModel";
 import { DoctorLeave } from "../models/doctorLeaveModel";
+import { Hospital } from "../models/hospitalModel";
 
 const pctChange = (current: number, prev: number) => {
   if (prev <= 0) return current > 0 ? 100 : 0;
@@ -19,7 +20,16 @@ export const buildAdminDashboardPayload = async (hospitalId?: string) => {
   fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
 
   // Build hospital filter if hospitalId is provided
-  const hospitalFilter = hospitalId ? { hospital: new mongoose.Types.ObjectId(hospitalId) } : {};
+  // CRITICAL: When hospitalId is provided, ALL queries MUST filter by this hospital
+  let hospitalFilter: any = {};
+  if (hospitalId) {
+    try {
+      const hospitalObjectId = new mongoose.Types.ObjectId(hospitalId);
+      hospitalFilter = { hospital: hospitalObjectId };
+    } catch (error) {
+      throw new Error(`Invalid hospitalId format: ${hospitalId}`);
+    }
+  }
 
   const [doctorsCount, patientsCount, appointmentsCount] = await Promise.all([
     Doctor.countDocuments(hospitalFilter),
@@ -330,7 +340,26 @@ export const buildAdminDashboardPayload = async (hospitalId?: string) => {
 
   const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
+  // Fetch hospital info if hospitalId is provided
+  let hospitalInfo: { id: string; name: string; city?: string; state?: string } | null = null;
+  if (hospitalId) {
+    try {
+      const hospitalDoc = await Hospital.findById(hospitalId).select("name city state").lean();
+      if (hospitalDoc && !Array.isArray(hospitalDoc)) {
+        hospitalInfo = {
+          id: hospitalId,
+          name: (hospitalDoc as any).name || "",
+          city: (hospitalDoc as any).city,
+          state: (hospitalDoc as any).state,
+        };
+      }
+    } catch (error) {
+      // Hospital not found or error - continue without hospital info
+    }
+  }
+
   return {
+    hospital: hospitalInfo,
     stats: {
       doctors: {
         count: doctorsCount,

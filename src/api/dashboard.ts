@@ -177,7 +177,15 @@ export type ScheduledDoctor = {
   department: string;
 };
 
+export type HospitalInfo = {
+  id: string;
+  name: string;
+  city?: string;
+  state?: string;
+};
+
 export type AdminDashboardResponse = {
+  hospital?: HospitalInfo | null;
   stats: AdminStats;
   appointmentStatistics: AppointmentStatistics;
   popularDoctors: PopularDoctor[];

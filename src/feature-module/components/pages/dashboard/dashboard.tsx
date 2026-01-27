@@ -127,7 +127,7 @@ const Dashboard = () => {
     );
   }
 
-  const { stats, appointmentStatistics, popularDoctors, recentAppointments, topDepartments, scheduleStats, scheduledDoctors, incomeByTreatment, topPatients, recentTransactions, leaveRequests } = dashboardData;
+  const { hospital, stats, appointmentStatistics, popularDoctors, recentAppointments, topDepartments, scheduleStats, scheduledDoctors, incomeByTreatment, topPatients, recentTransactions, leaveRequests } = dashboardData;
 
   return (
     <>
@@ -143,8 +143,17 @@ const Dashboard = () => {
               <h4 className="fw-bold mb-0">
                 {user?.role === "hospital_admin" ? "Hospital Admin Dashboard" : "Admin Dashboard"}
               </h4>
-              {user?.role === "hospital_admin" && (
-                <p className="text-muted mb-0 fs-13">Viewing data for your hospital branch</p>
+              {user?.role === "hospital_admin" && hospital && (
+                <div>
+                  <p className="text-muted mb-0 fs-13">
+                    <i className="ti ti-building-hospital me-1" />
+                    {hospital.name}
+                    {hospital.city && hospital.state && (
+                      <span className="ms-2">({hospital.city}, {hospital.state})</span>
+                    )}
+                  </p>
+                  <p className="text-muted mb-0 fs-12">Viewing data for your hospital branch</p>
+                </div>
               )}
             </div>
             <div className="d-flex align-items-center flex-wrap gap-2">
