@@ -5,9 +5,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.buildDashboardPayload = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
-const dashboardAppointmentModel_1 = require("../models/dashboardAppointmentModel");
-const dashboardPatientModel_1 = require("../models/dashboardPatientModel");
 const dashboardAvailabilityModel_1 = require("../models/dashboardAvailabilityModel");
+const appointmentModel_1 = require("../models/appointmentModel");
+const doctorModel_1 = require("../models/doctorModel");
+const userModel_1 = require("../models/userModel");
 const pctChange = (current, prev) => {
     if (prev <= 0)
         return current > 0 ? 100 : 0;
@@ -21,24 +22,83 @@ const buildDashboardPayload = async (doctorId) => {
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     const fourteenDaysAgo = new Date(now);
     fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
-    const [availabilityDocs, totalCount, onlineCount, cancelledCount] = await Promise.all([
+    const user = await userModel_1.User.findById(doctorId).select("email").lean().exec();
+    let doctorName = "";
+    if (user?.email) {
+        const doctor = await doctorModel_1.Doctor.findOne({
+            $or: [
+                { Email: new RegExp(`^${user.email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+                { email: new RegExp(`^${user.email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+            ],
+        })
+            .select("Name_Designation")
+            .lean()
+            .exec();
+        if (doctor) {
+            doctorName = doctor.Name_Designation || "";
+        }
+    }
+    const doctorFilter = doctorName ? { Doctor: doctorName } : {};
+    const [availabilityDocs, allAppointments] = await Promise.all([
         dashboardAvailabilityModel_1.DashboardAvailability.find({ doctorId }).sort({ day: 1 }).lean(),
-        dashboardAppointmentModel_1.DashboardAppointment.countDocuments({ doctorId }),
-        dashboardAppointmentModel_1.DashboardAppointment.countDocuments({ doctorId, mode: "Online" }),
-        dashboardAppointmentModel_1.DashboardAppointment.countDocuments({ doctorId, status: "Cancelled" }),
+        appointmentModel_1.Appointment.find(doctorFilter).lean(),
     ]);
-    const [last7Total, prev7Total] = await Promise.all([
-        dashboardAppointmentModel_1.DashboardAppointment.countDocuments({ doctorId, datetime: { $gte: sevenDaysAgo, $lt: now } }),
-        dashboardAppointmentModel_1.DashboardAppointment.countDocuments({ doctorId, datetime: { $gte: fourteenDaysAgo, $lt: sevenDaysAgo } }),
-    ]);
-    const [last7Online, prev7Online] = await Promise.all([
-        dashboardAppointmentModel_1.DashboardAppointment.countDocuments({ doctorId, mode: "Online", datetime: { $gte: sevenDaysAgo, $lt: now } }),
-        dashboardAppointmentModel_1.DashboardAppointment.countDocuments({ doctorId, mode: "Online", datetime: { $gte: fourteenDaysAgo, $lt: sevenDaysAgo } }),
-    ]);
-    const [last7Cancelled, prev7Cancelled] = await Promise.all([
-        dashboardAppointmentModel_1.DashboardAppointment.countDocuments({ doctorId, status: "Cancelled", datetime: { $gte: sevenDaysAgo, $lt: now } }),
-        dashboardAppointmentModel_1.DashboardAppointment.countDocuments({ doctorId, status: "Cancelled", datetime: { $gte: fourteenDaysAgo, $lt: sevenDaysAgo } }),
-    ]);
+    // Calculate counts from regular appointments
+    const totalCount = allAppointments.length;
+    const onlineCount = allAppointments.filter((a) => a.Mode === "Online").length;
+    const cancelledCount = allAppointments.filter((a) => a.Status === "Cancelled").length;
+    // Parse dates from appointments and filter
+    const parseAppointmentDate = (dateTimeStr) => {
+        try {
+            // Try to parse "DD MMM YYYY, hh:mm A" format
+            const monthMap = {
+                "Jan": 0, "Feb": 1, "Mar": 2, "Apr": 3, "May": 4, "Jun": 5,
+                "Jul": 6, "Aug": 7, "Sep": 8, "Oct": 9, "Nov": 10, "Dec": 11
+            };
+            const match = dateTimeStr.match(/(\d{1,2})\s+(\w{3})\s+(\d{4}),\s+(\d{1,2}):(\d{2})\s+(AM|PM)/i);
+            if (match) {
+                const [, day, month, year, hour, minute, ampm] = match;
+                const monthNum = monthMap[month];
+                if (monthNum !== undefined) {
+                    let hour24 = parseInt(hour, 10);
+                    if (ampm.toUpperCase() === "PM" && hour24 !== 12)
+                        hour24 += 12;
+                    if (ampm.toUpperCase() === "AM" && hour24 === 12)
+                        hour24 = 0;
+                    return new Date(parseInt(year, 10), monthNum, parseInt(day, 10), hour24, parseInt(minute, 10));
+                }
+            }
+            // Fallback to native Date parsing
+            return new Date(dateTimeStr);
+        }
+        catch {
+            return new Date();
+        }
+    };
+    const last7Total = allAppointments.filter((a) => {
+        const apptDate = parseAppointmentDate(a.Date_Time);
+        return apptDate >= sevenDaysAgo && apptDate < now;
+    }).length;
+    const prev7Total = allAppointments.filter((a) => {
+        const apptDate = parseAppointmentDate(a.Date_Time);
+        return apptDate >= fourteenDaysAgo && apptDate < sevenDaysAgo;
+    }).length;
+    const last7Online = allAppointments.filter((a) => {
+        const apptDate = parseAppointmentDate(a.Date_Time);
+        return a.Mode === "Online" && apptDate >= sevenDaysAgo && apptDate < now;
+    }).length;
+    const prev7Online = allAppointments.filter((a) => {
+        const apptDate = parseAppointmentDate(a.Date_Time);
+        return a.Mode === "Online" && apptDate >= fourteenDaysAgo && apptDate < sevenDaysAgo;
+    }).length;
+    const last7Cancelled = allAppointments.filter((a) => {
+        const apptDate = parseAppointmentDate(a.Date_Time);
+        return a.Status === "Cancelled" && apptDate >= sevenDaysAgo && apptDate < now;
+    }).length;
+    const prev7Cancelled = allAppointments.filter((a) => {
+        const apptDate = parseAppointmentDate(a.Date_Time);
+        return a.Status === "Cancelled" && apptDate >= fourteenDaysAgo && apptDate < sevenDaysAgo;
+    }).length;
     const heroCards = [
         {
             id: "total-appointments",
@@ -51,49 +111,45 @@ const buildDashboardPayload = async (doctorId) => {
                 data: await (async () => {
                     const start = startOfDay(sevenDaysAgo);
                     const days = Array.from({ length: 7 }).map((_, i) => new Date(start.getTime() + i * 24 * 60 * 60 * 1000));
-                    const buckets = await dashboardAppointmentModel_1.DashboardAppointment.aggregate([
-                        { $match: { doctorId, datetime: { $gte: start, $lt: now } } },
-                        {
-                            $group: {
-                                _id: { $dateToString: { format: "%Y-%m-%d", date: "$datetime" } },
-                                c: { $sum: 1 },
-                            },
-                        },
-                    ]);
-                    const map = new Map(buckets.map((b) => [b._id, b.c]));
-                    return days.map((d) => map.get(d.toISOString().slice(0, 10)) || 0);
+                    const buckets = new Map();
+                    allAppointments.forEach((a) => {
+                        const apptDate = parseAppointmentDate(a.Date_Time);
+                        if (apptDate >= start && apptDate < now) {
+                            const dateKey = apptDate.toISOString().slice(0, 10);
+                            buckets.set(dateKey, (buckets.get(dateKey) || 0) + 1);
+                        }
+                    });
+                    return days.map((d) => buckets.get(d.toISOString().slice(0, 10)) || 0);
                 })(),
                 color: "#2e3192",
             },
             changeSummary: `${pctChange(last7Total, prev7Total) >= 0 ? "+" : ""}${pctChange(last7Total, prev7Total)}% in last 7 days`,
         },
-        {
-            id: "online-consultations",
-            title: "Online Consultations",
-            value: onlineCount,
-            deltaPct: Math.abs(pctChange(last7Online, prev7Online)),
-            deltaDirection: pctChange(last7Online, prev7Online) >= 0 ? "up" : "down",
-            badgeTone: pctChange(last7Online, prev7Online) >= 0 ? "success" : "danger",
-            spark: {
-                data: await (async () => {
-                    const start = startOfDay(sevenDaysAgo);
-                    const days = Array.from({ length: 7 }).map((_, i) => new Date(start.getTime() + i * 24 * 60 * 60 * 1000));
-                    const buckets = await dashboardAppointmentModel_1.DashboardAppointment.aggregate([
-                        { $match: { doctorId, mode: "Online", datetime: { $gte: start, $lt: now } } },
-                        {
-                            $group: {
-                                _id: { $dateToString: { format: "%Y-%m-%d", date: "$datetime" } },
-                                c: { $sum: 1 },
-                            },
-                        },
-                    ]);
-                    const map = new Map(buckets.map((b) => [b._id, b.c]));
-                    return days.map((d) => map.get(d.toISOString().slice(0, 10)) || 0);
-                })(),
-                color: "#E04F16",
-            },
-            changeSummary: `${pctChange(last7Online, prev7Online) >= 0 ? "+" : ""}${pctChange(last7Online, prev7Online)}% in last 7 days`,
-        },
+        // {
+        //   id: "online-consultations",
+        //   title: "Online Consultations",
+        //   value: onlineCount,
+        //   deltaPct: Math.abs(pctChange(last7Online, prev7Online)),
+        //   deltaDirection: pctChange(last7Online, prev7Online) >= 0 ? "up" : "down",
+        //   badgeTone: pctChange(last7Online, prev7Online) >= 0 ? "success" : "danger",
+        //   spark: {
+        //     data: await (async () => {
+        //       const start = startOfDay(sevenDaysAgo);
+        //       const days = Array.from({ length: 7 }).map((_, i) => new Date(start.getTime() + i * 24 * 60 * 60 * 1000));
+        //       const buckets = new Map<string, number>();
+        //       allAppointments.forEach((a: any) => {
+        //         const apptDate = parseAppointmentDate(a.Date_Time);
+        //         if (a.Mode === "Online" && apptDate >= start && apptDate < now) {
+        //           const dateKey = apptDate.toISOString().slice(0, 10);
+        //           buckets.set(dateKey, (buckets.get(dateKey) || 0) + 1);
+        //         }
+        //       });
+        //       return days.map((d) => buckets.get(d.toISOString().slice(0, 10)) || 0);
+        //     })(),
+        //     color: "#E04F16",
+        //   },
+        //   changeSummary: `${pctChange(last7Online, prev7Online) >= 0 ? "+" : ""}${pctChange(last7Online, prev7Online)}% in last 7 days`,
+        // },
         {
             id: "cancelled-appointments",
             title: "Cancelled Appointments",
@@ -105,48 +161,43 @@ const buildDashboardPayload = async (doctorId) => {
                 data: await (async () => {
                     const start = startOfDay(sevenDaysAgo);
                     const days = Array.from({ length: 7 }).map((_, i) => new Date(start.getTime() + i * 24 * 60 * 60 * 1000));
-                    const buckets = await dashboardAppointmentModel_1.DashboardAppointment.aggregate([
-                        { $match: { doctorId, status: "Cancelled", datetime: { $gte: start, $lt: now } } },
-                        {
-                            $group: {
-                                _id: { $dateToString: { format: "%Y-%m-%d", date: "$datetime" } },
-                                c: { $sum: 1 },
-                            },
-                        },
-                    ]);
-                    const map = new Map(buckets.map((b) => [b._id, b.c]));
-                    return days.map((d) => map.get(d.toISOString().slice(0, 10)) || 0);
+                    const buckets = new Map();
+                    allAppointments.forEach((a) => {
+                        const apptDate = parseAppointmentDate(a.Date_Time);
+                        if (a.Status === "Cancelled" && apptDate >= start && apptDate < now) {
+                            const dateKey = apptDate.toISOString().slice(0, 10);
+                            buckets.set(dateKey, (buckets.get(dateKey) || 0) + 1);
+                        }
+                    });
+                    return days.map((d) => buckets.get(d.toISOString().slice(0, 10)) || 0);
                 })(),
                 color: "#0E9384",
             },
             changeSummary: `${pctChange(last7Cancelled, prev7Cancelled) >= 0 ? "+" : ""}${pctChange(last7Cancelled, prev7Cancelled)}% in last 7 days`,
         },
     ];
-    const upcomingAgg = await dashboardAppointmentModel_1.DashboardAppointment.aggregate([
-        { $match: { doctorId, datetime: { $gte: now }, status: { $ne: "Cancelled" } } },
-        { $sort: { datetime: 1 } },
-        { $limit: 1 },
-        {
-            $lookup: {
-                from: "dashboardpatients",
-                localField: "patientId",
-                foreignField: "_id",
-                as: "patient",
-            },
-        },
-        { $unwind: "$patient" },
-    ]);
-    const upcoming = upcomingAgg[0]
+    // Find upcoming appointment from regular appointments
+    const upcomingAppointments = allAppointments
+        .map((a) => ({
+        ...a,
+        parsedDate: parseAppointmentDate(a.Date_Time),
+    }))
+        .filter((a) => a.parsedDate >= now && a.Status !== "Cancelled")
+        .sort((a, b) => a.parsedDate.getTime() - b.parsedDate.getTime());
+    const upcomingAppt = upcomingAppointments[0];
+    const upcoming = upcomingAppt
         ? {
-            patientName: upcomingAgg[0].patient.name,
-            patientCode: `#${String(upcomingAgg[0]._id).slice(-6).toUpperCase()}`,
-            visitType: "General Visit",
-            department: "General",
-            mode: upcomingAgg[0].mode === "Online" ? "Online Consultation" : "In-Person",
-            datetime: new Date(upcomingAgg[0].datetime).toISOString(),
-            avatar: upcomingAgg[0].patient.avatar,
+            appointmentId: String(upcomingAppt._id || upcomingAppt.id || ""),
+            patientName: upcomingAppt.Patient || "-",
+            patientCode: `#${String(upcomingAppt._id || upcomingAppt.id || "").slice(-6).toUpperCase()}`,
+            visitType: upcomingAppt.Reason || "General Visit",
+            department: upcomingAppt.Department || "General",
+            mode: upcomingAppt.Mode === "Online" ? "Online Consultation" : "In-Person",
+            datetime: upcomingAppt.parsedDate.toISOString(),
+            avatar: upcomingAppt.Patient_Image || "assets/img/profiles/avatar-06.jpg",
         }
         : {
+            appointmentId: "",
             patientName: "-",
             patientCode: "-",
             visitType: "-",
@@ -155,107 +206,90 @@ const buildDashboardPayload = async (doctorId) => {
             datetime: new Date().toISOString(),
             avatar: "assets/img/profiles/avatar-06.jpg",
         };
-    const statusBuckets = await dashboardAppointmentModel_1.DashboardAppointment.aggregate([
-        { $match: { doctorId } },
-        { $group: { _id: "$status", c: { $sum: 1 } } },
-    ]);
-    const statusMap = new Map(statusBuckets.map((b) => [b._id, b.c]));
+    // Calculate status stats from regular appointments
+    const statusMap = new Map();
+    allAppointments.forEach((a) => {
+        const status = a.Status || "Schedule";
+        statusMap.set(status, (statusMap.get(status) || 0) + 1);
+    });
     const appointmentStats = {
         completed: statusMap.get("Checked Out") || 0,
-        pending: statusMap.get("Schedule") || 0,
+        pending: (statusMap.get("Schedule") || 0) + (statusMap.get("Scheduled") || 0) + (statusMap.get("Confirmed") || 0),
         cancelled: statusMap.get("Cancelled") || 0,
     };
+    // Calculate monthly stats from regular appointments
     const year = now.getFullYear();
     const yearStart = new Date(year, 0, 1);
     const yearEnd = new Date(year + 1, 0, 1);
-    const monthly = await dashboardAppointmentModel_1.DashboardAppointment.aggregate([
-        { $match: { doctorId, datetime: { $gte: yearStart, $lt: yearEnd } } },
-        {
-            $group: {
-                _id: { m: { $month: "$datetime" }, status: "$status" },
-                c: { $sum: 1 },
-            },
-        },
-    ]);
     const totalByMonth = Array(12).fill(0);
     const completedByMonth = Array(12).fill(0);
-    for (const row of monthly) {
-        const idx = row._id.m - 1;
-        totalByMonth[idx] += row.c;
-        if (row._id.status === "Checked Out")
-            completedByMonth[idx] += row.c;
-    }
-    const recentAppointmentsAgg = await dashboardAppointmentModel_1.DashboardAppointment.aggregate([
-        { $match: { doctorId } },
-        { $sort: { datetime: -1 } },
-        { $limit: 10 },
-        {
-            $lookup: {
-                from: "dashboardpatients",
-                localField: "patientId",
-                foreignField: "_id",
-                as: "patient",
-            },
+    allAppointments.forEach((a) => {
+        const apptDate = parseAppointmentDate(a.Date_Time);
+        if (apptDate >= yearStart && apptDate < yearEnd) {
+            const month = apptDate.getMonth();
+            totalByMonth[month]++;
+            if (a.Status === "Checked Out") {
+                completedByMonth[month]++;
+            }
+        }
+    });
+    // Get recent appointments from regular appointments collection
+    const recentAppointmentsData = allAppointments
+        .map((a) => ({
+        ...a,
+        parsedDate: parseAppointmentDate(a.Date_Time),
+    }))
+        .sort((a, b) => b.parsedDate.getTime() - a.parsedDate.getTime())
+        .slice(0, 10);
+    const recentAppointments = recentAppointmentsData.map((a) => ({
+        id: String(a._id || a.id || ""),
+        patient: {
+            name: a.Patient || "N/A",
+            phone: a.Phone || "N/A",
+            avatar: a.Patient_Image || "assets/img/profiles/avatar-06.jpg",
         },
-        { $unwind: "$patient" },
-        {
-            $project: {
-                _id: 1,
-                datetime: 1,
-                mode: 1,
-                status: 1,
-                fee: 1,
-                patient: { name: "$patient.name", phone: "$patient.phone", avatar: "$patient.avatar" },
-            },
-        },
-    ]);
-    const recentAppointments = recentAppointmentsAgg.map((a) => ({
-        id: String(a._id),
-        patient: a.patient,
-        datetime: new Date(a.datetime).toISOString(),
-        mode: a.mode,
-        status: a.status,
-        fee: a.fee,
+        datetime: a.parsedDate.toISOString(),
+        mode: a.Mode || "In-Person",
+        status: a.Status || "Schedule",
+        fee: parseFloat(a.Fees) || 0,
     }));
-    const topPatientsAgg = await dashboardAppointmentModel_1.DashboardAppointment.aggregate([
-        { $match: { doctorId } },
-        { $group: { _id: "$patientId", appointments: { $sum: 1 } } },
-        { $sort: { appointments: -1 } },
-        { $limit: 5 },
-        {
-            $lookup: {
-                from: "dashboardpatients",
-                localField: "_id",
-                foreignField: "_id",
-                as: "patient",
-            },
-        },
-        { $unwind: "$patient" },
-        {
-            $project: {
-                _id: 1,
-                appointments: 1,
-                name: "$patient.name",
-                phone: "$patient.phone",
-                avatar: "$patient.avatar",
-            },
-        },
-    ]);
-    const topPatients = topPatientsAgg.map((p) => ({
-        id: String(p._id),
-        name: p.name,
-        phone: p.phone,
-        avatar: p.avatar,
-        appointments: p.appointments,
+    // Calculate top patients from regular appointments
+    const patientAppointmentCount = new Map();
+    allAppointments.forEach((a) => {
+        const patientKey = `${a.Patient}_${a.Phone}`;
+        const existing = patientAppointmentCount.get(patientKey);
+        if (existing) {
+            existing.count++;
+        }
+        else {
+            patientAppointmentCount.set(patientKey, {
+                count: 1,
+                patient: {
+                    name: a.Patient,
+                    phone: a.Phone,
+                    avatar: a.Patient_Image || "assets/img/profiles/avatar-06.jpg",
+                },
+            });
+        }
+    });
+    const topPatients = Array.from(patientAppointmentCount.values())
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5)
+        .map((p, idx) => ({
+        id: `patient-${idx}`,
+        name: p.patient.name,
+        phone: p.patient.phone,
+        avatar: p.patient.avatar,
+        appointments: p.count,
     }));
-    const totalPatients = await dashboardPatientModel_1.DashboardPatient.countDocuments({ doctorId });
+    const totalPatients = patientAppointmentCount.size;
     const tiles = [
         { id: "total-patient", label: "Total Patient", value: totalPatients, trend: "Last 7 days", tone: "success" },
-        { id: "video-consultation", label: "Video Consultation", value: onlineCount, trend: "Last 7 days", tone: "success" },
-        { id: "rescheduled", label: "Rescheduled", value: 0, trend: "Last 7 days", tone: "warning" },
+        // { id: "video-consultation", label: "Video Consultation", value: onlineCount, trend: "Last 7 days", tone: "success" },
+        // { id: "rescheduled", label: "Rescheduled", value: 0, trend: "Last 7 days", tone: "warning" },
         { id: "pre-visit", label: "Pre Visit Bookings", value: last7Total, trend: "Last 7 days", tone: "success" },
-        { id: "walkin", label: "Walkin Bookings", value: 0, trend: "Last 7 days", tone: "info" },
-        { id: "follow-ups", label: "Follow Ups", value: 0, trend: "Last 7 days", tone: "success" },
+        // { id: "walkin", label: "Walkin Bookings", value: 0, trend: "Last 7 days", tone: "info" },
+        // { id: "follow-ups", label: "Follow Ups", value: 0, trend: "Last 7 days", tone: "success" },
     ];
     // ensure models are initialized in mongoose for lookups
     void mongoose_1.default.modelNames();

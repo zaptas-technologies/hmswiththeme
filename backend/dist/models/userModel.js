@@ -40,7 +40,7 @@ exports.User = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const userSchema = new mongoose_1.Schema({
-    email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    email: { type: String, required: true, unique: true, lowercase: true, trim: true, index: true },
     password: { type: String, required: true, select: false },
     name: { type: String, required: true },
     phone: { type: String },
@@ -48,14 +48,19 @@ const userSchema = new mongoose_1.Schema({
         type: String,
         required: true,
         enum: ["doctor", "receptionist", "admin", "super_admin", "hospital_admin", "nurse", "patient", "pharmacist", "lab_technician", "accountant"],
-        default: "doctor"
+        default: "doctor",
+        index: true,
     },
-    specialization: { type: String }, // For doctors
+    specialization: { type: String },
     avatar: { type: String },
+    hospitalId: { type: mongoose_1.Schema.Types.ObjectId, index: true },
 }, {
     timestamps: true,
-    id: false, // Disable virtual id field to avoid index conflicts
+    id: false,
 });
+// Compound indexes for common queries
+userSchema.index({ role: 1, hospitalId: 1 });
+userSchema.index({ email: 1, role: 1 });
 // Hash password before saving
 userSchema.pre("save", async function (next) {
     if (!this.isModified("password"))

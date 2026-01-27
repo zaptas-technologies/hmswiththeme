@@ -2,7 +2,6 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.register = exports.getCurrentUser = exports.login = void 0;
 const userModel_1 = require("../models/userModel");
-const doctorModel_1 = require("../models/doctorModel"); // Keep for backward compatibility
 // Simple JWT-like token (in production, use jsonwebtoken)
 const generateToken = (userId) => {
     return Buffer.from(JSON.stringify({ userId, doctorId: userId, timestamp: Date.now() })).toString("base64");
@@ -13,28 +12,7 @@ const login = async (req, res, next) => {
         if (!email || !password) {
             return res.status(400).json({ message: "Email and password are required" });
         }
-        // Try User model first, fallback to Doctor model for backward compatibility
-        let user = await userModel_1.User.findOne({ email: email.toLowerCase() }).select("+password");
-        let isLegacyDoctor = false;
-        if (!user) {
-            // Fallback to Doctor model for backward compatibility
-            const doctor = await doctorModel_1.Doctor.findOne({ email: email.toLowerCase() }).select("+password");
-            if (doctor) {
-                isLegacyDoctor = true;
-                // Convert doctor to user format
-                user = {
-                    _id: doctor._id,
-                    email: doctor.email,
-                    password: doctor.password,
-                    name: doctor.name,
-                    phone: doctor.phone,
-                    specialization: doctor.specialization,
-                    avatar: doctor.avatar,
-                    role: "doctor",
-                    comparePassword: doctor.comparePassword.bind(doctor),
-                };
-            }
-        }
+        const user = await userModel_1.User.findOne({ email: email.toLowerCase() }).select("+password");
         if (!user) {
             return res.status(401).json({ message: "Invalid email or password" });
         }
@@ -76,29 +54,13 @@ const login = async (req, res, next) => {
 exports.login = login;
 const getCurrentUser = async (req, res, next) => {
     try {
-        const userId = req.userId;
-        if (!userId) {
+        if (!req.user) {
             return res.status(401).json({ message: "Unauthorized" });
         }
-        // Try User model first, fallback to Doctor model for backward compatibility
-        let user = await userModel_1.User.findById(userId);
-        let isLegacyDoctor = false;
-        if (!user) {
-            const doctor = await doctorModel_1.Doctor.findById(userId);
-            if (doctor) {
-                isLegacyDoctor = true;
-                // Convert doctor to user format
-                user = {
-                    _id: doctor._id,
-                    email: doctor.email,
-                    name: doctor.name,
-                    phone: doctor.phone,
-                    specialization: doctor.specialization,
-                    avatar: doctor.avatar,
-                    role: "doctor",
-                };
-            }
-        }
+        const user = await userModel_1.User.findById(req.user.userId)
+            .select("_id email name phone specialization avatar role hospitalId")
+            .lean()
+            .exec();
         if (!user) {
             return res.status(404).json({ message: "User not found" });
         }
@@ -110,10 +72,10 @@ const getCurrentUser = async (req, res, next) => {
             specialization: user.specialization,
             avatar: user.avatar,
             role: user.role,
+            hospitalId: user.hospitalId?.toString(),
         };
         res.json({
             user: userResponse,
-            // Include doctor field for backward compatibility if it's a doctor
             ...(user.role === "doctor" ? {
                 doctor: {
                     id: userResponse.id,
@@ -137,14 +99,8 @@ const register = async (req, res, next) => {
         if (!email || !password || !name) {
             return res.status(400).json({ message: "Email, password, and name are required" });
         }
-        // Check if user already exists in User model
-        const existingUser = await userModel_1.User.findOne({ email: email.toLowerCase() });
+        const existingUser = await userModel_1.User.findOne({ email: email.toLowerCase() }).lean().exec();
         if (existingUser) {
-            return res.status(409).json({ message: "Email already registered" });
-        }
-        // Check if user exists in Doctor model (backward compatibility)
-        const existingDoctor = await doctorModel_1.Doctor.findOne({ email: email.toLowerCase() });
-        if (existingDoctor) {
             return res.status(409).json({ message: "Email already registered" });
         }
         // Create user with role (default to "doctor" if not specified)

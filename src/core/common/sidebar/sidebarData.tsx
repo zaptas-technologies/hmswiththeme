@@ -347,6 +347,18 @@ export const SidebarData = [
         dot: true,
         submenuItems: [],
       },
+      {
+        label: "Hospitals",
+        link: routes.hospitals,
+        submenu: false,
+        showSubRoute: false,
+        icon: "building-hospital",
+        base: "frontent",
+        materialicons: "start",
+        dot: true,
+        submenuItems: [],
+        roles: ["super_admin"], // Only show for super_admin
+      },
 
       // {
       //   label: "Assets",

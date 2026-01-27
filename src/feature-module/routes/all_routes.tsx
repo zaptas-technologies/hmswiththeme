@@ -67,6 +67,9 @@ export const all_routes = {
   packagesGrid: "/super-admin/packages-grid",
   domain: "/super-admin/domain",
   purchaseTransaction: "/super-admin/purchase-transaction",
+  hospitals: "/hospitals",
+  addHospital: "/add-hospital",
+  editHospital: "/edit-hospital",
 
   //Application routes
   chat: "/application/chat",

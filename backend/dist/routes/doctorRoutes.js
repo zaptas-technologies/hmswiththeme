@@ -3,19 +3,34 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.buildDoctorRouter = void 0;
 const express_1 = require("express");
 const doctorController_1 = require("../controllers/doctorController");
-const requireUserId_1 = require("../middleware/requireUserId");
+const authMiddleware_1 = require("../middlewares/authMiddleware");
 const buildDoctorRouter = () => {
     const router = (0, express_1.Router)();
-    // GET /api/doctors - Get all doctors (public or authenticated based on your needs)
-    router.get("/", doctorController_1.getAllDoctors);
-    // GET /api/doctors/:id - Get doctor by ID
-    router.get("/:id", doctorController_1.getDoctorById);
-    // POST /api/doctors - Create new doctor (requires authentication)
-    router.post("/", requireUserId_1.requireUserId, doctorController_1.createDoctor);
-    // PATCH /api/doctors/:id - Update doctor (requires authentication)
-    router.patch("/:id", requireUserId_1.requireUserId, doctorController_1.updateDoctor);
-    // DELETE /api/doctors/:id - Delete doctor (requires authentication)
-    router.delete("/:id", requireUserId_1.requireUserId, doctorController_1.deleteDoctor);
+    // Handle OPTIONS preflight requests for all routes - must be before other routes
+    // Handle both root and ID routes
+    router.options("/", (req, res) => {
+        const origin = req.headers.origin;
+        res.header("Access-Control-Allow-Origin", origin || "*");
+        res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+        res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, x-user-id, Accept, Origin");
+        res.header("Access-Control-Allow-Credentials", "true");
+        res.header("Access-Control-Max-Age", "86400"); // 24 hours
+        return res.sendStatus(204);
+    });
+    router.options("/:id", (req, res) => {
+        const origin = req.headers.origin;
+        res.header("Access-Control-Allow-Origin", origin || "*");
+        res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+        res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, x-user-id, Accept, Origin");
+        res.header("Access-Control-Allow-Credentials", "true");
+        res.header("Access-Control-Max-Age", "86400"); // 24 hours
+        return res.sendStatus(204);
+    });
+    router.get("/", authMiddleware_1.authMiddleware, doctorController_1.getAllDoctors);
+    router.get("/:id", authMiddleware_1.authMiddleware, doctorController_1.getDoctorById);
+    router.post("/", authMiddleware_1.authMiddleware, doctorController_1.createDoctor);
+    router.patch("/:id", authMiddleware_1.authMiddleware, doctorController_1.updateDoctor);
+    router.delete("/:id", authMiddleware_1.authMiddleware, doctorController_1.deleteDoctor);
     return router;
 };
 exports.buildDoctorRouter = buildDoctorRouter;

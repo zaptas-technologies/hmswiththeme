@@ -8,32 +8,56 @@ const cors_1 = __importDefault(require("cors"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const morgan_1 = __importDefault(require("morgan"));
 const db_1 = require("./config/db");
-const resourceRoutes_1 = require("./routes/resourceRoutes");
 const dashboardRoutes_1 = require("./routes/dashboardRoutes");
 const authRoutes_1 = require("./routes/authRoutes");
 const scheduleRoutes_1 = require("./routes/scheduleRoutes");
 const doctorRoutes_1 = require("./routes/doctorRoutes");
 const appointmentRoutes_1 = require("./routes/appointmentRoutes");
-const resourceLoader_1 = require("./utils/resourceLoader");
-const resourceRegistry_1 = require("./models/resourceRegistry");
+const doctorLeaveRoutes_1 = require("./routes/doctorLeaveRoutes");
+const patientRoutes_1 = require("./routes/patientRoutes");
+const consultationRoutes_1 = require("./routes/consultationRoutes");
+const prescriptionRoutes_1 = require("./routes/prescriptionRoutes");
+const inventoryRoutes_1 = require("./routes/inventoryRoutes");
+const grnRoutes_1 = require("./routes/grnRoutes");
+const hospitalRoutes_1 = require("./routes/hospitalRoutes");
 dotenv_1.default.config();
 const start = async () => {
     const app = (0, express_1.default)();
-    app.use((0, cors_1.default)({
-        origin: true,
+    const corsOptions = {
+        origin: (origin, callback) => {
+            callback(null, true);
+        },
         credentials: true,
-    }));
+        methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allowedHeaders: [
+            "Content-Type",
+            "Authorization",
+            "X-Requested-With",
+            "Accept",
+            "Origin",
+        ],
+        exposedHeaders: ["Content-Type", "Authorization"],
+        preflightContinue: false,
+        optionsSuccessStatus: 204,
+        maxAge: 86400,
+    };
+    app.use((0, cors_1.default)(corsOptions));
+    app.options("*", (0, cors_1.default)(corsOptions));
     app.use(express_1.default.json({ limit: "1mb" }));
     app.use((0, morgan_1.default)("dev"));
-    const descriptors = await (0, resourceLoader_1.scanResourceFiles)();
-    const resources = await (0, resourceRegistry_1.initResourceModels)(descriptors);
     app.use("/api/auth", (0, authRoutes_1.buildAuthRouter)());
     app.use("/api/dashboard", (0, dashboardRoutes_1.buildDashboardRouter)());
     app.use("/api/schedule", (0, scheduleRoutes_1.buildScheduleRouter)());
     app.use("/api/doctors", (0, doctorRoutes_1.buildDoctorRouter)());
     app.use("/api/appointments", (0, appointmentRoutes_1.buildAppointmentRouter)());
-    app.use("/api", (0, resourceRoutes_1.buildResourceRouter)(resources));
-    app.get("/", (_req, res) => res.json({ message: "HMS API is healthy", resources }));
+    app.use("/api/doctor-leaves", (0, doctorLeaveRoutes_1.buildDoctorLeaveRouter)());
+    app.use("/api/patients", (0, patientRoutes_1.buildPatientRouter)());
+    app.use("/api/consultations", (0, consultationRoutes_1.buildConsultationRouter)());
+    app.use("/api/prescriptions", (0, prescriptionRoutes_1.buildPrescriptionRouter)());
+    app.use("/api/inventory", (0, inventoryRoutes_1.buildInventoryRouter)());
+    app.use("/api/grn", (0, grnRoutes_1.buildGRNRouter)());
+    app.use("/api/hospitals", (0, hospitalRoutes_1.buildHospitalRouter)());
+    app.get("/", (_req, res) => res.json({ message: "HMS API is healthy" }));
     await (0, db_1.connectDB)(process.env.MONGODB_URI || "");
     const port = Number(process.env.PORT || 4000);
     app.listen(port, () => {

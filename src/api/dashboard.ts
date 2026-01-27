@@ -196,3 +196,32 @@ export const fetchAdminDashboard = async (): Promise<AdminDashboardResponse> => 
   const { data } = await api.get<AdminDashboardResponse>("/dashboard/admin");
   return data;
 };
+
+// Super Admin Dashboard Types
+export type SuperAdminBranchRow = {
+  hospitalId: string;
+  name: string;
+  city?: string;
+  state?: string;
+  status?: string;
+  admin?: { id: string; name: string; email: string; phone?: string } | null;
+  counts: { doctors: number; patients: number; appointments: number };
+};
+
+export type SuperAdminDashboardResponse = {
+  generatedAt: string;
+  totals: {
+    branches: number;
+    hospitalAdmins: number;
+    doctors: number;
+    patients: number;
+    appointments: number;
+    revenue: number;
+  };
+  branches: SuperAdminBranchRow[];
+};
+
+export const fetchSuperAdminDashboard = async (): Promise<SuperAdminDashboardResponse> => {
+  const { data } = await api.get<SuperAdminDashboardResponse>("/dashboard/super-admin");
+  return data;
+};

@@ -73,6 +73,8 @@ import AddInventory from "../components/pages/clinic-modules/inventory/add-inven
 import GRNList from "../components/pages/clinic-modules/grn/grn";
 import AddGRN from "../components/pages/clinic-modules/grn/add-grn";
 import Specializations from "../components/pages/clinic-modules/specializations/specializations";
+import HospitalsList from "../components/pages/clinic-modules/hospitals/hospitals";
+import AddHospital from "../components/pages/clinic-modules/hospitals/add-hospital";
 import AddBlog from "../components/pages/content-modules/add-blog/addBlog";
 import AddPages from "../components/pages/content-modules/add-page/addPages";
 import BlogCategories from "../components/pages/content-modules/blog-categories/blogCategories";
@@ -89,6 +91,7 @@ import Testimonials from "../components/pages/content-modules/testimonials/testi
 import Dashboard from "../components/pages/dashboard/dashboard";
 import DoctorDahboard from "../components/pages/dashboard/doctor-dashboard/doctorDahboard";
 import PatientDashboard from "../components/pages/dashboard/patient-dashboard/patientDashboard";
+import SuperAdminDashboard from "../components/pages/super-admin/super-admin-dashboard/superAdminDashboard";
 import DoctorAppointments from "../components/pages/doctor-modules/doctor-appointments/doctorAppointments";
 import DoctorsAppointmentDetails from "../components/pages/doctor-modules/doctors-appointment-details/doctorsAppointmentDetails";
 import DoctorsLeaves from "../components/pages/doctor-modules/doctors-leaves/doctorsLeaves";
@@ -299,6 +302,11 @@ export const publicRoutes = [
   {
     path: routes.layoutDark,
     element: <Dashboard />,
+    route: Route,
+  },
+  {
+    path: routes.superAdminDashboard,
+    element: <SuperAdminDashboard />,
     route: Route,
   },
   {
@@ -1369,6 +1377,21 @@ export const publicRoutes = [
   {
     path: routes.editGRN,
     element: <AddGRN />,
+    route: Route,
+  },
+  {
+    path: routes.hospitals,
+    element: <HospitalsList />,
+    route: Route,
+  },
+  {
+    path: routes.addHospital,
+    element: <AddHospital />,
+    route: Route,
+  },
+  {
+    path: routes.editHospital,
+    element: <AddHospital />,
     route: Route,
   },
 

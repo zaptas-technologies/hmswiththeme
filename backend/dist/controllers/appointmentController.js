@@ -1,12 +1,30 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteAppointment = exports.updateAppointment = exports.createAppointment = exports.getAppointmentById = exports.getAllAppointments = void 0;
-const resourceRegistry_1 = require("../models/resourceRegistry");
+const appointmentModel_1 = require("../models/appointmentModel");
+const dashboardAppointmentModel_1 = require("../models/dashboardAppointmentModel");
+const dashboardPatientModel_1 = require("../models/dashboardPatientModel");
+const userModel_1 = require("../models/userModel");
+const doctorModel_1 = require("../models/doctorModel");
+const authMiddleware_1 = require("../middlewares/authMiddleware");
 const formatAppointmentResponse = (appt) => {
     if (!appt)
         return appt;
     const obj = typeof appt.toObject === "function" ? appt.toObject() : appt;
-    return obj;
+    return {
+        _id: obj._id,
+        id: obj.id,
+        Date_Time: obj.Date_Time,
+        Patient: obj.Patient,
+        Phone: obj.Phone,
+        Patient_Image: obj.Patient_Image,
+        Doctor: obj.Doctor,
+        Mode: obj.Mode,
+        Status: obj.Status,
+        Fees: obj.Fees,
+        createdAt: obj.createdAt,
+        updatedAt: obj.updatedAt,
+    };
 };
 const validateAppointmentData = (data) => {
     if (!data)
@@ -28,10 +46,11 @@ const validateAppointmentData = (data) => {
     }
     return { isValid: true };
 };
-// GET /api/appointments
 const getAllAppointments = async (req, res, next) => {
     try {
-        const Model = (0, resourceRegistry_1.getResourceModel)("appointments");
+        if (!req.user) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const skip = (page - 1) * limit;
@@ -41,22 +60,30 @@ const getAllAppointments = async (req, res, next) => {
         const Mode = req.query.mode || "";
         const Doctor = req.query.doctor || "";
         const Patient = req.query.patient || "";
-        const filter = {};
+        const filter = (0, authMiddleware_1.buildAccessFilter)(req.user);
         if (Status)
             filter.Status = Status;
         if (Mode)
             filter.Mode = Mode;
-        if (Doctor)
-            filter.Doctor = Doctor;
         if (Patient)
             filter.Patient = Patient;
+        if (Doctor) {
+            const doctorRx = new RegExp(Doctor.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+            filter.Doctor = doctorRx;
+        }
         if (search) {
             const rx = new RegExp(search, "i");
             filter.$or = [{ Patient: rx }, { Doctor: rx }, { Phone: rx }];
         }
         const [appts, total] = await Promise.all([
-            Model.find(filter).sort(sort).skip(skip).limit(limit).exec(),
-            Model.countDocuments(filter),
+            appointmentModel_1.Appointment.find(filter)
+                .select("_id id Date_Time Patient Phone Patient_Image Doctor Mode Status Fees createdAt updatedAt")
+                .sort(sort)
+                .skip(skip)
+                .limit(limit)
+                .lean()
+                .exec(),
+            appointmentModel_1.Appointment.countDocuments(filter),
         ]);
         res.json({
             data: appts.map(formatAppointmentResponse),
@@ -73,14 +100,21 @@ const getAllAppointments = async (req, res, next) => {
     }
 };
 exports.getAllAppointments = getAllAppointments;
-// GET /api/appointments/:id
 const getAppointmentById = async (req, res, next) => {
     try {
-        const Model = (0, resourceRegistry_1.getResourceModel)("appointments");
+        if (!req.user) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
         const { id } = req.params;
-        const appt = await Model.findOne({ $or: [{ _id: id }, { id }] }).exec();
-        if (!appt)
+        const filter = (0, authMiddleware_1.buildAccessFilter)(req.user);
+        filter.$or = [{ _id: id }, { id }];
+        const appt = await appointmentModel_1.Appointment.findOne(filter)
+            .select("_id id Date_Time Patient Phone Patient_Image Doctor Mode Status Fees createdAt updatedAt")
+            .lean()
+            .exec();
+        if (!appt) {
             return res.status(404).json({ message: "Appointment not found" });
+        }
         res.json(formatAppointmentResponse(appt));
     }
     catch (err) {
@@ -91,24 +125,119 @@ const getAppointmentById = async (req, res, next) => {
     }
 };
 exports.getAppointmentById = getAppointmentById;
-// POST /api/appointments
 const createAppointment = async (req, res, next) => {
     try {
-        const Model = (0, resourceRegistry_1.getResourceModel)("appointments");
+        if (!req.user) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
         const apptData = req.body;
         const validation = validateAppointmentData(apptData);
         if (!validation.isValid) {
             return res.status(400).json({ message: validation.error });
         }
         if (!apptData.id) {
-            apptData.id =
-                Date.now().toString() + Math.random().toString(36).slice(2, 9);
+            apptData.id = Date.now().toString() + Math.random().toString(36).slice(2, 9);
         }
-        const existingById = await Model.findOne({ id: apptData.id }).exec();
+        const existingById = await appointmentModel_1.Appointment.findOne({ id: apptData.id }).lean().exec();
         if (existingById) {
             return res.status(409).json({ message: "Appointment with this ID already exists" });
         }
-        const created = await Model.create(apptData);
+        const accessFilter = (0, authMiddleware_1.buildAccessFilter)(req.user);
+        const appointmentData = {
+            ...apptData,
+            ...accessFilter,
+        };
+        const created = await appointmentModel_1.Appointment.create(appointmentData);
+        if (apptData.doctorId) {
+            try {
+                const doctorIdStr = String(apptData.doctorId).trim();
+                const doctor = await doctorModel_1.Doctor.findById(doctorIdStr)
+                    .lean()
+                    .exec();
+                if (doctor) {
+                    const doctorEmail = (doctor.Email || doctor.email || "").toLowerCase().trim();
+                    if (doctorEmail) {
+                        const user = await userModel_1.User.findOne({ email: doctorEmail }).select("_id").lean().exec();
+                        const dashboardDoctorId = user ? String(user._id) : doctorIdStr;
+                        let dashboardPatient = await dashboardPatientModel_1.DashboardPatient.findOne({
+                            doctorId: dashboardDoctorId,
+                            name: apptData.Patient,
+                            phone: apptData.Phone,
+                        })
+                            .lean()
+                            .exec();
+                        if (!dashboardPatient) {
+                            const newPatient = await dashboardPatientModel_1.DashboardPatient.create({
+                                doctorId: dashboardDoctorId,
+                                name: apptData.Patient,
+                                phone: apptData.Phone,
+                                avatar: apptData.Patient_Image || "assets/img/profiles/avatar-02.jpg",
+                            });
+                            dashboardPatient = { _id: newPatient._id };
+                        }
+                        let appointmentDate;
+                        try {
+                            appointmentDate = new Date(apptData.Date_Time);
+                            if (isNaN(appointmentDate.getTime())) {
+                                const monthMap = {
+                                    "Jan": 0, "Feb": 1, "Mar": 2, "Apr": 3, "May": 4, "Jun": 5,
+                                    "Jul": 6, "Aug": 7, "Sep": 8, "Oct": 9, "Nov": 10, "Dec": 11
+                                };
+                                const match = apptData.Date_Time.match(/(\d{1,2})\s+(\w{3})\s+(\d{4}),\s+(\d{1,2}):(\d{2})\s+(AM|PM)/i);
+                                if (match) {
+                                    const [, day, month, year, hour, minute, ampm] = match;
+                                    const monthNum = monthMap[month];
+                                    if (monthNum !== undefined) {
+                                        let hour24 = parseInt(hour, 10);
+                                        if (ampm.toUpperCase() === "PM" && hour24 !== 12)
+                                            hour24 += 12;
+                                        if (ampm.toUpperCase() === "AM" && hour24 === 12)
+                                            hour24 = 0;
+                                        appointmentDate = new Date(parseInt(year, 10), monthNum, parseInt(day, 10), hour24, parseInt(minute, 10));
+                                    }
+                                    else {
+                                        appointmentDate = new Date();
+                                    }
+                                }
+                                else {
+                                    appointmentDate = new Date();
+                                }
+                            }
+                        }
+                        catch {
+                            appointmentDate = new Date();
+                        }
+                        const statusMap = {
+                            "Schedule": "Schedule",
+                            "Scheduled": "Schedule",
+                            "Checked In": "Checked in",
+                            "Checked Out": "Checked Out",
+                            "Completed": "Checked Out",
+                            "Confirmed": "Schedule",
+                        };
+                        const dashboardStatus = statusMap[apptData.Status] || "Schedule";
+                        const modeMap = {
+                            "Online": "Online",
+                            "In-Person": "In-Person",
+                            "In Person": "In-Person",
+                        };
+                        const dashboardMode = modeMap[apptData.Mode || ""] || "In-Person";
+                        const fee = parseFloat(String(apptData.Fees)) || 0;
+                        await dashboardAppointmentModel_1.DashboardAppointment.create({
+                            doctorId: dashboardDoctorId,
+                            patientId: dashboardPatient._id,
+                            datetime: appointmentDate,
+                            mode: dashboardMode,
+                            status: dashboardStatus,
+                            fee: fee,
+                        });
+                    }
+                }
+            }
+            catch (dashboardErr) {
+                // Log error but don't fail the appointment creation
+            }
+        }
         res.status(201).json(formatAppointmentResponse(created));
     }
     catch (err) {
@@ -122,13 +251,13 @@ const createAppointment = async (req, res, next) => {
     }
 };
 exports.createAppointment = createAppointment;
-// PATCH /api/appointments/:id
 const updateAppointment = async (req, res, next) => {
     try {
-        const Model = (0, resourceRegistry_1.getResourceModel)("appointments");
+        if (!req.user) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
         const { id } = req.params;
         const updates = req.body;
-        // If caller attempts to change required fields, validate them.
         const validation = validateAppointmentData({
             Date_Time: updates.Date_Time ?? "x",
             Patient: updates.Patient ?? "x",
@@ -136,14 +265,19 @@ const updateAppointment = async (req, res, next) => {
             Doctor: updates.Doctor ?? "x",
             Status: updates.Status ?? "x",
         });
-        // Only enforce when those fields are actually present
         if ((updates.Date_Time || updates.Patient || updates.Phone || updates.Doctor || updates.Status) &&
             !validation.isValid) {
             return res.status(400).json({ message: validation.error });
         }
-        const updated = await Model.findOneAndUpdate({ $or: [{ _id: id }, { id }] }, { $set: updates }, { new: true }).exec();
-        if (!updated)
+        const filter = (0, authMiddleware_1.buildAccessFilter)(req.user);
+        filter.$or = [{ _id: id }, { id }];
+        const updated = await appointmentModel_1.Appointment.findOneAndUpdate(filter, { $set: updates }, { new: true })
+            .select("_id id Date_Time Patient Phone Patient_Image Doctor Mode Status Fees createdAt updatedAt")
+            .lean()
+            .exec();
+        if (!updated) {
             return res.status(404).json({ message: "Appointment not found" });
+        }
         res.json(formatAppointmentResponse(updated));
     }
     catch (err) {
@@ -154,14 +288,18 @@ const updateAppointment = async (req, res, next) => {
     }
 };
 exports.updateAppointment = updateAppointment;
-// DELETE /api/appointments/:id
 const deleteAppointment = async (req, res, next) => {
     try {
-        const Model = (0, resourceRegistry_1.getResourceModel)("appointments");
+        if (!req.user) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
         const { id } = req.params;
-        const deleted = await Model.findOneAndDelete({ $or: [{ _id: id }, { id }] }).exec();
-        if (!deleted)
+        const filter = (0, authMiddleware_1.buildAccessFilter)(req.user);
+        filter.$or = [{ _id: id }, { id }];
+        const deleted = await appointmentModel_1.Appointment.findOneAndDelete(filter).lean().exec();
+        if (!deleted) {
             return res.status(404).json({ message: "Appointment not found" });
+        }
         res.status(204).send();
     }
     catch (err) {

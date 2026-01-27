@@ -25,6 +25,8 @@ exports.schemaMap = {
     patientappointments: clinical_1.PatientAppointmentSchema,
     doctorprescriptions: clinical_1.DoctorPrescriptionSchema,
     patientprescriptions: clinical_1.PatientPrescriptionSchema,
+    doctorleaves: clinical_1.DoctorLeaveSchema,
+    consultations: clinical_1.ConsultationSchema,
     // finance
     invoices: finance_1.InvoiceSchema,
     transactions: finance_1.TransactionSchema,

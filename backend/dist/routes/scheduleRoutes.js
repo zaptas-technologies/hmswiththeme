@@ -3,12 +3,11 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.buildScheduleRouter = void 0;
 const express_1 = require("express");
 const scheduleController_1 = require("../controllers/scheduleController");
-const requireUserId_1 = require("../middleware/requireUserId");
+const authMiddleware_1 = require("../middlewares/authMiddleware");
 const validateSchedule_1 = require("../middleware/validateSchedule");
 const buildScheduleRouter = () => {
     const router = (0, express_1.Router)();
-    // All routes require authentication
-    router.use(requireUserId_1.requireUserId);
+    router.use(authMiddleware_1.authMiddleware);
     // GET /api/schedule - Get current schedule
     router.get("/", scheduleController_1.getSchedule);
     // GET /api/schedule/history - Get schedule history with pagination
