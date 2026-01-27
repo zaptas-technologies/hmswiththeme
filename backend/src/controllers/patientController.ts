@@ -139,6 +139,10 @@ export const createPatient: RequestHandler = async (req, res, next) => {
 
     // Remove id field if present (we use MongoDB's _id)
     const { id: _ignoredId, _id: _ignoredMongoId, ...cleanPatientData } = patientData;
+    
+    // Explicitly delete id field to ensure it's not included (handles cases where id might be undefined/null/empty)
+    delete (cleanPatientData as any).id;
+    delete (cleanPatientData as any)._id;
 
     const existingByPhone = await Patient.findOne({ Phone: patientData.Phone }).lean().exec();
     if (existingByPhone) {
@@ -177,6 +181,10 @@ export const createPatient: RequestHandler = async (req, res, next) => {
     // Remove hospital from cleanPatientData if it exists (we'll add it separately)
     const { hospital, ...finalPatientData } = cleanPatientData;
     
+    // Ensure id and _id are not in finalPatientData
+    delete (finalPatientData as any).id;
+    delete (finalPatientData as any)._id;
+    
     const patient = await Patient.create({
       ...finalPatientData,
       ...(hospitalId && { hospital: hospitalId }),
@@ -186,6 +194,12 @@ export const createPatient: RequestHandler = async (req, res, next) => {
     // Handle MongoDB duplicate key error
     if (err.code === 11000) {
       const field = Object.keys(err.keyPattern)[0];
+      // If the error is about 'id' field, provide a more helpful message
+      if (field === 'id') {
+        return res.status(409).json({
+          message: "A patient with this identifier already exists. Please refresh and try again.",
+        });
+      }
       return res.status(409).json({
         message: `Patient with this ${field} already exists`,
       });
@@ -251,6 +265,12 @@ export const updatePatient: RequestHandler = async (req, res, next) => {
     // Handle MongoDB duplicate key error
     if (err.code === 11000) {
       const field = Object.keys(err.keyPattern)[0];
+      // If the error is about 'id' field, provide a more helpful message
+      if (field === 'id') {
+        return res.status(409).json({
+          message: "A patient with this identifier already exists. Please refresh and try again.",
+        });
+      }
       return res.status(409).json({
         message: `Patient with this ${field} already exists`,
       });
