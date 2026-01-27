@@ -3,7 +3,7 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import ImageWithBasePath from "../../imageWithBasePath";
 import React, { useEffect, useState } from "react";
-import { getSidebarDataByRole } from "./sidebarData";
+import { SidebarData } from "./sidebarData";
 import { useDispatch, useSelector } from "react-redux";
 import { setExpandMenu, setMobileSidebar } from "../../redux/sidebarSlice";
 import { updateTheme } from "../../redux/themeSlice";
@@ -201,7 +201,7 @@ const Sidebar = () => {
         {/* Sidenav Menu */}
         <div className="sidebar-inner" data-simplebar="">
           <div id="sidebar-menu" className="sidebar-menu">
-            {user?.role === "super_admin" && (
+            {/* {user?.role === "super_admin" && (
               <div className="sidebar-top shadow-sm p-2 rounded-1 mb-3 dropend">
                 <Link
                   to="#"
@@ -300,9 +300,9 @@ const Sidebar = () => {
                   </div>
                 </div>
               </div>
-            )}
+            )} */}
             <ul>
-              {getSidebarDataByRole(user?.role)?.map((mainLabel, index) => (
+              {SidebarData?.map((mainLabel, index) => (
                 <React.Fragment key={`main-${index}`}>
                   <li className="menu-title">
                     <span>{mainLabel?.tittle}</span>
