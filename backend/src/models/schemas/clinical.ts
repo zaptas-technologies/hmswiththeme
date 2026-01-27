@@ -233,7 +233,6 @@ export const GRNSchema = new Schema(
     Supplier: { type: String, required: true },
     Supplier_Invoice: { type: String },
     Items: [{
-      inventoryId: { type: String, required: true },
       Item_Name: { type: String, required: true },
       Item_Code: { type: String },
       Batch_Number: { type: String },
