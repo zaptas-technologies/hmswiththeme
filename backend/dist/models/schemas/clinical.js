@@ -101,7 +101,7 @@ exports.DoctorLeaveSchema = new mongoose_1.Schema({
 }, { timestamps: true, strict: false });
 exports.ConsultationSchema = new mongoose_1.Schema({
     Consultation_ID: { type: String, required: true, unique: true },
-    Appointment_ID: { type: String, required: true, index: true }, // Reference to appointment
+    Appointment_ID: { type: String, required: true }, // Reference to appointment
     Patient: { type: String, required: true },
     Patient_Image: { type: String },
     Doctor: { type: String, required: true },

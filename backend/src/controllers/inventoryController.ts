@@ -1,6 +1,7 @@
 import { RequestHandler } from "express";
 import { Inventory, InventoryDoc } from "../models/inventoryModel";
 import mongoose from "mongoose";
+import { buildAccessFilter } from "../middlewares/authMiddleware";
 
 export interface InventoryRequest {
   Item_Name: string;
@@ -158,7 +159,11 @@ export const createInventory: RequestHandler = async (req, res, next) => {
     }
 
     // Remove id field if present (we use MongoDB's _id)
-    const { id: _ignoredId, ...cleanInventoryData } = inventoryData;
+    const { id: _ignoredId, _id: _ignoredMongoId, ...cleanInventoryData } = inventoryData;
+    
+    // Explicitly delete id field to ensure it's not included (handles cases where id might be undefined/null/empty)
+    delete (cleanInventoryData as any).id;
+    delete (cleanInventoryData as any)._id;
 
     // Convert Expiry_Date to Date if string
     if (typeof cleanInventoryData.Expiry_Date === "string") {
@@ -166,11 +171,18 @@ export const createInventory: RequestHandler = async (req, res, next) => {
     }
 
     // Set hospital and user from request if available
-    if (req.user && (req.user as any).hospitalId) {
-      cleanInventoryData.hospital = (req.user as any).hospitalId;
-    }
-    if (req.user && (req.user as any).id) {
-      cleanInventoryData.user = (req.user as any).id;
+    if (req.user) {
+      const accessFilter = buildAccessFilter(req.user);
+      if (accessFilter.hospital) {
+        cleanInventoryData.hospital = typeof accessFilter.hospital === 'string' 
+          ? new mongoose.Types.ObjectId(accessFilter.hospital)
+          : accessFilter.hospital;
+      }
+      if (accessFilter.user) {
+        cleanInventoryData.user = typeof accessFilter.user === 'string'
+          ? new mongoose.Types.ObjectId(accessFilter.user)
+          : accessFilter.user;
+      }
     }
 
     const inventory = await Inventory.create(cleanInventoryData);
@@ -184,6 +196,12 @@ export const createInventory: RequestHandler = async (req, res, next) => {
     // Handle MongoDB duplicate key error
     if (err.code === 11000) {
       const field = Object.keys(err.keyPattern)[0];
+      // If the error is about 'id' field, provide a more helpful message
+      if (field === 'id') {
+        return res.status(409).json({
+          message: "An inventory item with this identifier already exists. Please refresh and try again.",
+        });
+      }
       return res.status(409).json({
         message: `Inventory item with this ${field} already exists`,
       });
@@ -239,6 +257,12 @@ export const updateInventory: RequestHandler = async (req, res, next) => {
     // Handle MongoDB duplicate key error
     if (err.code === 11000) {
       const field = Object.keys(err.keyPattern)[0];
+      // If the error is about 'id' field, provide a more helpful message
+      if (field === 'id') {
+        return res.status(409).json({
+          message: "An inventory item with this identifier already exists. Please refresh and try again.",
+        });
+      }
       return res.status(409).json({
         message: `Inventory item with this ${field} already exists`,
       });

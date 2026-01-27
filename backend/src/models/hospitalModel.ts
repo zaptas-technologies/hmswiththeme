@@ -30,7 +30,6 @@ const hospitalSchema = new Schema<HospitalDoc>(
     hospitalAdmin: { 
       type: Schema.Types.ObjectId, 
       ref: "User",
-      index: true,
     },
   },
   { 

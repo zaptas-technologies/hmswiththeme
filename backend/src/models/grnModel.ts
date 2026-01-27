@@ -32,7 +32,7 @@ export interface GRNDoc extends Document {
 // Add indexes for role-based access and queries
 GRNSchema.index({ hospital: 1, createdAt: -1 });
 GRNSchema.index({ hospital: 1, GRN_Date: -1 });
-GRNSchema.index({ GRN_Number: 1 });
+// Note: GRN_Number already has unique: true in schema which creates an index
 GRNSchema.index({ Status: 1 });
 
 export const GRN =
