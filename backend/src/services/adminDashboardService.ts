@@ -11,41 +11,45 @@ const pctChange = (current: number, prev: number) => {
 
 const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 
-export const buildAdminDashboardPayload = async () => {
+export const buildAdminDashboardPayload = async (hospitalId?: string) => {
   const now = new Date();
   const sevenDaysAgo = new Date(now);
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   const fourteenDaysAgo = new Date(now);
   fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
 
+  // Build hospital filter if hospitalId is provided
+  const hospitalFilter = hospitalId ? { hospital: new mongoose.Types.ObjectId(hospitalId) } : {};
+
   const [doctorsCount, patientsCount, appointmentsCount] = await Promise.all([
-    Doctor.countDocuments(),
-    Patient.countDocuments(),
-    Appointment.countDocuments(),
+    Doctor.countDocuments(hospitalFilter),
+    Patient.countDocuments(hospitalFilter),
+    Appointment.countDocuments(hospitalFilter),
   ]);
 
   const [last7Doctors, prev7Doctors] = await Promise.all([
-    Doctor.countDocuments({ createdAt: { $gte: sevenDaysAgo, $lt: now } }),
-    Doctor.countDocuments({ createdAt: { $gte: fourteenDaysAgo, $lt: sevenDaysAgo } }),
+    Doctor.countDocuments({ ...hospitalFilter, createdAt: { $gte: sevenDaysAgo, $lt: now } }),
+    Doctor.countDocuments({ ...hospitalFilter, createdAt: { $gte: fourteenDaysAgo, $lt: sevenDaysAgo } }),
   ]);
 
   const [last7Patients, prev7Patients] = await Promise.all([
-    Patient.countDocuments({ createdAt: { $gte: sevenDaysAgo, $lt: now } }),
-    Patient.countDocuments({ createdAt: { $gte: fourteenDaysAgo, $lt: sevenDaysAgo } }),
+    Patient.countDocuments({ ...hospitalFilter, createdAt: { $gte: sevenDaysAgo, $lt: now } }),
+    Patient.countDocuments({ ...hospitalFilter, createdAt: { $gte: fourteenDaysAgo, $lt: sevenDaysAgo } }),
   ]);
 
   const [last7Appointments, prev7Appointments] = await Promise.all([
-    Appointment.countDocuments({ Date_Time: { $gte: sevenDaysAgo.toISOString(), $lt: now.toISOString() } }),
-    Appointment.countDocuments({ Date_Time: { $gte: fourteenDaysAgo.toISOString(), $lt: sevenDaysAgo.toISOString() } }),
+    Appointment.countDocuments({ ...hospitalFilter, Date_Time: { $gte: sevenDaysAgo.toISOString(), $lt: now.toISOString() } }),
+    Appointment.countDocuments({ ...hospitalFilter, Date_Time: { $gte: fourteenDaysAgo.toISOString(), $lt: sevenDaysAgo.toISOString() } }),
   ]);
 
   const revenueAgg = await Appointment.aggregate([
-    { $match: { Status: { $in: ["Confirmed", "Checked Out", "Completed"] } } },
+    { $match: { ...hospitalFilter, Status: { $in: ["Confirmed", "Checked Out", "Completed"] } } },
     { $group: { _id: null, total: { $sum: { $ifNull: [{ $toDouble: "$Fees" }, 0] } } } },
   ]);
   const revenue = revenueAgg[0]?.total || 0;
 
   const appointmentStats = await Appointment.aggregate([
+    { $match: hospitalFilter },
     {
       $group: {
         _id: "$Status",
@@ -64,15 +68,33 @@ export const buildAdminDashboardPayload = async () => {
   const reschedule = statsMap.get("Reschedule") || 0;
   const completed = statsMap.get("Checked Out") || statsMap.get("Completed") || statsMap.get("Confirmed") || 0;
 
+  // Build doctor lookup filter to ensure we only get doctors from the same hospital
+  const doctorLookupFilter: any = {};
+  if (hospitalId) {
+    doctorLookupFilter.hospital = new mongoose.Types.ObjectId(hospitalId);
+  }
+
   const popularDoctors = await Appointment.aggregate([
+    { $match: hospitalFilter },
     { $group: { _id: "$Doctor", count: { $sum: 1 } } },
     { $sort: { count: -1 } },
     { $limit: 3 },
     {
       $lookup: {
         from: "doctors",
-        localField: "_id",
-        foreignField: "Name_Designation",
+        let: { doctorName: "$_id" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$Name_Designation", "$$doctorName"] },
+                  ...(hospitalId ? [{ $eq: ["$hospital", new mongoose.Types.ObjectId(hospitalId)] }] : []),
+                ],
+              },
+            },
+          },
+        ],
         as: "doctorInfo",
       },
     },
@@ -87,19 +109,20 @@ export const buildAdminDashboardPayload = async () => {
     },
   ]);
 
-  const recentAppointments = await Appointment.find()
+  const recentAppointments = await Appointment.find(hospitalFilter)
     .sort({ Date_Time: 1 })
     .limit(10)
     .lean();
 
   const topDepartments = await Appointment.aggregate([
-    { $match: { Department: { $exists: true, $ne: "" } } },
+    { $match: { ...hospitalFilter, Department: { $exists: true, $ne: "" } } },
     { $group: { _id: "$Department", count: { $sum: 1 } } },
     { $sort: { count: -1 } },
     { $limit: 3 },
   ]);
 
   const scheduleStats = await Doctor.aggregate([
+    { $match: hospitalFilter },
     {
       $group: {
         _id: "$Status",
@@ -111,14 +134,20 @@ export const buildAdminDashboardPayload = async () => {
   const availableDoctors = scheduleStats.find((s: any) => s._id === "Available")?.count || 0;
   const unavailableDoctors = scheduleStats.find((s: any) => s._id === "Unavailable")?.count || 0;
 
-  const leaveCount = await DoctorLeave.countDocuments({
+  // For leave requests, filter by hospital if provided
+  const leaveHospitalFilter = hospitalId ? { hospital: new mongoose.Types.ObjectId(hospitalId) } : {};
+  const leaveCountFilter: any = {
+    ...leaveHospitalFilter,
     $or: [
       { Status: "Approved" },
-      { startDate: { $lte: now }, endDate: { $gte: now } },
+      { From_Date: { $lte: now }, To_Date: { $gte: now } },
     ],
-  });
+  };
+
+  const leaveCount = await DoctorLeave.countDocuments(leaveCountFilter);
 
   const scheduledDoctors = await Doctor.find({
+    ...hospitalFilter,
     Status: "Available",
   })
     .select("Name_Designation role Department img")
@@ -126,7 +155,7 @@ export const buildAdminDashboardPayload = async () => {
     .lean();
 
   const incomeByTreatment = await Appointment.aggregate([
-    { $match: { Department: { $exists: true, $ne: "" }, Status: { $in: ["Confirmed", "Checked Out", "Completed"] } } },
+    { $match: { ...hospitalFilter, Department: { $exists: true, $ne: "" }, Status: { $in: ["Confirmed", "Checked Out", "Completed"] } } },
     {
       $group: {
         _id: "$Department",
@@ -139,14 +168,26 @@ export const buildAdminDashboardPayload = async () => {
   ]);
 
   const topPatients = await Appointment.aggregate([
+    { $match: hospitalFilter },
     { $group: { _id: "$Patient", count: { $sum: 1 }, totalPaid: { $sum: { $ifNull: [{ $toDouble: "$Fees" }, 0] } } } },
     { $sort: { count: -1 } },
     { $limit: 5 },
     {
       $lookup: {
         from: "patients",
-        localField: "_id",
-        foreignField: "Patient",
+        let: { patientName: "$_id" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$Patient", "$$patientName"] },
+                  ...(hospitalId ? [{ $eq: ["$hospital", new mongoose.Types.ObjectId(hospitalId)] }] : []),
+                ],
+              },
+            },
+          },
+        ],
         as: "patientInfo",
       },
     },
@@ -163,6 +204,7 @@ export const buildAdminDashboardPayload = async () => {
   ]);
 
   const recentTransactions = await Appointment.find({
+    ...hospitalFilter,
     Fees: { $exists: true, $ne: null },
     Status: { $in: ["Confirmed", "Checked Out", "Completed"] },
   })
@@ -170,33 +212,51 @@ export const buildAdminDashboardPayload = async () => {
     .limit(5)
     .lean();
 
-  const leaveRequests = await DoctorLeave.find({
-    Status: { $in: ["Pending", "Requested"] },
-  })
+  const leaveRequestsFilter = {
+    ...leaveHospitalFilter,
+    Status: { $in: ["Applied", "Pending", "Requested"] },
+  };
+  
+  const leaveRequests = await DoctorLeave.find(leaveRequestsFilter)
     .sort({ createdAt: -1 })
     .limit(5)
     .lean();
 
   const formattedLeaveRequests = await Promise.all(
     leaveRequests.map(async (leave: any) => {
-      const doctor = await Doctor.findOne({ _id: leave.doctorId })
+      // Try to find doctor by Doctor field (name) or Doctor_Id
+      const doctorFilter: any = {};
+      if (leave.Doctor) {
+        doctorFilter.Name_Designation = leave.Doctor;
+      } else if (leave.Doctor_Id) {
+        doctorFilter._id = leave.Doctor_Id;
+      }
+      
+      // Add hospital filter if provided
+      if (hospitalId) {
+        doctorFilter.hospital = new mongoose.Types.ObjectId(hospitalId);
+      }
+      
+      const doctor = await Doctor.findOne(doctorFilter)
         .select("Name_Designation img")
         .lean()
         .exec() as { Name_Designation?: string; img?: string } | null;
+      
       return {
         id: String(leave._id),
-        doctorName: doctor?.Name_Designation || "Unknown Doctor",
+        doctorName: doctor?.Name_Designation || leave.Doctor || "Unknown Doctor",
         doctorImg: doctor?.img || "assets/img/profiles/avatar-16.jpg",
-        days: leave.days || 0,
-        reason: leave.reason || "Personal Reason",
-        startDate: leave.startDate,
-        endDate: leave.endDate,
+        days: leave.No_Of_Days || leave.Day || 0,
+        reason: leave.Reason || leave.Leave_Type || "Personal Reason",
+        startDate: leave.From_Date || leave.Date,
+        endDate: leave.To_Date || leave.Date,
       };
     })
   );
 
   // Generate sparkline data for stats cards
-  const generateSparklineData = async (model: mongoose.Model<any>, dateField: string, filter: any = {}) => {
+  const generateSparklineData = async (model: mongoose.Model<any>, dateField: string, baseFilter: any = {}) => {
+    const filter = { ...baseFilter, ...hospitalFilter };
     const start = startOfDay(sevenDaysAgo);
     const days = Array.from({ length: 7 }).map((_, i) => new Date(start.getTime() + i * 24 * 60 * 60 * 1000));
     
@@ -247,7 +307,7 @@ export const buildAdminDashboardPayload = async () => {
   const yearStart = new Date(year, 0, 1);
   const yearEnd = new Date(year + 1, 0, 1);
   
-  const allAppointmentsForYear = await Appointment.find({}).lean();
+  const allAppointmentsForYear = await Appointment.find(hospitalFilter).lean();
   const totalByMonth = Array(12).fill(0);
   const completedByMonth = Array(12).fill(0);
   

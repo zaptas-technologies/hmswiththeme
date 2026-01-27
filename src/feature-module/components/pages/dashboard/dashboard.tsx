@@ -11,9 +11,11 @@ import CircleChart from "./chats/circleChart";
 import { Calendar, type CalendarProps } from "antd";
 import type { Dayjs } from "dayjs";
 import { fetchAdminDashboard, type AdminDashboardResponse } from "../../../../api/dashboard";
+import { useAuth } from "../../../../core/context/AuthContext";
 import dayjs from "dayjs";
 
 const Dashboard = () => {
+  const { user } = useAuth();
   const [dashboardData, setDashboardData] = useState<AdminDashboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -138,7 +140,12 @@ const Dashboard = () => {
           {/* Page Header */}
           <div className="d-flex align-items-sm-center justify-content-between flex-wrap gap-2 mb-4">
             <div>
-              <h4 className="fw-bold mb-0">Admin Dashboard </h4>
+              <h4 className="fw-bold mb-0">
+                {user?.role === "hospital_admin" ? "Hospital Admin Dashboard" : "Admin Dashboard"}
+              </h4>
+              {user?.role === "hospital_admin" && (
+                <p className="text-muted mb-0 fs-13">Viewing data for your hospital branch</p>
+              )}
             </div>
             <div className="d-flex align-items-center flex-wrap gap-2">
               <Link
