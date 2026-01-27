@@ -36,7 +36,6 @@ export const DoctorSchema = new Schema(
 
 export const PatientSchema = new Schema(
   {
-    id: { type: String, required: true, unique: true },
     Patient: { type: String, required: true },
     Gender: { type: String },
     Patient_img: { type: String },
@@ -47,6 +46,8 @@ export const PatientSchema = new Schema(
     Address: { type: String },
     Last_Visit: { type: String },
     Status: { type: String, enum: ["Available", "Unavailable"], required: true },
+    hospital: { type: Schema.Types.ObjectId, ref: "Hospital", index: true },
+    user: { type: Schema.Types.ObjectId, ref: "User", index: true },
   },
   { timestamps: true, strict: false }
 );

@@ -1,4 +1,5 @@
 import { RequestHandler } from "express";
+import mongoose from "mongoose";
 import { DoctorSchedule, DaySchedule, DoctorScheduleDoc } from "../models/doctorScheduleModel";
 
 export interface ScheduleRequest {
@@ -13,7 +14,7 @@ export interface ScheduleRequest {
 const formatScheduleResponse = (schedule: DoctorScheduleDoc) => {
   return {
     id: schedule._id.toString(),
-    doctorId: schedule.doctorId,
+    doctorId: schedule.doctorId.toString(),
     location: schedule.location,
     fromDate: schedule.fromDate.toISOString().split("T")[0],
     toDate: schedule.toDate.toISOString().split("T")[0],
@@ -43,10 +44,13 @@ const getDefaultSchedule = () => ({
 
 export const getSchedule: RequestHandler = async (req, res, next) => {
   try {
-    const doctorId = (req as any).userId as string | undefined;
-    if (!doctorId) {
+    const doctorIdStr = (req as any).userId as string | undefined;
+    if (!doctorIdStr) {
       return res.status(401).json({ message: "Unauthorized" });
     }
+
+    // Convert string doctorId to ObjectId
+    const doctorId = new mongoose.Types.ObjectId(doctorIdStr);
 
     // Get the most recent active schedule for this doctor
     const schedule = await DoctorSchedule.findOne({ doctorId })
@@ -66,10 +70,13 @@ export const getSchedule: RequestHandler = async (req, res, next) => {
 
 export const saveSchedule: RequestHandler = async (req, res, next) => {
   try {
-    const doctorId = (req as any).userId as string | undefined;
-    if (!doctorId) {
+    const doctorIdStr = (req as any).userId as string | undefined;
+    if (!doctorIdStr) {
       return res.status(401).json({ message: "Unauthorized" });
     }
+
+    // Convert string doctorId to ObjectId
+    const doctorId = new mongoose.Types.ObjectId(doctorIdStr);
 
     const { location, fromDate, toDate, recursEvery, schedules }: ScheduleRequest = req.body;
 
@@ -180,10 +187,13 @@ export const saveSchedule: RequestHandler = async (req, res, next) => {
 
 export const updateSchedule: RequestHandler = async (req, res, next) => {
   try {
-    const doctorId = (req as any).userId as string | undefined;
-    if (!doctorId) {
+    const doctorIdStr = (req as any).userId as string | undefined;
+    if (!doctorIdStr) {
       return res.status(401).json({ message: "Unauthorized" });
     }
+
+    // Convert string doctorId to ObjectId
+    const doctorId = new mongoose.Types.ObjectId(doctorIdStr);
 
     const updateData: Partial<ScheduleRequest> = req.body;
 
@@ -240,10 +250,13 @@ export const updateSchedule: RequestHandler = async (req, res, next) => {
 
 export const deleteSchedule: RequestHandler = async (req, res, next) => {
   try {
-    const doctorId = (req as any).userId as string | undefined;
-    if (!doctorId) {
+    const doctorIdStr = (req as any).userId as string | undefined;
+    if (!doctorIdStr) {
       return res.status(401).json({ message: "Unauthorized" });
     }
+
+    // Convert string doctorId to ObjectId
+    const doctorId = new mongoose.Types.ObjectId(doctorIdStr);
 
     const schedule = await DoctorSchedule.findOne({ doctorId })
       .sort({ createdAt: -1 })
@@ -263,10 +276,13 @@ export const deleteSchedule: RequestHandler = async (req, res, next) => {
 
 export const getScheduleHistory: RequestHandler = async (req, res, next) => {
   try {
-    const doctorId = (req as any).userId as string | undefined;
-    if (!doctorId) {
+    const doctorIdStr = (req as any).userId as string | undefined;
+    if (!doctorIdStr) {
       return res.status(401).json({ message: "Unauthorized" });
     }
+
+    // Convert string doctorId to ObjectId
+    const doctorId = new mongoose.Types.ObjectId(doctorIdStr);
 
     const limit = Number(req.query.limit) || 10;
     const page = Number(req.query.page) || 1;

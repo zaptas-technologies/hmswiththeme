@@ -2,7 +2,6 @@ import mongoose, { Schema, Document } from "mongoose";
 import { PatientSchema } from "./schemas/clinical";
 
 export interface PatientDoc extends Document {
-  id: string;
   Patient: string;
   Gender?: string;
   Patient_img?: string;

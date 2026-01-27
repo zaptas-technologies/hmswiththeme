@@ -323,8 +323,8 @@ export const createDoctor: RequestHandler = async (req, res, next) => {
         const location = scheduleLocation.trim();
         const recursEvery = scheduleRecursEvery || "1 Week";
         
-        // Use doctor._id as the doctorId for DoctorSchedule
-        const doctorId = doctor._id.toString();
+        // Use doctor._id as ObjectId for DoctorSchedule
+        const doctorId = doctor._id;
         
         await DoctorSchedule.create({
           doctorId,
@@ -366,7 +366,7 @@ export const createDoctor: RequestHandler = async (req, res, next) => {
         await Doctor.findByIdAndDelete(doctor._id);
         // Also delete schedule if it was created
         if (schedules && schedules.length > 0) {
-          await DoctorSchedule.deleteMany({ doctorId: doctor._id.toString() });
+          await DoctorSchedule.deleteMany({ doctorId: doctor._id });
         }
         
         if (userErr.code === 11000) {

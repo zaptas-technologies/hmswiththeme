@@ -12,7 +12,7 @@ export interface DaySchedule {
 }
 
 export interface DoctorScheduleDoc extends Document {
-  doctorId: string;
+  doctorId: mongoose.Types.ObjectId;
   location: string;
   fromDate: Date;
   toDate: Date;
@@ -45,7 +45,7 @@ const DayScheduleSchema = new Schema<DaySchedule>(
 
 const DoctorScheduleSchema = new Schema<DoctorScheduleDoc>(
   {
-    doctorId: { type: String, required: true, index: true },
+    doctorId: { type: Schema.Types.ObjectId, ref: "Doctor", required: true, index: true },
     location: { type: String, required: true },
     fromDate: { type: Date, required: true },
     toDate: { type: Date, required: true },

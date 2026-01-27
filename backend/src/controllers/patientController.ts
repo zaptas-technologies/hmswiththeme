@@ -4,8 +4,6 @@ import { Patient } from "../models/patientModel";
 import { buildAccessFilter } from "../middlewares/authMiddleware";
 
 export interface PatientRequest {
-  _id?: string;
-  id?: string;
   Patient: string;
   Gender?: string;
   Patient_img?: string;
@@ -23,7 +21,11 @@ export interface PatientRequest {
 const formatPatientResponse = (patient: any) => {
   if (!patient) return patient;
   const obj = typeof patient.toObject === "function" ? patient.toObject() : patient;
-  return obj;
+  return {
+    ...obj,
+    _id: obj._id?.toString() || obj._id,
+    id: obj._id?.toString() || obj._id, // For backward compatibility, map _id to id
+  };
 };
 
 const validatePatientData = (
@@ -68,7 +70,7 @@ export const getAllPatients: RequestHandler = async (req, res, next) => {
 
     const [patients, total] = await Promise.all([
       Patient.find(filter)
-        .select("_id id Patient Gender Patient_img Doctor_img Phone Email Doctor Role Address Last_Visit Status createdAt updatedAt")
+        .select("_id Patient Gender Patient_img Doctor_img Phone Email Doctor Role Address Last_Visit Status createdAt updatedAt")
         .sort(sort)
         .skip(skip)
         .limit(limit)
@@ -99,10 +101,16 @@ export const getPatientById: RequestHandler = async (req, res, next) => {
 
     const { id } = req.params;
     const filter = buildAccessFilter(req.user);
-    filter.$or = [{ _id: id }, { id }];
+    
+    // Use _id only (MongoDB ObjectId)
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      filter._id = new mongoose.Types.ObjectId(id);
+    } else {
+      return res.status(400).json({ message: "Invalid patient ID format" });
+    }
 
     const patient = await Patient.findOne(filter)
-      .select("_id id Patient Gender Patient_img Doctor_img Phone Email Doctor Role Address Last_Visit Status createdAt updatedAt")
+      .select("_id Patient Gender Patient_img Doctor_img Phone Email Doctor Role Address Last_Visit Status createdAt updatedAt")
       .lean()
       .exec();
 
@@ -129,14 +137,8 @@ export const createPatient: RequestHandler = async (req, res, next) => {
       return res.status(400).json({ message: validation.error });
     }
 
-    if (!patientData.id) {
-      patientData.id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
-    }
-
-    const existing = await Patient.findOne({ id: patientData.id }).lean().exec();
-    if (existing) {
-      return res.status(409).json({ message: "Patient with this ID already exists" });
-    }
+    // Remove id field if present (we use MongoDB's _id)
+    const { id: _ignoredId, _id: _ignoredMongoId, ...cleanPatientData } = patientData;
 
     const existingByPhone = await Patient.findOne({ Phone: patientData.Phone }).lean().exec();
     if (existingByPhone) {
@@ -144,9 +146,40 @@ export const createPatient: RequestHandler = async (req, res, next) => {
     }
 
     const accessFilter = buildAccessFilter(req.user);
+    
+    // Ensure hospital is ObjectId if provided
+    let hospitalId: mongoose.Types.ObjectId | undefined;
+    
+    if (accessFilter.hospital) {
+      // Hospital from user role (should be string from buildAccessFilter)
+      if (typeof accessFilter.hospital === 'string') {
+        if (mongoose.Types.ObjectId.isValid(accessFilter.hospital)) {
+          hospitalId = new mongoose.Types.ObjectId(accessFilter.hospital);
+        } else {
+          return res.status(400).json({ message: "Invalid hospital ID format from user role" });
+        }
+      } else if (accessFilter.hospital instanceof mongoose.Types.ObjectId) {
+        hospitalId = accessFilter.hospital;
+      }
+    } else if (cleanPatientData.hospital) {
+      // Hospital from request body (could be string or ObjectId)
+      if (typeof cleanPatientData.hospital === 'string') {
+        if (mongoose.Types.ObjectId.isValid(cleanPatientData.hospital)) {
+          hospitalId = new mongoose.Types.ObjectId(cleanPatientData.hospital);
+        } else {
+          return res.status(400).json({ message: "Invalid hospital ID format in request body" });
+        }
+      } else if (cleanPatientData.hospital instanceof mongoose.Types.ObjectId) {
+        hospitalId = cleanPatientData.hospital;
+      }
+    }
+    
+    // Remove hospital from cleanPatientData if it exists (we'll add it separately)
+    const { hospital, ...finalPatientData } = cleanPatientData;
+    
     const patient = await Patient.create({
-      ...patientData,
-      ...accessFilter,
+      ...finalPatientData,
+      ...(hospitalId && { hospital: hospitalId }),
     });
     res.status(201).json(formatPatientResponse(patient));
   } catch (err: any) {
@@ -187,7 +220,13 @@ export const updatePatient: RequestHandler = async (req, res, next) => {
     }
 
     const filter = buildAccessFilter(req.user);
-    filter.$or = [{ _id: id }, { id }];
+    
+    // Use _id only (MongoDB ObjectId)
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      filter._id = new mongoose.Types.ObjectId(id);
+    } else {
+      return res.status(400).json({ message: "Invalid patient ID format" });
+    }
 
     const patient = await Patient.findOne(filter).exec();
 
@@ -238,7 +277,13 @@ export const deletePatient: RequestHandler = async (req, res, next) => {
 
     const { id } = req.params;
     const filter = buildAccessFilter(req.user);
-    filter.$or = [{ _id: id }, { id }];
+    
+    // Use _id only (MongoDB ObjectId)
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      filter._id = new mongoose.Types.ObjectId(id);
+    } else {
+      return res.status(400).json({ message: "Invalid patient ID format" });
+    }
 
     const patient = await Patient.findOneAndDelete(filter).lean().exec();
 
