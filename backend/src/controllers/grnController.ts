@@ -2,6 +2,7 @@ import { RequestHandler } from "express";
 import { GRN, GRNDoc, GRNItem } from "../models/grnModel";
 import { Inventory } from "../models/inventoryModel";
 import mongoose from "mongoose";
+import { buildAccessFilter } from "../middlewares/authMiddleware";
 
 export interface GRNRequest {
   GRN_Number: string;
@@ -124,6 +125,10 @@ const updateInventoryFromGRN = async (items: GRNItem[], hospitalId?: mongoose.Ty
 // GET /api/grn - Get all GRNs
 export const getAllGRN: RequestHandler = async (req, res, next) => {
   try {
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
     const skip = (page - 1) * limit;
@@ -132,24 +137,29 @@ export const getAllGRN: RequestHandler = async (req, res, next) => {
     const search = (req.query.search as string) || "";
     const status = (req.query.status as string) || "";
     const supplier = (req.query.supplier as string) || "";
-    const hospitalId = (req.query.hospitalId as string) || "";
 
-    const filter: Record<string, any> = {};
-    
-    if (hospitalId && mongoose.Types.ObjectId.isValid(hospitalId)) {
-      filter.hospital = new mongoose.Types.ObjectId(hospitalId);
-    }
+    // Use buildAccessFilter to ensure users only see GRNs from their hospital
+    const filter = buildAccessFilter(req.user);
     
     if (status) filter.Status = status;
     if (supplier) filter.Supplier = new RegExp(supplier, "i");
 
     if (search) {
       const rx = new RegExp(search, "i");
-      filter.$or = [
-        { GRN_Number: rx },
-        { Supplier: rx },
-        { Supplier_Invoice: rx },
-      ];
+      const searchConditions = {
+        $or: [
+          { GRN_Number: rx },
+          { Supplier: rx },
+          { Supplier_Invoice: rx },
+        ],
+      };
+      // Combine with existing filter conditions
+      if (filter.$or) {
+        filter.$and = filter.$and || [];
+        filter.$and.push(searchConditions);
+      } else {
+        Object.assign(filter, searchConditions);
+      }
     }
 
     const [grns, total] = await Promise.all([
@@ -174,16 +184,24 @@ export const getAllGRN: RequestHandler = async (req, res, next) => {
 // GET /api/grn/:id - Get GRN by ID
 export const getGRNById: RequestHandler = async (req, res, next) => {
   try {
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
     const { id } = req.params;
 
+    // Use buildAccessFilter to ensure users only see GRNs from their hospital
+    const filter = buildAccessFilter(req.user);
+
     // Use _id or GRN_Number (business identifier)
-    let grn;
     if (mongoose.Types.ObjectId.isValid(id)) {
-      grn = await GRN.findById(id);
+      filter._id = new mongoose.Types.ObjectId(id);
     } else {
       // Try GRN_Number if not a valid ObjectId
-      grn = await GRN.findOne({ GRN_Number: id });
+      filter.GRN_Number = id;
     }
+
+    const grn = await GRN.findOne(filter);
 
     if (!grn) {
       return res.status(404).json({ message: "GRN not found" });
@@ -275,20 +293,28 @@ export const createGRN: RequestHandler = async (req, res, next) => {
 // PATCH /api/grn/:id - Update GRN
 export const updateGRN: RequestHandler = async (req, res, next) => {
   try {
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
     const { id } = req.params;
     const updateData: Partial<GRNRequest> = req.body;
 
     // Don't allow updating id or _id
     const { id: _ignoredId, _id: _ignoredMongoId, ...cleanUpdateData } = updateData;
 
+    // Use buildAccessFilter to ensure users only update GRNs from their hospital
+    const filter = buildAccessFilter(req.user);
+
     // Use _id or GRN_Number (business identifier)
-    let grn;
     if (mongoose.Types.ObjectId.isValid(id)) {
-      grn = await GRN.findById(id);
+      filter._id = new mongoose.Types.ObjectId(id);
     } else {
       // Try GRN_Number if not a valid ObjectId
-      grn = await GRN.findOne({ GRN_Number: id });
+      filter.GRN_Number = id;
     }
+
+    const grn = await GRN.findOne(filter);
 
     if (!grn) {
       return res.status(404).json({ message: "GRN not found" });
@@ -347,16 +373,24 @@ export const updateGRN: RequestHandler = async (req, res, next) => {
 // DELETE /api/grn/:id - Delete GRN
 export const deleteGRN: RequestHandler = async (req, res, next) => {
   try {
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
     const { id } = req.params;
 
+    // Use buildAccessFilter to ensure users only delete GRNs from their hospital
+    const filter = buildAccessFilter(req.user);
+
     // Use _id or GRN_Number (business identifier)
-    let grn;
     if (mongoose.Types.ObjectId.isValid(id)) {
-      grn = await GRN.findByIdAndDelete(id);
+      filter._id = new mongoose.Types.ObjectId(id);
     } else {
       // Try GRN_Number if not a valid ObjectId
-      grn = await GRN.findOneAndDelete({ GRN_Number: id });
+      filter.GRN_Number = id;
     }
+
+    const grn = await GRN.findOneAndDelete(filter);
 
     if (!grn) {
       return res.status(404).json({ message: "GRN not found" });

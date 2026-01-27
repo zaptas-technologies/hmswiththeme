@@ -76,6 +76,10 @@ const updateInventoryStatus = (inventory: InventoryDoc) => {
 // GET /api/inventory - Get all inventory items
 export const getAllInventory: RequestHandler = async (req, res, next) => {
   try {
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
     const skip = (page - 1) * limit;
@@ -84,25 +88,30 @@ export const getAllInventory: RequestHandler = async (req, res, next) => {
     const search = (req.query.search as string) || "";
     const status = (req.query.status as string) || "";
     const category = (req.query.category as string) || "";
-    const hospitalId = (req.query.hospitalId as string) || "";
 
-    const filter: Record<string, any> = {};
-    
-    if (hospitalId && mongoose.Types.ObjectId.isValid(hospitalId)) {
-      filter.hospital = new mongoose.Types.ObjectId(hospitalId);
-    }
+    // Use buildAccessFilter to ensure users only see inventory from their hospital
+    const filter = buildAccessFilter(req.user);
     
     if (status) filter.Status = status;
     if (category) filter.Category = new RegExp(category, "i");
 
     if (search) {
       const rx = new RegExp(search, "i");
-      filter.$or = [
-        { Item_Name: rx },
-        { Item_Code: rx },
-        { Batch_Number: rx },
-        { Manufacturer: rx },
-      ];
+      const searchConditions = {
+        $or: [
+          { Item_Name: rx },
+          { Item_Code: rx },
+          { Batch_Number: rx },
+          { Manufacturer: rx },
+        ],
+      };
+      // Combine with existing filter conditions
+      if (filter.$or) {
+        filter.$and = filter.$and || [];
+        filter.$and.push(searchConditions);
+      } else {
+        Object.assign(filter, searchConditions);
+      }
     }
 
     const [inventory, total] = await Promise.all([
@@ -127,15 +136,23 @@ export const getAllInventory: RequestHandler = async (req, res, next) => {
 // GET /api/inventory/:id - Get inventory item by ID
 export const getInventoryById: RequestHandler = async (req, res, next) => {
   try {
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
     const { id } = req.params;
 
+    // Use buildAccessFilter to ensure users only see inventory from their hospital
+    const filter = buildAccessFilter(req.user);
+
     // Use _id only (MongoDB ObjectId)
-    let inventory;
-    if (mongoose.Types.ObjectId.isValid(id)) {
-      inventory = await Inventory.findById(id);
-    } else {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ message: "Invalid inventory ID format" });
     }
+
+    filter._id = new mongoose.Types.ObjectId(id);
+
+    const inventory = await Inventory.findOne(filter);
 
     if (!inventory) {
       return res.status(404).json({ message: "Inventory item not found" });
@@ -223,6 +240,10 @@ export const createInventory: RequestHandler = async (req, res, next) => {
 // PATCH /api/inventory/:id - Update inventory item
 export const updateInventory: RequestHandler = async (req, res, next) => {
   try {
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
     const { id } = req.params;
     const updateData: Partial<InventoryRequest> = req.body;
 
@@ -234,12 +255,17 @@ export const updateInventory: RequestHandler = async (req, res, next) => {
       cleanUpdateData.Expiry_Date = new Date(cleanUpdateData.Expiry_Date);
     }
 
+    // Use buildAccessFilter to ensure users only update inventory from their hospital
+    const filter = buildAccessFilter(req.user);
+
     // Use _id only (MongoDB ObjectId)
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ message: "Invalid inventory ID format" });
     }
 
-    const inventory = await Inventory.findById(id);
+    filter._id = new mongoose.Types.ObjectId(id);
+
+    const inventory = await Inventory.findOne(filter);
 
     if (!inventory) {
       return res.status(404).json({ message: "Inventory item not found" });
@@ -284,15 +310,23 @@ export const updateInventory: RequestHandler = async (req, res, next) => {
 // DELETE /api/inventory/:id - Delete inventory item
 export const deleteInventory: RequestHandler = async (req, res, next) => {
   try {
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
     const { id } = req.params;
 
+    // Use buildAccessFilter to ensure users only delete inventory from their hospital
+    const filter = buildAccessFilter(req.user);
+
     // Use _id only (MongoDB ObjectId)
-    let inventory;
-    if (mongoose.Types.ObjectId.isValid(id)) {
-      inventory = await Inventory.findByIdAndDelete(id);
-    } else {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ message: "Invalid inventory ID format" });
     }
+
+    filter._id = new mongoose.Types.ObjectId(id);
+
+    const inventory = await Inventory.findOneAndDelete(filter);
 
     if (!inventory) {
       return res.status(404).json({ message: "Inventory item not found" });
