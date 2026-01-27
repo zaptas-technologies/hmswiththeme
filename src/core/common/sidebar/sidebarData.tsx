@@ -284,7 +284,7 @@ const HospitalAdminSidebarData = [
         submenuItems: [
           { label: "Doctors", link: routes.doctors },
           { label: "Add Doctor", link: routes.addDoctors },
-          { label: "Doctor Schedule", link: routes.doctorScheduleClini },
+          // { label: "Doctor Schedule", link: routes.doctorScheduleClini },
         ],
       },
       {
