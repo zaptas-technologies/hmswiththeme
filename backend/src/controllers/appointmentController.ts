@@ -8,8 +8,6 @@ import { Doctor } from "../models/doctorModel";
 import { buildAccessFilter } from "../middlewares/authMiddleware";
 
 export interface AppointmentRequest {
-  _id?: string;
-  id?: string;
   Date_Time: string;
   Patient: string;
   Phone: string;
@@ -29,8 +27,8 @@ const formatAppointmentResponse = (appt: any) => {
   const obj = typeof appt.toObject === "function" ? appt.toObject() : appt;
   
   return {
-    _id: obj._id,
-    id: obj.id,
+    _id: obj._id?.toString() || obj._id,
+    id: obj._id?.toString() || obj._id, // For backward compatibility, map _id to id
     Date_Time: obj.Date_Time,
     Patient: obj.Patient,
     Phone: obj.Phone,
@@ -101,7 +99,7 @@ export const getAllAppointments: RequestHandler = async (req, res, next) => {
 
     const [appts, total] = await Promise.all([
       Appointment.find(filter)
-        .select("_id id Date_Time Patient Phone Patient_Image Doctor Mode Status Fees createdAt updatedAt")
+        .select("_id Date_Time Patient Phone Patient_Image Doctor Mode Status Fees createdAt updatedAt")
         .sort(sort)
         .skip(skip)
         .limit(limit)
@@ -132,10 +130,16 @@ export const getAppointmentById: RequestHandler = async (req, res, next) => {
 
     const { id } = req.params;
     const filter = buildAccessFilter(req.user);
-    filter.$or = [{ _id: id }, { id }];
+    
+    // Use _id only (MongoDB ObjectId)
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      filter._id = new mongoose.Types.ObjectId(id);
+    } else {
+      return res.status(400).json({ message: "Invalid appointment ID format" });
+    }
 
     const appt = await Appointment.findOne(filter)
-      .select("_id id Date_Time Patient Phone Patient_Image Doctor Mode Status Fees createdAt updatedAt")
+      .select("_id Date_Time Patient Phone Patient_Image Doctor Mode Status Fees createdAt updatedAt")
       .lean()
       .exec();
     
@@ -165,19 +169,44 @@ export const createAppointment: RequestHandler = async (req, res, next) => {
       return res.status(400).json({ message: validation.error });
     }
 
-    if (!apptData.id) {
-      apptData.id = Date.now().toString() + Math.random().toString(36).slice(2, 9);
-    }
-
-    const existingById = await Appointment.findOne({ id: apptData.id }).lean().exec();
-    if (existingById) {
-      return res.status(409).json({ message: "Appointment with this ID already exists" });
-    }
+    // Remove id field if present (we use MongoDB's _id)
+    const { id: _ignoredId, _id: _ignoredMongoId, ...cleanApptData } = apptData;
 
     const accessFilter = buildAccessFilter(req.user);
+    
+    // Ensure hospital is ObjectId if provided
+    let hospitalId: mongoose.Types.ObjectId | undefined;
+    
+    if (accessFilter.hospital) {
+      // Hospital from user role (should be string from buildAccessFilter)
+      if (typeof accessFilter.hospital === 'string') {
+        if (mongoose.Types.ObjectId.isValid(accessFilter.hospital)) {
+          hospitalId = new mongoose.Types.ObjectId(accessFilter.hospital);
+        } else {
+          return res.status(400).json({ message: "Invalid hospital ID format from user role" });
+        }
+      } else if (accessFilter.hospital instanceof mongoose.Types.ObjectId) {
+        hospitalId = accessFilter.hospital;
+      }
+    } else if (cleanApptData.hospital) {
+      // Hospital from request body (could be string or ObjectId)
+      if (typeof cleanApptData.hospital === 'string') {
+        if (mongoose.Types.ObjectId.isValid(cleanApptData.hospital)) {
+          hospitalId = new mongoose.Types.ObjectId(cleanApptData.hospital);
+        } else {
+          return res.status(400).json({ message: "Invalid hospital ID format in request body" });
+        }
+      } else if (cleanApptData.hospital instanceof mongoose.Types.ObjectId) {
+        hospitalId = cleanApptData.hospital;
+      }
+    }
+    
+    // Remove hospital from cleanApptData if it exists (we'll add it separately)
+    const { hospital, ...finalApptData } = cleanApptData;
+    
     const appointmentData: any = {
-      ...apptData,
-      ...accessFilter,
+      ...finalApptData,
+      ...(hospitalId && { hospital: hospitalId }),
     };
 
     const created = await Appointment.create(appointmentData);
@@ -297,30 +326,39 @@ export const updateAppointment: RequestHandler = async (req, res, next) => {
     const { id } = req.params;
     const updates: Partial<AppointmentRequest> = req.body;
 
+    // Remove id field if present
+    const { id: _ignoredId, _id: _ignoredMongoId, ...cleanUpdates } = updates;
+
     const validation = validateAppointmentData({
-      Date_Time: updates.Date_Time ?? "x",
-      Patient: updates.Patient ?? "x",
-      Phone: updates.Phone ?? "x",
-      Doctor: updates.Doctor ?? "x",
-      Status: updates.Status ?? "x",
+      Date_Time: cleanUpdates.Date_Time ?? "x",
+      Patient: cleanUpdates.Patient ?? "x",
+      Phone: cleanUpdates.Phone ?? "x",
+      Doctor: cleanUpdates.Doctor ?? "x",
+      Status: cleanUpdates.Status ?? "x",
     } as any);
 
     if (
-      (updates.Date_Time || updates.Patient || updates.Phone || updates.Doctor || updates.Status) &&
+      (cleanUpdates.Date_Time || cleanUpdates.Patient || cleanUpdates.Phone || cleanUpdates.Doctor || cleanUpdates.Status) &&
       !validation.isValid
     ) {
       return res.status(400).json({ message: validation.error });
     }
 
     const filter = buildAccessFilter(req.user);
-    filter.$or = [{ _id: id }, { id }];
+    
+    // Use _id only (MongoDB ObjectId)
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      filter._id = new mongoose.Types.ObjectId(id);
+    } else {
+      return res.status(400).json({ message: "Invalid appointment ID format" });
+    }
 
     const updated = await Appointment.findOneAndUpdate(
       filter,
-      { $set: updates },
+      { $set: cleanUpdates },
       { new: true }
     )
-      .select("_id id Date_Time Patient Phone Patient_Image Doctor Mode Status Fees createdAt updatedAt")
+      .select("_id Date_Time Patient Phone Patient_Image Doctor Mode Status Fees createdAt updatedAt")
       .lean()
       .exec();
 
@@ -345,7 +383,13 @@ export const deleteAppointment: RequestHandler = async (req, res, next) => {
 
     const { id } = req.params;
     const filter = buildAccessFilter(req.user);
-    filter.$or = [{ _id: id }, { id }];
+    
+    // Use _id only (MongoDB ObjectId)
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      filter._id = new mongoose.Types.ObjectId(id);
+    } else {
+      return res.status(400).json({ message: "Invalid appointment ID format" });
+    }
 
     const deleted = await Appointment.findOneAndDelete(filter).lean().exec();
     

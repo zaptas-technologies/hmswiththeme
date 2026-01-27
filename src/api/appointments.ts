@@ -72,10 +72,9 @@ export const fetchAppointmentById = async (id: string): Promise<Appointment> => 
 export const createAppointment = async (
   appointmentData: Partial<Appointment>
 ): Promise<Appointment> => {
-  if (!appointmentData.id) {
-    appointmentData.id = Date.now().toString();
-  }
-  const { data } = await api.post<Appointment>("/appointments", appointmentData);
+  // Remove id field if present - backend uses MongoDB's _id
+  const { id: _ignoredId, ...cleanAppointmentData } = appointmentData;
+  const { data } = await api.post<Appointment>("/appointments", cleanAppointmentData);
   return data;
 };
 

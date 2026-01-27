@@ -2,7 +2,6 @@ import { Schema } from "mongoose";
 
 export const AppointmentSchema = new Schema(
   {
-    id: { type: String, required: true, unique: true },
     Date_Time: { type: String, required: true },
     Patient: { type: String, required: true },
     Phone: { type: String, required: true },
@@ -13,6 +12,10 @@ export const AppointmentSchema = new Schema(
     Mode: { type: String },
     Status: { type: String, required: true },
     Consultation_ID: { type: String, index: true }, // Reference to consultation document
+    Fees: { type: Schema.Types.Mixed },
+    doctorId: { type: String },
+    hospital: { type: Schema.Types.ObjectId, ref: "Hospital", index: true },
+    user: { type: Schema.Types.ObjectId, ref: "User", index: true },
   },
   { timestamps: true, strict: false }
 );

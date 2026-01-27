@@ -2,7 +2,6 @@ import mongoose, { Schema, Document } from "mongoose";
 import { AppointmentSchema } from "./schemas/clinical";
 
 export interface AppointmentDoc extends Document {
-  id: string;
   Date_Time: string;
   Patient: string;
   Phone: string;
