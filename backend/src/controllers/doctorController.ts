@@ -1,7 +1,8 @@
 import { RequestHandler } from "express";
-import { getResourceModel } from "../models/resourceRegistry";
 import mongoose from "mongoose";
+import { Doctor } from "../models/doctorModel";
 import { User } from "../models/userModel";
+import { buildAccessFilter } from "../middlewares/authMiddleware";
 
 export interface DoctorRequest {
   id?: string;
@@ -118,18 +119,28 @@ const validateDoctorData = (data: Partial<DoctorRequest>): { isValid: boolean; e
   return { isValid: true };
 };
 
-// GET /api/doctors - Get all doctors with pagination
 export const getAllDoctors: RequestHandler = async (req, res, next) => {
   try {
-    const Model = getResourceModel("doctors");
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
     const skip = (page - 1) * limit;
     const sort = req.query.sort as string || "-createdAt";
 
+    const filter = buildAccessFilter(req.user);
+
     const [doctors, total] = await Promise.all([
-      Model.find({}).sort(sort).skip(skip).limit(limit).exec(),
-      Model.countDocuments({}),
+      Doctor.find(filter)
+        .select("_id id Name_Designation img role Department Phone Email Fees Status createdAt updatedAt")
+        .sort(sort)
+        .skip(skip)
+        .limit(limit)
+        .lean()
+        .exec(),
+      Doctor.countDocuments(filter),
     ]);
 
     res.json({
@@ -146,20 +157,20 @@ export const getAllDoctors: RequestHandler = async (req, res, next) => {
   }
 };
 
-// GET /api/doctors/:id - Get doctor by ID
 export const getDoctorById: RequestHandler = async (req, res, next) => {
   try {
-    const Model = getResourceModel("doctors");
-    const { id } = req.params;
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
 
-    let doctor;
-    if (mongoose.Types.ObjectId.isValid(id)) {
-      doctor = await Model.findById(id);
-    }
-    
-    if (!doctor) {
-      doctor = await Model.findOne({ id });
-    }
+    const { id } = req.params;
+    const filter = buildAccessFilter(req.user);
+    filter.$or = [{ _id: id }, { id }];
+
+    const doctor = await Doctor.findOne(filter)
+      .select("_id id Name_Designation img role Department Phone Email Fees Status createdAt updatedAt")
+      .lean()
+      .exec();
 
     if (!doctor) {
       return res.status(404).json({ message: "Doctor not found" });
@@ -171,10 +182,12 @@ export const getDoctorById: RequestHandler = async (req, res, next) => {
   }
 };
 
-// POST /api/doctors - Create new doctor
 export const createDoctor: RequestHandler = async (req, res, next) => {
   try {
-    const Model = getResourceModel("doctors");
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
     const doctorData: DoctorRequest = req.body;
 
     // Validate required fields
@@ -194,12 +207,14 @@ export const createDoctor: RequestHandler = async (req, res, next) => {
     // Check if doctor with same email already exists (case-insensitive using regex)
     // Check both Email and email fields since schema might use either
     const emailRegex = new RegExp(`^${normalizedEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
-    const existingByEmail = await Model.findOne({
+    const existingByEmail = await Doctor.findOne({
       $or: [
         { email: emailRegex },
         { Email: emailRegex }
       ]
-    });
+    })
+      .lean()
+      .exec();
     
     if (existingByEmail) {
       return res.status(409).json({ 
@@ -208,7 +223,7 @@ export const createDoctor: RequestHandler = async (req, res, next) => {
       });
     }
 
-    const existingById = await Model.findOne({ id: doctorData.id });
+    const existingById = await Doctor.findOne({ id: doctorData.id }).lean().exec();
     if (existingById) {
       return res.status(409).json({ message: "Doctor with this ID already exists" });
     }
@@ -225,11 +240,12 @@ export const createDoctor: RequestHandler = async (req, res, next) => {
     // Extract password before creating doctor (password is only for User account, not doctor record)
     const { password, email, ...doctorRecordData } = doctorData; // Remove email (lowercase) if present
     
-    // Normalize email in doctor record to ensure consistency - use only Email (uppercase) as per schema
     doctorRecordData.Email = normalizedEmail;
-
-    // Create doctor record (without password, with normalized Email)
-    const doctor = await Model.create(doctorRecordData);
+    const accessFilter = buildAccessFilter(req.user);
+    const doctor = await Doctor.create({
+      ...doctorRecordData,
+      ...accessFilter,
+    });
 
     // Create user account for login if password is provided
     if (password) {
@@ -243,8 +259,7 @@ export const createDoctor: RequestHandler = async (req, res, next) => {
           specialization: doctorData.Department,
         });
       } catch (userErr: any) {
-        // If user creation fails, delete the doctor record to maintain consistency
-        await Model.findByIdAndDelete(doctor._id);
+        await Doctor.findByIdAndDelete(doctor._id);
         
         if (userErr.code === 11000) {
           return res.status(409).json({ message: "User account with this email already exists" });
@@ -255,12 +270,9 @@ export const createDoctor: RequestHandler = async (req, res, next) => {
 
     res.status(201).json(formatDoctorResponse(doctor));
   } catch (err: any) {
-    // Handle MongoDB duplicate key error
     if (err.code === 11000) {
       const field = Object.keys(err.keyPattern)[0];
       const fieldName = field === 'Email' || field === 'email' ? 'email' : field;
-      // eslint-disable-next-line no-console
-      console.error('Duplicate key error:', { field, keyPattern: err.keyPattern, keyValue: err.keyValue });
       return res.status(409).json({ 
         message: `Doctor with this ${fieldName} already exists`,
         field: fieldName,
@@ -281,17 +293,12 @@ export const createDoctor: RequestHandler = async (req, res, next) => {
   }
 };
 
-// PATCH /api/doctors/:id - Update doctor
 export const updateDoctor: RequestHandler = async (req, res, next) => {
-  // Set CORS headers on the actual response
-  const origin = req.headers.origin;
-  res.header("Access-Control-Allow-Origin", origin || "*");
-  res.header("Access-Control-Allow-Credentials", "true");
-  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, x-user-id, Accept, Origin");
-  
   try {
-    const Model = getResourceModel("doctors");
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
     const { id } = req.params;
     const updateData: Partial<DoctorRequest> = req.body;
 
@@ -306,15 +313,10 @@ export const updateDoctor: RequestHandler = async (req, res, next) => {
       }
     }
 
-    // Find doctor by _id or id
-    let doctor;
-    if (mongoose.Types.ObjectId.isValid(id)) {
-      doctor = await Model.findById(id);
-    }
-    
-    if (!doctor) {
-      doctor = await Model.findOne({ id });
-    }
+    const filter = buildAccessFilter(req.user);
+    filter.$or = [{ _id: id }, { id }];
+
+    const doctor = await Doctor.findOne(filter).exec();
 
     if (!doctor) {
       return res.status(404).json({ message: "Doctor not found" });
@@ -323,9 +325,10 @@ export const updateDoctor: RequestHandler = async (req, res, next) => {
     // Save old email before updating (needed for user account lookup)
     const oldEmail = doctor.Email?.toLowerCase();
 
-    // Check for email conflict if email is being updated
     if (updateData.Email && updateData.Email !== doctor.Email) {
-      const existingByEmail = await Model.findOne({ Email: updateData.Email });
+      const existingByEmail = await Doctor.findOne({ Email: updateData.Email })
+        .lean()
+        .exec() as { _id: mongoose.Types.ObjectId } | null;
       if (existingByEmail && existingByEmail._id.toString() !== doctor._id.toString()) {
         return res.status(409).json({ message: "Doctor with this email already exists" });
       }
@@ -421,26 +424,25 @@ export const updateDoctor: RequestHandler = async (req, res, next) => {
   }
 };
 
-// DELETE /api/doctors/:id - Delete doctor
 export const deleteDoctor: RequestHandler = async (req, res, next) => {
   try {
-    const Model = getResourceModel("doctors");
-    const { id } = req.params;
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
 
-    let doctor;
-    if (mongoose.Types.ObjectId.isValid(id)) {
-      doctor = await Model.findByIdAndDelete(id);
-    }
-    
-    if (!doctor) {
-      doctor = await Model.findOneAndDelete({ id });
-    }
+    const { id } = req.params;
+    const filter = buildAccessFilter(req.user);
+    filter.$or = [{ _id: id }, { id }];
+
+    const doctor = await Doctor.findOneAndDelete(filter)
+      .lean()
+      .exec() as { _id: mongoose.Types.ObjectId; id?: string } | null;
 
     if (!doctor) {
       return res.status(404).json({ message: "Doctor not found" });
     }
 
-    res.json({ message: "Doctor deleted successfully", id: doctor._id?.toString() || doctor.id });
+    res.json({ message: "Doctor deleted successfully", id: doctor._id?.toString() || doctor.id || "" });
   } catch (err) {
     next(err);
   }

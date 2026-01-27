@@ -1,11 +1,11 @@
 import { Router } from "express";
 import { getDashboard } from "../controllers/dashboardController";
 import { getAdminDashboard } from "../controllers/adminDashboardController";
-import { requireUserId } from "../middleware/requireUserId";
+import { authMiddleware } from "../middlewares/authMiddleware";
 
 export const buildDashboardRouter = () => {
   const router = Router();
-  router.use(requireUserId);
+  router.use(authMiddleware);
   router.get("/", getDashboard);
   router.get("/admin", getAdminDashboard);
   return router;

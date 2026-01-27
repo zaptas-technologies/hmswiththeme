@@ -201,3 +201,62 @@ export const ConsultationSchema = new Schema(
   { timestamps: true, strict: false }
 );
 
+export const InventorySchema = new Schema(
+  {
+    id: { type: String, required: true, unique: true },
+    Item_Name: { type: String, required: true },
+    Item_Code: { type: String },
+    Category: { type: String },
+    Manufacturer: { type: String },
+    Batch_Number: { type: String },
+    Expiry_Date: { type: Date, required: true },
+    Quantity: { type: Number, required: true, default: 0 },
+    Unit: { type: String, default: "pcs" },
+    Unit_Price: { type: Number, default: 0 },
+    Total_Value: { type: Number, default: 0 },
+    Location: { type: String },
+    Supplier: { type: String },
+    Status: { 
+      type: String, 
+      enum: ["Available", "Low Stock", "Out of Stock", "Expired"], 
+      default: "Available"
+    },
+    Notes: { type: String },
+    hospital: { type: Schema.Types.ObjectId, index: true },
+    user: { type: Schema.Types.ObjectId, index: true },
+  },
+  { timestamps: true, strict: false }
+);
+
+export const GRNSchema = new Schema(
+  {
+    id: { type: String, required: true, unique: true },
+    GRN_Number: { type: String, required: true, unique: true },
+    GRN_Date: { type: Date, required: true, default: Date.now },
+    Supplier: { type: String, required: true },
+    Supplier_Invoice: { type: String },
+    Items: [{
+      inventoryId: { type: String, required: true },
+      Item_Name: { type: String, required: true },
+      Item_Code: { type: String },
+      Batch_Number: { type: String },
+      Expiry_Date: { type: Date, required: true },
+      Quantity: { type: Number, required: true },
+      Unit: { type: String, default: "pcs" },
+      Unit_Price: { type: Number, required: true },
+      Total_Price: { type: Number, required: true },
+    }],
+    Total_Amount: { type: Number, required: true, default: 0 },
+    Status: {
+      type: String,
+      enum: ["Draft", "Received", "Cancelled"],
+      default: "Draft",
+    },
+    Received_By: { type: String },
+    Notes: { type: String },
+    hospital: { type: Schema.Types.ObjectId, index: true },
+    user: { type: Schema.Types.ObjectId, index: true },
+  },
+  { timestamps: true, strict: false }
+);
+

@@ -6,7 +6,7 @@ import {
   updatePrescription,
   deletePrescription,
 } from "../controllers/prescriptionController";
-import { requireUserId } from "../middleware/requireUserId";
+import { authMiddleware } from "../middlewares/authMiddleware";
 
 export const buildPrescriptionRouter = () => {
   const router = Router();
@@ -32,20 +32,11 @@ export const buildPrescriptionRouter = () => {
     return res.sendStatus(204);
   });
 
-  // GET /api/prescriptions - Get all prescriptions (with filtering)
-  router.get("/", getAllPrescriptions);
-
-  // GET /api/prescriptions/:id - Get prescription by ID
-  router.get("/:id", getPrescriptionById);
-
-  // POST /api/prescriptions - Create new prescription (requires authentication)
-  router.post("/", requireUserId, createPrescription);
-
-  // PATCH /api/prescriptions/:id - Update prescription (requires authentication)
-  router.patch("/:id", requireUserId, updatePrescription);
-
-  // DELETE /api/prescriptions/:id - Delete prescription (requires authentication)
-  router.delete("/:id", requireUserId, deletePrescription);
+  router.get("/", authMiddleware, getAllPrescriptions);
+  router.get("/:id", authMiddleware, getPrescriptionById);
+  router.post("/", authMiddleware, createPrescription);
+  router.patch("/:id", authMiddleware, updatePrescription);
+  router.delete("/:id", authMiddleware, deletePrescription);
 
   return router;
 };

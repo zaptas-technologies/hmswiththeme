@@ -1,0 +1,292 @@
+import { RequestHandler } from "express";
+import { Inventory, InventoryDoc } from "../models/inventoryModel";
+import mongoose from "mongoose";
+
+export interface InventoryRequest {
+  _id?: string;
+  id?: string;
+  Item_Name: string;
+  Item_Code?: string;
+  Category?: string;
+  Manufacturer?: string;
+  Batch_Number?: string;
+  Expiry_Date: Date | string;
+  Quantity: number;
+  Unit?: string;
+  Unit_Price?: number;
+  Total_Value?: number;
+  Location?: string;
+  Supplier?: string;
+  Status?: "Available" | "Low Stock" | "Out of Stock" | "Expired";
+  Notes?: string;
+  hospital?: string;
+  user?: string;
+  [key: string]: any;
+}
+
+const formatInventoryResponse = (inventory: any) => {
+  if (!inventory) return inventory;
+  const obj = typeof inventory.toObject === "function" ? inventory.toObject() : inventory;
+  return obj;
+};
+
+const validateInventoryData = (
+  data: Partial<InventoryRequest>
+): { isValid: boolean; error?: string } => {
+  if (!data) return { isValid: false, error: "Missing request body" };
+  if (!data.Item_Name || typeof data.Item_Name !== "string") {
+    return { isValid: false, error: "Item name is required" };
+  }
+  if (!data.Expiry_Date) {
+    return { isValid: false, error: "Expiry date is required" };
+  }
+  if (data.Quantity === undefined || data.Quantity === null || typeof data.Quantity !== "number") {
+    return { isValid: false, error: "Quantity is required and must be a number" };
+  }
+  if (data.Quantity < 0) {
+    return { isValid: false, error: "Quantity cannot be negative" };
+  }
+  return { isValid: true };
+};
+
+// Helper function to update status based on quantity and expiry
+const updateInventoryStatus = (inventory: InventoryDoc) => {
+  const now = new Date();
+  const expiryDate = new Date(inventory.Expiry_Date);
+  
+  if (expiryDate < now) {
+    inventory.Status = "Expired";
+  } else if (inventory.Quantity === 0) {
+    inventory.Status = "Out of Stock";
+  } else if (inventory.Quantity < 10) {
+    inventory.Status = "Low Stock";
+  } else {
+    inventory.Status = "Available";
+  }
+  
+  // Calculate total value
+  if (inventory.Unit_Price && inventory.Quantity) {
+    inventory.Total_Value = inventory.Unit_Price * inventory.Quantity;
+  }
+};
+
+// GET /api/inventory - Get all inventory items
+export const getAllInventory: RequestHandler = async (req, res, next) => {
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const skip = (page - 1) * limit;
+    const sort = (req.query.sort as string) || "-createdAt";
+
+    const search = (req.query.search as string) || "";
+    const status = (req.query.status as string) || "";
+    const category = (req.query.category as string) || "";
+    const hospitalId = (req.query.hospitalId as string) || "";
+
+    const filter: Record<string, any> = {};
+    
+    if (hospitalId && mongoose.Types.ObjectId.isValid(hospitalId)) {
+      filter.hospital = new mongoose.Types.ObjectId(hospitalId);
+    }
+    
+    if (status) filter.Status = status;
+    if (category) filter.Category = new RegExp(category, "i");
+
+    if (search) {
+      const rx = new RegExp(search, "i");
+      filter.$or = [
+        { Item_Name: rx },
+        { Item_Code: rx },
+        { Batch_Number: rx },
+        { Manufacturer: rx },
+      ];
+    }
+
+    const [inventory, total] = await Promise.all([
+      Inventory.find(filter).sort(sort).skip(skip).limit(limit).exec(),
+      Inventory.countDocuments(filter),
+    ]);
+
+    res.json({
+      data: inventory.map(formatInventoryResponse),
+      pagination: {
+        total,
+        page,
+        limit,
+        pages: Math.ceil(total / limit),
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET /api/inventory/:id - Get inventory item by ID
+export const getInventoryById: RequestHandler = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    let inventory;
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      inventory = await Inventory.findById(id);
+    }
+
+    if (!inventory) {
+      inventory = await Inventory.findOne({ $or: [{ _id: id }, { id }] });
+    }
+
+    if (!inventory) {
+      return res.status(404).json({ message: "Inventory item not found" });
+    }
+
+    res.json(formatInventoryResponse(inventory));
+  } catch (err) {
+    next(err);
+  }
+};
+
+// POST /api/inventory - Create new inventory item
+export const createInventory: RequestHandler = async (req, res, next) => {
+  try {
+    const inventoryData: InventoryRequest = req.body;
+
+    // Validate required fields
+    const validation = validateInventoryData(inventoryData);
+    if (!validation.isValid) {
+      return res.status(400).json({ message: validation.error });
+    }
+
+    // Generate ID if not provided
+    if (!inventoryData.id) {
+      inventoryData.id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+    }
+
+    // Check if inventory item with same id already exists
+    const existing = await Inventory.findOne({ id: inventoryData.id });
+    if (existing) {
+      return res.status(409).json({ message: "Inventory item with this ID already exists" });
+    }
+
+    // Convert Expiry_Date to Date if string
+    if (typeof inventoryData.Expiry_Date === "string") {
+      inventoryData.Expiry_Date = new Date(inventoryData.Expiry_Date);
+    }
+
+    // Set hospital and user from request if available
+    if (req.user && (req.user as any).hospitalId) {
+      inventoryData.hospital = (req.user as any).hospitalId;
+    }
+    if (req.user && (req.user as any).id) {
+      inventoryData.user = (req.user as any).id;
+    }
+
+    const inventory = await Inventory.create(inventoryData);
+    
+    // Update status based on quantity and expiry
+    updateInventoryStatus(inventory);
+    await inventory.save();
+
+    res.status(201).json(formatInventoryResponse(inventory));
+  } catch (err: any) {
+    // Handle MongoDB duplicate key error
+    if (err.code === 11000) {
+      const field = Object.keys(err.keyPattern)[0];
+      return res.status(409).json({
+        message: `Inventory item with this ${field} already exists`,
+      });
+    }
+
+    // Handle validation errors
+    if (err.name === "ValidationError") {
+      const errors = Object.values(err.errors).map((e: any) => e.message);
+      return res.status(400).json({
+        message: "Validation error",
+        errors,
+      });
+    }
+
+    next(err);
+  }
+};
+
+// PATCH /api/inventory/:id - Update inventory item
+export const updateInventory: RequestHandler = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const updateData: Partial<InventoryRequest> = req.body;
+
+    // Don't allow updating id or _id
+    const { id: _ignoredId, _id: _ignoredMongoId, ...cleanUpdateData } = updateData;
+
+    // Convert Expiry_Date to Date if string
+    if (cleanUpdateData.Expiry_Date && typeof cleanUpdateData.Expiry_Date === "string") {
+      cleanUpdateData.Expiry_Date = new Date(cleanUpdateData.Expiry_Date);
+    }
+
+    // Find inventory by _id or id
+    let inventory;
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      inventory = await Inventory.findById(id);
+    }
+
+    if (!inventory) {
+      inventory = await Inventory.findOne({ id });
+    }
+
+    if (!inventory) {
+      return res.status(404).json({ message: "Inventory item not found" });
+    }
+
+    // Update inventory
+    Object.assign(inventory, cleanUpdateData);
+    
+    // Update status based on quantity and expiry
+    updateInventoryStatus(inventory);
+    await inventory.save();
+
+    res.json(formatInventoryResponse(inventory));
+  } catch (err: any) {
+    // Handle MongoDB duplicate key error
+    if (err.code === 11000) {
+      const field = Object.keys(err.keyPattern)[0];
+      return res.status(409).json({
+        message: `Inventory item with this ${field} already exists`,
+      });
+    }
+
+    // Handle validation errors
+    if (err.name === "ValidationError") {
+      const errors = Object.values(err.errors).map((e: any) => e.message);
+      return res.status(400).json({
+        message: "Validation error",
+        errors,
+      });
+    }
+
+    next(err);
+  }
+};
+
+// DELETE /api/inventory/:id - Delete inventory item
+export const deleteInventory: RequestHandler = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    let inventory;
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      inventory = await Inventory.findByIdAndDelete(id);
+    }
+
+    if (!inventory) {
+      inventory = await Inventory.findOneAndDelete({ id });
+    }
+
+    if (!inventory) {
+      return res.status(404).json({ message: "Inventory item not found" });
+    }
+
+    res.json({ message: "Inventory item deleted successfully" });
+  } catch (err) {
+    next(err);
+  }
+};

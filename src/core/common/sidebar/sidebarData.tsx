@@ -325,6 +325,28 @@ export const SidebarData = [
         dot: true,
         submenuItems: [],
       },
+      {
+        label: "Inventory",
+        link: routes.inventory,
+        submenu: false,
+        showSubRoute: false,
+        icon: "package",
+        base: "frontent",
+        materialicons: "start",
+        dot: true,
+        submenuItems: [],
+      },
+      {
+        label: "GRN",
+        link: routes.grn,
+        submenu: false,
+        showSubRoute: false,
+        icon: "file-invoice",
+        base: "frontent",
+        materialicons: "start",
+        dot: true,
+        submenuItems: [],
+      },
 
       // {
       //   label: "Assets",

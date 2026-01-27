@@ -1,5 +1,8 @@
-import { getResourceModel } from "../models/resourceRegistry";
 import mongoose from "mongoose";
+import { Doctor } from "../models/doctorModel";
+import { Patient } from "../models/patientModel";
+import { Appointment } from "../models/appointmentModel";
+import { DoctorLeave } from "../models/doctorLeaveModel";
 
 const pctChange = (current: number, prev: number) => {
   if (prev <= 0) return current > 0 ? 100 : 0;
@@ -15,42 +18,34 @@ export const buildAdminDashboardPayload = async () => {
   const fourteenDaysAgo = new Date(now);
   fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
 
-  const DoctorModel = getResourceModel("doctors");
-  const PatientModel = getResourceModel("patients");
-  const AppointmentModel = getResourceModel("appointments");
-
-  // Get counts
   const [doctorsCount, patientsCount, appointmentsCount] = await Promise.all([
-    DoctorModel.countDocuments(),
-    PatientModel.countDocuments(),
-    AppointmentModel.countDocuments(),
+    Doctor.countDocuments(),
+    Patient.countDocuments(),
+    Appointment.countDocuments(),
   ]);
 
-  // Get counts for last 7 days
   const [last7Doctors, prev7Doctors] = await Promise.all([
-    DoctorModel.countDocuments({ createdAt: { $gte: sevenDaysAgo, $lt: now } }),
-    DoctorModel.countDocuments({ createdAt: { $gte: fourteenDaysAgo, $lt: sevenDaysAgo } }),
+    Doctor.countDocuments({ createdAt: { $gte: sevenDaysAgo, $lt: now } }),
+    Doctor.countDocuments({ createdAt: { $gte: fourteenDaysAgo, $lt: sevenDaysAgo } }),
   ]);
 
   const [last7Patients, prev7Patients] = await Promise.all([
-    PatientModel.countDocuments({ createdAt: { $gte: sevenDaysAgo, $lt: now } }),
-    PatientModel.countDocuments({ createdAt: { $gte: fourteenDaysAgo, $lt: sevenDaysAgo } }),
+    Patient.countDocuments({ createdAt: { $gte: sevenDaysAgo, $lt: now } }),
+    Patient.countDocuments({ createdAt: { $gte: fourteenDaysAgo, $lt: sevenDaysAgo } }),
   ]);
 
   const [last7Appointments, prev7Appointments] = await Promise.all([
-    AppointmentModel.countDocuments({ Date_Time: { $gte: sevenDaysAgo.toISOString(), $lt: now.toISOString() } }),
-    AppointmentModel.countDocuments({ Date_Time: { $gte: fourteenDaysAgo.toISOString(), $lt: sevenDaysAgo.toISOString() } }),
+    Appointment.countDocuments({ Date_Time: { $gte: sevenDaysAgo.toISOString(), $lt: now.toISOString() } }),
+    Appointment.countDocuments({ Date_Time: { $gte: fourteenDaysAgo.toISOString(), $lt: sevenDaysAgo.toISOString() } }),
   ]);
 
-  // Calculate revenue (assuming appointments have fees)
-  const revenueAgg = await AppointmentModel.aggregate([
+  const revenueAgg = await Appointment.aggregate([
     { $match: { Status: { $in: ["Confirmed", "Checked Out", "Completed"] } } },
     { $group: { _id: null, total: { $sum: { $ifNull: [{ $toDouble: "$Fees" }, 0] } } } },
   ]);
   const revenue = revenueAgg[0]?.total || 0;
 
-  // Appointment statistics
-  const appointmentStats = await AppointmentModel.aggregate([
+  const appointmentStats = await Appointment.aggregate([
     {
       $group: {
         _id: "$Status",
@@ -69,8 +64,7 @@ export const buildAdminDashboardPayload = async () => {
   const reschedule = statsMap.get("Reschedule") || 0;
   const completed = statsMap.get("Checked Out") || statsMap.get("Completed") || statsMap.get("Confirmed") || 0;
 
-  // Popular Doctors (by appointment count)
-  const popularDoctors = await AppointmentModel.aggregate([
+  const popularDoctors = await Appointment.aggregate([
     { $group: { _id: "$Doctor", count: { $sum: 1 } } },
     { $sort: { count: -1 } },
     { $limit: 3 },
@@ -93,22 +87,19 @@ export const buildAdminDashboardPayload = async () => {
     },
   ]);
 
-  // Recent Appointments (for calendar)
-  const recentAppointments = await AppointmentModel.find()
+  const recentAppointments = await Appointment.find()
     .sort({ Date_Time: 1 })
     .limit(10)
     .lean();
 
-  // Top 3 Departments
-  const topDepartments = await AppointmentModel.aggregate([
+  const topDepartments = await Appointment.aggregate([
     { $match: { Department: { $exists: true, $ne: "" } } },
     { $group: { _id: "$Department", count: { $sum: 1 } } },
     { $sort: { count: -1 } },
     { $limit: 3 },
   ]);
 
-  // Doctors Schedule Stats
-  const scheduleStats = await DoctorModel.aggregate([
+  const scheduleStats = await Doctor.aggregate([
     {
       $group: {
         _id: "$Status",
@@ -120,25 +111,21 @@ export const buildAdminDashboardPayload = async () => {
   const availableDoctors = scheduleStats.find((s: any) => s._id === "Available")?.count || 0;
   const unavailableDoctors = scheduleStats.find((s: any) => s._id === "Unavailable")?.count || 0;
 
-  // Get doctors on leave (assuming there's a leave model or field)
-  const DoctorLeaveModel = getResourceModel("doctorleaves");
-  const leaveCount = await DoctorLeaveModel.countDocuments({
+  const leaveCount = await DoctorLeave.countDocuments({
     $or: [
       { Status: "Approved" },
       { startDate: { $lte: now }, endDate: { $gte: now } },
     ],
   });
 
-  // Get available doctors for schedule section (limit to 4)
-  const scheduledDoctors = await DoctorModel.find({
+  const scheduledDoctors = await Doctor.find({
     Status: "Available",
   })
     .select("Name_Designation role Department img")
     .limit(4)
     .lean();
 
-  // Income By Treatment (Department)
-  const incomeByTreatment = await AppointmentModel.aggregate([
+  const incomeByTreatment = await Appointment.aggregate([
     { $match: { Department: { $exists: true, $ne: "" }, Status: { $in: ["Confirmed", "Checked Out", "Completed"] } } },
     {
       $group: {
@@ -151,8 +138,7 @@ export const buildAdminDashboardPayload = async () => {
     { $limit: 5 },
   ]);
 
-  // Top 5 Patients (by appointment count)
-  const topPatients = await AppointmentModel.aggregate([
+  const topPatients = await Appointment.aggregate([
     { $group: { _id: "$Patient", count: { $sum: 1 }, totalPaid: { $sum: { $ifNull: [{ $toDouble: "$Fees" }, 0] } } } },
     { $sort: { count: -1 } },
     { $limit: 5 },
@@ -176,8 +162,7 @@ export const buildAdminDashboardPayload = async () => {
     },
   ]);
 
-  // Recent Transactions (from appointments with fees)
-  const recentTransactions = await AppointmentModel.find({
+  const recentTransactions = await Appointment.find({
     Fees: { $exists: true, $ne: null },
     Status: { $in: ["Confirmed", "Checked Out", "Completed"] },
   })
@@ -185,18 +170,19 @@ export const buildAdminDashboardPayload = async () => {
     .limit(5)
     .lean();
 
-  // Leave Requests
-  const leaveRequests = await DoctorLeaveModel.find({
+  const leaveRequests = await DoctorLeave.find({
     Status: { $in: ["Pending", "Requested"] },
   })
     .sort({ createdAt: -1 })
     .limit(5)
     .lean();
 
-  // Format leave requests with doctor info
   const formattedLeaveRequests = await Promise.all(
     leaveRequests.map(async (leave: any) => {
-      const doctor = await DoctorModel.findOne({ _id: leave.doctorId }).lean() as any;
+      const doctor = await Doctor.findOne({ _id: leave.doctorId })
+        .select("Name_Designation img")
+        .lean()
+        .exec() as { Name_Designation?: string; img?: string } | null;
       return {
         id: String(leave._id),
         doctorName: doctor?.Name_Designation || "Unknown Doctor",
@@ -252,17 +238,16 @@ export const buildAdminDashboardPayload = async () => {
     }
   };
 
-  const doctorsSparkline = await generateSparklineData(DoctorModel, "createdAt");
-  const patientsSparkline = await generateSparklineData(PatientModel, "createdAt");
-  const appointmentsSparkline = await generateSparklineData(AppointmentModel, "Date_Time");
+  const doctorsSparkline = await generateSparklineData(Doctor, "createdAt");
+  const patientsSparkline = await generateSparklineData(Patient, "createdAt");
+  const appointmentsSparkline = await generateSparklineData(Appointment, "Date_Time");
 
   // Monthly appointment trend for chart
   const year = now.getFullYear();
   const yearStart = new Date(year, 0, 1);
   const yearEnd = new Date(year + 1, 0, 1);
   
-  // Since Date_Time is stored as string, we'll process in memory
-  const allAppointmentsForYear = await AppointmentModel.find({}).lean();
+  const allAppointmentsForYear = await Appointment.find({}).lean();
   const totalByMonth = Array(12).fill(0);
   const completedByMonth = Array(12).fill(0);
   

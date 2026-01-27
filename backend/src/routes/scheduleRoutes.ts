@@ -1,13 +1,12 @@
 import { Router } from "express";
 import { getSchedule, saveSchedule, updateSchedule, deleteSchedule, getScheduleHistory } from "../controllers/scheduleController";
-import { requireUserId } from "../middleware/requireUserId";
+import { authMiddleware } from "../middlewares/authMiddleware";
 import { validateScheduleRequest } from "../middleware/validateSchedule";
 
 export const buildScheduleRouter = () => {
   const router = Router();
   
-  // All routes require authentication
-  router.use(requireUserId);
+  router.use(authMiddleware);
   
   // GET /api/schedule - Get current schedule
   router.get("/", getSchedule);

@@ -68,6 +68,10 @@ import PatientDetails from "../components/pages/clinic-modules/patient-details/p
 import PatientsGrid from "../components/pages/clinic-modules/patients-grid/patientsGrid";
 import Patients from "../components/pages/clinic-modules/patients/patients";
 import Services from "../components/pages/clinic-modules/services/services";
+import InventoryList from "../components/pages/clinic-modules/inventory/inventory";
+import AddInventory from "../components/pages/clinic-modules/inventory/add-inventory";
+import GRNList from "../components/pages/clinic-modules/grn/grn";
+import AddGRN from "../components/pages/clinic-modules/grn/add-grn";
 import Specializations from "../components/pages/clinic-modules/specializations/specializations";
 import AddBlog from "../components/pages/content-modules/add-blog/addBlog";
 import AddPages from "../components/pages/content-modules/add-page/addPages";
@@ -1335,6 +1339,36 @@ export const publicRoutes = [
   {
     path: routes.specializations,
     element: <Specializations />,
+    route: Route,
+  },
+  {
+    path: routes.inventory,
+    element: <InventoryList />,
+    route: Route,
+  },
+  {
+    path: routes.addInventory,
+    element: <AddInventory />,
+    route: Route,
+  },
+  {
+    path: routes.editInventory,
+    element: <AddInventory />,
+    route: Route,
+  },
+  {
+    path: routes.grn,
+    element: <GRNList />,
+    route: Route,
+  },
+  {
+    path: routes.addGRN,
+    element: <AddGRN />,
+    route: Route,
+  },
+  {
+    path: routes.editGRN,
+    element: <AddGRN />,
     route: Route,
   },
 

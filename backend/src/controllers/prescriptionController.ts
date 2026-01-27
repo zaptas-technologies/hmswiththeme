@@ -1,6 +1,8 @@
 import { RequestHandler } from "express";
-import { getResourceModel } from "../models/resourceRegistry";
 import mongoose from "mongoose";
+import { Prescription } from "../models/prescriptionModel";
+import { Consultation } from "../models/consultationModel";
+import { buildAccessFilter } from "../middlewares/authMiddleware";
 
 export interface PrescriptionRequest {
   _id?: string;
@@ -66,14 +68,13 @@ const validatePrescriptionData = (
   return { isValid: true };
 };
 
-// GET /api/prescriptions - Get all prescriptions with filtering
 export const getAllPrescriptions: RequestHandler = async (req, res, next) => {
   try {
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
     const dbName = mongoose.connection.db?.databaseName || "unknown";
-    // eslint-disable-next-line no-console
-    console.log(`[Prescription Controller] Database: ${dbName} - Fetching prescriptions`);
-    
-    const Model = getResourceModel("doctorprescriptions");
     const includeConsultations =
       String(req.query.includeConsultations ?? "").toLowerCase() === "true" ||
       String(req.query.includeConsultations ?? "") === "1";
@@ -89,19 +90,7 @@ export const getAllPrescriptions: RequestHandler = async (req, res, next) => {
     const Patient = (req.query.patient as string) || "";
     const date = (req.query.date as string) || "";
 
-    // eslint-disable-next-line no-console
-    console.log(`[Prescription Controller] Database: ${dbName} - Query params:`, {
-      page,
-      limit,
-      sort,
-      search,
-      Status,
-      Doctor,
-      Patient,
-      date,
-    });
-
-    const filter: Record<string, any> = {};
+    const filter = buildAccessFilter(req.user);
     const andConditions: any[] = [];
     
     if (Status) filter.Status = Status;
@@ -138,20 +127,10 @@ export const getAllPrescriptions: RequestHandler = async (req, res, next) => {
         }
       });
       
-      // Match either full name, base name, or partial (case-insensitive)
       andConditions.push({
         $or: doctorRegexPatterns.map(pattern => ({
           Doctor: { $regex: pattern, $options: "i" }
         }))
-      });
-      
-      // eslint-disable-next-line no-console
-      console.log(`[Prescription Controller] Database: ${dbName} - Doctor filter:`, {
-        original: Doctor,
-        decoded: decodedDoctor,
-        baseName: baseDoctorName,
-        words: doctorWords,
-        patterns: doctorRegexPatterns,
       });
     }
     
@@ -190,33 +169,9 @@ export const getAllPrescriptions: RequestHandler = async (req, res, next) => {
       }
     }
 
-    // eslint-disable-next-line no-console
-    console.log(`[Prescription Controller] Database: ${dbName} - Filter object:`, JSON.stringify(filter, null, 2));
+    const totalAllPrescriptions = await Prescription.countDocuments(filter);
 
-    // First, let's check total count without filter to see if there are any prescriptions
-    const totalWithoutFilter = await Model.countDocuments({});
-    // eslint-disable-next-line no-console
-    console.log(`[Prescription Controller] Database: ${dbName} - Total prescriptions in DB: ${totalWithoutFilter}`);
-
-    // If doctor filter is applied, also check what doctor names exist
-    if (Doctor) {
-      const samplePrescriptions = await Model.find({}).limit(10).select("Doctor").lean().exec();
-      const uniqueDoctors = [...new Set(samplePrescriptions.map((p: any) => p.Doctor).filter(Boolean))];
-      // eslint-disable-next-line no-console
-      console.log(`[Prescription Controller] Database: ${dbName} - Sample doctor names in DB:`, uniqueDoctors);
-      // eslint-disable-next-line no-console
-      console.log(`[Prescription Controller] Database: ${dbName} - Searching for doctor:`, Doctor);
-    }
-    
-    // Also log total count without any filters for debugging
-    const totalAllPrescriptions = await Model.countDocuments({});
-    // eslint-disable-next-line no-console
-    console.log(`[Prescription Controller] Database: ${dbName} - Total prescriptions in collection: ${totalAllPrescriptions}`);
-
-    // If there are no prescriptions yet, optionally derive "prescription-like" rows
-    // from completed consultations (unwind Medications).
     if (includeConsultations && totalAllPrescriptions === 0) {
-      const ConsultationModel = getResourceModel("consultations");
 
       // Sort parsing (supports "createdAt", "-createdAt", etc.)
       const sortField = String(sort || "-createdAt").startsWith("-")
@@ -226,7 +181,7 @@ export const getAllPrescriptions: RequestHandler = async (req, res, next) => {
 
       // For consultations we treat "createdAt" as consultation.createdAt
       // (and expose it similarly on derived rows).
-      const consultationMatch: Record<string, any> = {};
+      const consultationMatch = buildAccessFilter(req.user);
       const consultationAnd: any[] = [];
 
       // Doctor filter (reuse same flexible patterns but match on consultations.Doctor)
@@ -400,17 +355,11 @@ export const getAllPrescriptions: RequestHandler = async (req, res, next) => {
       const countPipeline = [...consultationPipelineBase, { $count: "total" }];
 
       const [derivedRows, countRows] = await Promise.all([
-        (ConsultationModel as any).aggregate(dataPipeline).exec(),
-        (ConsultationModel as any).aggregate(countPipeline).exec(),
+        Consultation.aggregate(dataPipeline).exec(),
+        Consultation.aggregate(countPipeline).exec(),
       ]);
 
       const derivedTotal = countRows?.[0]?.total ?? 0;
-
-      // eslint-disable-next-line no-console
-      console.log(
-        `[Prescription Controller] Database: ${dbName} - Derived from consultations:`,
-        { found: derivedRows.length, total: derivedTotal }
-      );
 
       return res.json({
         data: derivedRows.map(formatPrescriptionResponse),
@@ -423,30 +372,16 @@ export const getAllPrescriptions: RequestHandler = async (req, res, next) => {
       });
     }
 
-    // Use select to only fetch necessary fields from database
     const [prescriptions, total] = await Promise.all([
-      Model.find(filter)
+      Prescription.find(filter)
         .select("_id id Prescription_ID Date Prescribed_On Patient Patient_Image Doctor Medicine Status Dosage Frequency Duration Appointment_ID appointmentId Amount createdAt updatedAt")
         .sort(sort)
         .skip(skip)
         .limit(limit)
         .lean()
         .exec(),
-      Model.countDocuments(filter),
+      Prescription.countDocuments(filter),
     ]);
-
-    // eslint-disable-next-line no-console
-    console.log(`[Prescription Controller] Database: ${dbName} - Query results:`, {
-      found: prescriptions.length,
-      total,
-      filterApplied: Object.keys(filter).length > 0,
-      samplePrescriptions: prescriptions.slice(0, 3).map((p: any) => ({
-        id: p.id || p._id,
-        Doctor: p.Doctor,
-        Patient: p.Patient,
-        Medicine: p.Medicine,
-      })),
-    });
 
     res.json({
       data: prescriptions.map(formatPrescriptionResponse),
@@ -462,15 +397,20 @@ export const getAllPrescriptions: RequestHandler = async (req, res, next) => {
   }
 };
 
-// GET /api/prescriptions/:id - Get prescription by ID
 export const getPrescriptionById: RequestHandler = async (req, res, next) => {
   try {
-    const Model = getResourceModel("doctorprescriptions");
-    const { id } = req.params;
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
 
-    const prescription = await Model.findOne({
-      $or: [{ _id: id }, { id }, { Prescription_ID: id }],
-    }).exec();
+    const { id } = req.params;
+    const filter = buildAccessFilter(req.user);
+    filter.$or = [{ _id: id }, { id }, { Prescription_ID: id }];
+
+    const prescription = await Prescription.findOne(filter)
+      .select("_id id Prescription_ID Date Prescribed_On Patient Patient_Image Doctor Medicine Status Dosage Frequency Duration Appointment_ID appointmentId Amount createdAt updatedAt")
+      .lean()
+      .exec();
     
     if (!prescription) {
       return res.status(404).json({ message: "Prescription not found" });
@@ -485,10 +425,12 @@ export const getPrescriptionById: RequestHandler = async (req, res, next) => {
   }
 };
 
-// POST /api/prescriptions - Create new prescription
 export const createPrescription: RequestHandler = async (req, res, next) => {
   try {
-    const Model = getResourceModel("doctorprescriptions");
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
     const prescData: PrescriptionRequest = req.body;
 
     const validation = validatePrescriptionData(prescData);
@@ -496,12 +438,10 @@ export const createPrescription: RequestHandler = async (req, res, next) => {
       return res.status(400).json({ message: validation.error });
     }
 
-    // Generate ID if not provided
     if (!prescData.id && !prescData.Prescription_ID) {
       prescData.Prescription_ID = `#PRE${Date.now().toString().slice(-4)}`;
     }
 
-    // Set date if not provided
     if (!prescData.Date && !prescData.Prescribed_On) {
       const today = new Date().toISOString().split("T")[0];
       prescData.Date = today;
@@ -512,15 +452,18 @@ export const createPrescription: RequestHandler = async (req, res, next) => {
       prescData.Date = prescData.Prescribed_On;
     }
 
-    // Check for duplicate
     if (prescData.id) {
-      const existing = await Model.findOne({ id: prescData.id }).exec();
+      const existing = await Prescription.findOne({ id: prescData.id }).lean().exec();
       if (existing) {
         return res.status(409).json({ message: "Prescription with this ID already exists" });
       }
     }
 
-    const created = await Model.create(prescData);
+    const accessFilter = buildAccessFilter(req.user);
+    const created = await Prescription.create({
+      ...prescData,
+      ...accessFilter,
+    });
     res.status(201).json(formatPrescriptionResponse(created));
   } catch (err: any) {
     if (err?.name === "ValidationError") {
@@ -533,21 +476,22 @@ export const createPrescription: RequestHandler = async (req, res, next) => {
   }
 };
 
-// PATCH /api/prescriptions/:id - Update prescription
 export const updatePrescription: RequestHandler = async (req, res, next) => {
   try {
-    const Model = getResourceModel("doctorprescriptions");
-    const { id } = req.params;
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
 
-    const prescription = await Model.findOne({
-      $or: [{ _id: id }, { id }, { Prescription_ID: id }],
-    }).exec();
+    const { id } = req.params;
+    const filter = buildAccessFilter(req.user);
+    filter.$or = [{ _id: id }, { id }, { Prescription_ID: id }];
+
+    const prescription = await Prescription.findOne(filter).exec();
 
     if (!prescription) {
       return res.status(404).json({ message: "Prescription not found" });
     }
 
-    // Don't allow updating id, _id, or Prescription_ID fields
     const { id: _ignoredId, _id: _ignoredMongoId, Prescription_ID: _ignoredPrescId, ...updateData } = req.body;
     
     Object.assign(prescription, updateData);
@@ -565,21 +509,21 @@ export const updatePrescription: RequestHandler = async (req, res, next) => {
   }
 };
 
-// DELETE /api/prescriptions/:id - Delete prescription
 export const deletePrescription: RequestHandler = async (req, res, next) => {
   try {
-    const Model = getResourceModel("doctorprescriptions");
-    const { id } = req.params;
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
 
-    const prescription = await Model.findOne({
-      $or: [{ _id: id }, { id }, { Prescription_ID: id }],
-    }).exec();
+    const { id } = req.params;
+    const filter = buildAccessFilter(req.user);
+    filter.$or = [{ _id: id }, { id }, { Prescription_ID: id }];
+
+    const prescription = await Prescription.findOneAndDelete(filter).lean().exec();
 
     if (!prescription) {
       return res.status(404).json({ message: "Prescription not found" });
     }
-
-    await prescription.deleteOne();
     res.status(204).send();
   } catch (err: any) {
     if (err?.name === "CastError") {

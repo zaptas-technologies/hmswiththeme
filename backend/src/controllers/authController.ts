@@ -1,6 +1,6 @@
 import { RequestHandler } from "express";
 import { User, type UserRole } from "../models/userModel";
-import { Doctor } from "../models/doctorModel"; // Keep for backward compatibility
+import { Doctor } from "../models/doctorModel";
 
 export interface LoginRequest {
   email: string;
@@ -42,29 +42,7 @@ export const login: RequestHandler = async (req, res, next) => {
       return res.status(400).json({ message: "Email and password are required" });
     }
 
-    // Try User model first, fallback to Doctor model for backward compatibility
-    let user = await User.findOne({ email: email.toLowerCase() }).select("+password");
-    let isLegacyDoctor = false;
-
-    if (!user) {
-      // Fallback to Doctor model for backward compatibility
-      const doctor = await Doctor.findOne({ email: email.toLowerCase() }).select("+password");
-      if (doctor) {
-        isLegacyDoctor = true;
-        // Convert doctor to user format
-        user = {
-          _id: doctor._id,
-          email: doctor.email,
-          password: doctor.password,
-          name: doctor.name,
-          phone: doctor.phone,
-          specialization: doctor.specialization,
-          avatar: doctor.avatar,
-          role: "doctor" as UserRole,
-          comparePassword: doctor.comparePassword.bind(doctor),
-        } as any;
-      }
-    }
+    const user = await User.findOne({ email: email.toLowerCase() }).select("+password");
 
     if (!user) {
       return res.status(401).json({ message: "Invalid email or password" });
@@ -111,31 +89,14 @@ export const login: RequestHandler = async (req, res, next) => {
 
 export const getCurrentUser: RequestHandler = async (req, res, next) => {
   try {
-    const userId = (req as any).userId as string | undefined;
-    if (!userId) {
+    if (!req.user) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    // Try User model first, fallback to Doctor model for backward compatibility
-    let user = await User.findById(userId);
-    let isLegacyDoctor = false;
-
-    if (!user) {
-      const doctor = await Doctor.findById(userId);
-      if (doctor) {
-        isLegacyDoctor = true;
-        // Convert doctor to user format
-        user = {
-          _id: doctor._id,
-          email: doctor.email,
-          name: doctor.name,
-          phone: doctor.phone,
-          specialization: doctor.specialization,
-          avatar: doctor.avatar,
-          role: "doctor" as UserRole,
-        } as any;
-      }
-    }
+    const user = await User.findById(req.user.userId)
+      .select("_id email name phone specialization avatar role hospitalId")
+      .lean()
+      .exec();
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
@@ -149,11 +110,11 @@ export const getCurrentUser: RequestHandler = async (req, res, next) => {
       specialization: user.specialization,
       avatar: user.avatar,
       role: user.role,
+      hospitalId: user.hospitalId?.toString(),
     };
 
     res.json({
       user: userResponse,
-      // Include doctor field for backward compatibility if it's a doctor
       ...(user.role === "doctor" ? {
         doctor: {
           id: userResponse.id,
@@ -178,15 +139,8 @@ export const register: RequestHandler = async (req, res, next) => {
       return res.status(400).json({ message: "Email, password, and name are required" });
     }
 
-    // Check if user already exists in User model
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    const existingUser = await User.findOne({ email: email.toLowerCase() }).lean().exec();
     if (existingUser) {
-      return res.status(409).json({ message: "Email already registered" });
-    }
-
-    // Check if user exists in Doctor model (backward compatibility)
-    const existingDoctor = await Doctor.findOne({ email: email.toLowerCase() });
-    if (existingDoctor) {
       return res.status(409).json({ message: "Email already registered" });
     }
 

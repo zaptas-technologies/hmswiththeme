@@ -6,15 +6,15 @@ import {
   updateAppointment,
   deleteAppointment,
 } from "../controllers/appointmentController";
-import { requireUserId } from "../middleware/requireUserId";
+import { authMiddleware } from "../middlewares/authMiddleware";
  
 export const buildAppointmentRouter = () => {
   const router = Router();
-  router.get("/", getAllAppointments);
-  router.get("/:id", getAppointmentById);
-  router.post("/", requireUserId, createAppointment);
-  router.patch("/:id", requireUserId, updateAppointment);
-  router.delete("/:id", requireUserId, deleteAppointment);
+  router.get("/", authMiddleware, getAllAppointments);
+  router.get("/:id", authMiddleware, getAppointmentById);
+  router.post("/", authMiddleware, createAppointment);
+  router.patch("/:id", authMiddleware, updateAppointment);
+  router.delete("/:id", authMiddleware, deleteAppointment);
   return router;
 };
 

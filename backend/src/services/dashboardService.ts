@@ -1,8 +1,9 @@
 import mongoose from "mongoose";
- import { DashboardAppointment } from "../models/dashboardAppointmentModel";
+import { DashboardAppointment } from "../models/dashboardAppointmentModel";
 import { DashboardPatient } from "../models/dashboardPatientModel";
 import { DashboardAvailability } from "../models/dashboardAvailabilityModel";
-import { getResourceModel } from "../models/resourceRegistry";
+import { Appointment } from "../models/appointmentModel";
+import { Doctor } from "../models/doctorModel";
 import { User } from "../models/userModel";
 
 const pctChange = (current: number, prev: number) => {
@@ -10,7 +11,6 @@ const pctChange = (current: number, prev: number) => {
   return Math.round(((current - prev) / prev) * 100);
 };
 
-// const DashboardAppointment = getResourceModel("appointments");
 const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 
 const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -22,29 +22,28 @@ export const buildDashboardPayload = async (doctorId: string) => {
   const fourteenDaysAgo = new Date(now);
   fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
 
-  // Find User to get email, then find Doctor to get Name_Designation
-  const user = await User.findById(doctorId);
+  const user = await User.findById(doctorId).select("email").lean().exec();
   let doctorName = "";
   if (user?.email) {
-    const DoctorModel = getResourceModel("doctors");
-    const doctor = await DoctorModel.findOne({
+    const doctor = await Doctor.findOne({
       $or: [
         { Email: new RegExp(`^${user.email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
         { email: new RegExp(`^${user.email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
       ],
-    }).exec();
+    })
+      .select("Name_Designation")
+      .lean()
+      .exec() as { Name_Designation?: string } | null;
     if (doctor) {
       doctorName = doctor.Name_Designation || "";
     }
   }
 
-  // Use regular appointments collection instead of DashboardAppointment
-  const AppointmentModel = getResourceModel("appointments");
   const doctorFilter = doctorName ? { Doctor: doctorName } : {};
 
   const [availabilityDocs, allAppointments] = await Promise.all([
     DashboardAvailability.find({ doctorId }).sort({ day: 1 }).lean(),
-    AppointmentModel.find(doctorFilter).lean(),
+    Appointment.find(doctorFilter).lean(),
   ]);
 
   // Calculate counts from regular appointments
@@ -324,7 +323,7 @@ export const buildDashboardPayload = async (doctorId: string) => {
     },
     heroCards,
     upcoming,
-    availability: availabilityDocs.map((a) => ({ day: a.day, window: a.window })),
+    availability: availabilityDocs.map((a: any) => ({ day: a.day, window: a.window })),
     appointmentTrend: { categories: monthLabels, total: totalByMonth, completed: completedByMonth },
     tiles,
     appointmentStats,

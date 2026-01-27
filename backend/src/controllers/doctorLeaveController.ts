@@ -1,6 +1,7 @@
 import { RequestHandler } from "express";
-import { getResourceModel } from "../models/resourceRegistry";
 import mongoose from "mongoose";
+import { DoctorLeave } from "../models/doctorLeaveModel";
+import { buildAccessFilter } from "../middlewares/authMiddleware";
 
 export interface DoctorLeaveRequest {
   _id?: string;
@@ -71,10 +72,11 @@ const calculateLeaveDays = (fromDate: Date | string, toDate: Date | string): { d
   return { days, dayString, dateString };
 };
 
-// GET /api/doctor-leaves
 export const getAllDoctorLeaves: RequestHandler = async (req, res, next) => {
   try {
-    const Model = getResourceModel("doctorleaves");
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
 
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
@@ -90,7 +92,7 @@ export const getAllDoctorLeaves: RequestHandler = async (req, res, next) => {
     const dateFrom = (req.query.dateFrom as string) || "";
     const dateTo = (req.query.dateTo as string) || "";
 
-    const filter: Record<string, any> = {};
+    const filter = buildAccessFilter(req.user);
     if (status) filter.Status = status;
     if (doctor) filter.Doctor = new RegExp(doctor, "i");
     if (leaveType) filter.Leave_Type = new RegExp(leaveType, "i");
@@ -128,8 +130,14 @@ export const getAllDoctorLeaves: RequestHandler = async (req, res, next) => {
     }
 
     const [leaves, total] = await Promise.all([
-      Model.find(filter).sort(sort).skip(skip).limit(limit).exec(),
-      Model.countDocuments(filter),
+      DoctorLeave.find(filter)
+        .select("_id id Doctor Doctor_Id Date From_Date To_Date Leave_Type Day No_Of_Days Applied_On Applied_On_Date Status Reason Department Designation createdAt updatedAt")
+        .sort(sort)
+        .skip(skip)
+        .limit(limit)
+        .lean()
+        .exec(),
+      DoctorLeave.countDocuments(filter),
     ]);
 
     res.json({
@@ -146,13 +154,20 @@ export const getAllDoctorLeaves: RequestHandler = async (req, res, next) => {
   }
 };
 
-// GET /api/doctor-leaves/:id
 export const getDoctorLeaveById: RequestHandler = async (req, res, next) => {
   try {
-    const Model = getResourceModel("doctorleaves");
-    const { id } = req.params;
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
 
-    const leave = await Model.findOne({ $or: [{ _id: id }, { id }] }).exec();
+    const { id } = req.params;
+    const filter = buildAccessFilter(req.user);
+    filter.$or = [{ _id: id }, { id }];
+
+    const leave = await DoctorLeave.findOne(filter)
+      .select("_id id Doctor Doctor_Id Date From_Date To_Date Leave_Type Day No_Of_Days Applied_On Applied_On_Date Status Reason Department Designation createdAt updatedAt")
+      .lean()
+      .exec();
 
     if (!leave) {
       return res.status(404).json({ message: "Doctor leave not found" });
@@ -164,10 +179,12 @@ export const getDoctorLeaveById: RequestHandler = async (req, res, next) => {
   }
 };
 
-// POST /api/doctor-leaves - Create new doctor leave
 export const createDoctorLeave: RequestHandler = async (req, res, next) => {
   try {
-    const Model = getResourceModel("doctorleaves");
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
     const leaveData: DoctorLeaveRequest = req.body;
 
     // Validate required fields
@@ -199,13 +216,16 @@ export const createDoctorLeave: RequestHandler = async (req, res, next) => {
       leaveData.Applied_On_Date = new Date();
     }
 
-    // Check if leave with same id already exists
-    const existing = await Model.findOne({ id: leaveData.id });
+    const existing = await DoctorLeave.findOne({ id: leaveData.id }).lean().exec();
     if (existing) {
       return res.status(409).json({ message: "Doctor leave with this ID already exists" });
     }
 
-    const leave = await Model.create(leaveData);
+    const accessFilter = buildAccessFilter(req.user);
+    const leave = await DoctorLeave.create({
+      ...leaveData,
+      ...accessFilter,
+    });
     res.status(201).json(formatDoctorLeaveResponse(leave));
   } catch (err: any) {
     // Handle MongoDB duplicate key error
@@ -229,52 +249,42 @@ export const createDoctorLeave: RequestHandler = async (req, res, next) => {
   }
 };
 
-// PATCH /api/doctor-leaves/:id - Update doctor leave
 export const updateDoctorLeave: RequestHandler = async (req, res, next) => {
   try {
-    const Model = getResourceModel("doctorleaves");
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
     const { id } = req.params;
     const updateData: Partial<DoctorLeaveRequest> = req.body;
 
-    // Don't allow updating id or _id
     const { id: _ignoredId, _id: _ignoredMongoId, ...cleanUpdateData } = updateData;
 
-    // Validate if updating required fields
     if (updateData.Status && !["Applied", "Approved", "Rejected"].includes(updateData.Status)) {
       return res.status(400).json({ message: "Status must be Applied, Approved, or Rejected" });
     }
 
-    // Recalculate days if dates are updated
-    if (cleanUpdateData.From_Date || cleanUpdateData.To_Date) {
-      const leave = await Model.findOne({ $or: [{ _id: id }, { id }] });
-      if (leave) {
-        const fromDate = cleanUpdateData.From_Date || leave.From_Date || leave.Date;
-        const toDate = cleanUpdateData.To_Date || leave.To_Date || leave.Date;
-        
-        if (fromDate && toDate) {
-          const { days, dayString, dateString } = calculateLeaveDays(fromDate, toDate);
-          cleanUpdateData.No_Of_Days = days;
-          cleanUpdateData.Day = dayString;
-          cleanUpdateData.Date = dateString;
-        }
-      }
-    }
+    const filter = buildAccessFilter(req.user);
+    filter.$or = [{ _id: id }, { id }];
 
-    // Find leave by _id or id
-    let leave;
-    if (mongoose.Types.ObjectId.isValid(id)) {
-      leave = await Model.findById(id);
-    }
-
-    if (!leave) {
-      leave = await Model.findOne({ id });
-    }
+    let leave = await DoctorLeave.findOne(filter).exec();
 
     if (!leave) {
       return res.status(404).json({ message: "Doctor leave not found" });
     }
 
-    // Update leave
+    if (cleanUpdateData.From_Date || cleanUpdateData.To_Date) {
+      const fromDate = cleanUpdateData.From_Date || leave.From_Date || leave.Date;
+      const toDate = cleanUpdateData.To_Date || leave.To_Date || leave.Date;
+      
+      if (fromDate && toDate) {
+        const { days, dayString, dateString } = calculateLeaveDays(fromDate, toDate);
+        cleanUpdateData.No_Of_Days = days;
+        cleanUpdateData.Day = dayString;
+        cleanUpdateData.Date = dateString;
+      }
+    }
+
     Object.assign(leave, cleanUpdateData);
     await leave.save();
 
@@ -301,20 +311,17 @@ export const updateDoctorLeave: RequestHandler = async (req, res, next) => {
   }
 };
 
-// DELETE /api/doctor-leaves/:id - Delete doctor leave
 export const deleteDoctorLeave: RequestHandler = async (req, res, next) => {
   try {
-    const Model = getResourceModel("doctorleaves");
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
     const { id } = req.params;
+    const filter = buildAccessFilter(req.user);
+    filter.$or = [{ _id: id }, { id }];
 
-    let leave;
-    if (mongoose.Types.ObjectId.isValid(id)) {
-      leave = await Model.findByIdAndDelete(id);
-    }
-
-    if (!leave) {
-      leave = await Model.findOneAndDelete({ id });
-    }
+    const leave = await DoctorLeave.findOneAndDelete(filter).lean().exec();
 
     if (!leave) {
       return res.status(404).json({ message: "Doctor leave not found" });

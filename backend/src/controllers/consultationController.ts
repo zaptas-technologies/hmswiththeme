@@ -1,9 +1,14 @@
 import { RequestHandler } from "express";
-import { getResourceModel } from "../models/resourceRegistry";
 import mongoose from "mongoose";
+import { Appointment } from "../models/appointmentModel";
+import { Patient } from "../models/patientModel";
+import { Consultation } from "../models/consultationModel";
+import { Doctor } from "../models/doctorModel";
+import { Prescription } from "../models/prescriptionModel";
 import { DashboardAppointment } from "../models/dashboardAppointmentModel";
 import { DashboardPatient } from "../models/dashboardPatientModel";
 import { User } from "../models/userModel";
+import { buildAccessFilter } from "../middlewares/authMiddleware";
 
 export interface ConsultationData {
   appointmentId: string;
@@ -42,53 +47,55 @@ export interface ConsultationData {
   }>;
 }
 
-// GET /api/consultations/appointment/:id - Get appointment with patient details for consultation
 export const getAppointmentForConsultation: RequestHandler = async (req, res, next) => {
   try {
-    const dbName = mongoose.connection.db?.databaseName || "unknown";
-    // eslint-disable-next-line no-console
-    console.log(`[Consultation Controller] Database: ${dbName} - Fetching appointment for consultation: ${req.params.id}`);
-    
-    const AppointmentModel = getResourceModel("appointments");
-    const PatientModel = getResourceModel("patients");
-    const ConsultationModel = getResourceModel("consultations");
-    const { id } = req.params;
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
 
-    // Find appointment
-    const appointment = await AppointmentModel.findOne({ $or: [{ _id: id }, { id }] }).exec();
+    const { id } = req.params;
+    const filter = buildAccessFilter(req.user);
+    filter.$or = [{ _id: id }, { id }];
+
+    const appointment = await Appointment.findOne(filter)
+      .select("_id id Date_Time Patient Phone Patient_Image Doctor_Image Doctor role Mode Status Consultation_ID Fees doctorId createdAt updatedAt")
+      .lean()
+      .exec();
     if (!appointment) {
       return res.status(404).json({ message: "Appointment not found" });
     }
 
-    // Find patient by name or phone
+    const appointmentObj = appointment as any;
     let patient = null;
-    if (appointment.Patient) {
-      patient = await PatientModel.findOne({
-        $or: [
-          { Patient: appointment.Patient },
-          { Phone: appointment.Phone },
-        ],
-      }).exec();
+    if (appointmentObj.Patient) {
+      const patientFilter = buildAccessFilter(req.user);
+      patientFilter.$or = [
+        { Patient: appointmentObj.Patient },
+        { Phone: appointmentObj.Phone },
+      ];
+      patient = await Patient.findOne(patientFilter)
+        .select("_id id Patient Gender Patient_img Doctor_img Phone Email Doctor Role Address Last_Visit Status createdAt updatedAt")
+        .lean()
+        .exec();
     }
 
-    // Find consultation if exists
     let consultation = null;
-    const consultationId = appointment.Consultation_ID;
+    const consultationId = appointmentObj.Consultation_ID;
     if (consultationId) {
-      consultation = await ConsultationModel.findOne({
-        $or: [
-          { Consultation_ID: consultationId },
-          { id: consultationId },
-          { Appointment_ID: appointment.id || appointment._id?.toString() },
-        ],
-      }).exec();
+      const consultationFilter = buildAccessFilter(req.user);
+      consultationFilter.$or = [
+        { Consultation_ID: consultationId },
+        { id: consultationId },
+        { Appointment_ID: appointmentObj.id || appointmentObj._id?.toString() },
+      ];
+      consultation = await Consultation.findOne(consultationFilter)
+        .select("_id id Consultation_ID Appointment_ID Patient Patient_Image Doctor Doctor_Image Vitals Complaints Diagnosis Medications Advice Investigations FollowUp Invoice Status Consultation_Date Completed_At createdAt updatedAt")
+        .lean()
+        .exec();
     }
 
-    // Format response
-    const appointmentObj = typeof appointment.toObject === "function" ? appointment.toObject() : appointment;
-    const consultationObj = consultation ? (typeof consultation.toObject === "function" ? consultation.toObject() : consultation) : null;
+    const consultationObj = consultation as any;
     
-    // Merge consultation data into appointment object for backward compatibility
     if (consultationObj) {
       if (consultationObj.Vitals) appointmentObj.Vitals = consultationObj.Vitals;
       if (consultationObj.Complaints) appointmentObj.Complaints = consultationObj.Complaints;
@@ -100,18 +107,9 @@ export const getAppointmentForConsultation: RequestHandler = async (req, res, ne
       if (consultationObj.Invoice) appointmentObj.Invoice = consultationObj.Invoice;
     }
     
-    // eslint-disable-next-line no-console
-    console.log(`[Consultation Controller] Database: ${dbName} - Appointment data loaded:`, {
-      appointmentId: appointmentObj.id || appointmentObj._id,
-      consultationId: consultationObj?.Consultation_ID || consultationObj?.id,
-      hasConsultation: !!consultationObj,
-      hasInvoice: !!appointmentObj.Invoice,
-      invoiceCount: appointmentObj.Invoice?.length || 0,
-    });
-    
     res.json({
       appointment: appointmentObj,
-      patient: patient ? (typeof patient.toObject === "function" ? patient.toObject() : patient) : null,
+      patient,
       consultation: consultationObj,
     });
   } catch (err: any) {
@@ -122,30 +120,13 @@ export const getAppointmentForConsultation: RequestHandler = async (req, res, ne
   }
 };
 
-// POST /api/consultations - Save consultation data and optionally complete appointment
 export const saveConsultation: RequestHandler = async (req, res, next) => {
   try {
-    const dbName = mongoose.connection.db?.databaseName || "unknown";
-    // eslint-disable-next-line no-console
-    console.log(`[Consultation Controller] Database: ${dbName} - Saving consultation data`);
-    
-    const AppointmentModel = getResourceModel("appointments");
-    const { appointmentId, consultationData, completeAppointment } = req.body;
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
 
-    // eslint-disable-next-line no-console
-    console.log(`[Consultation Controller] Database: ${dbName} - Request data:`, {
-      appointmentId,
-      hasVitals: !!consultationData?.vitals,
-      hasComplaints: !!consultationData?.complaints,
-      hasDiagnosis: !!consultationData?.diagnosis,
-      hasMedications: !!consultationData?.medications,
-      hasAdvice: !!consultationData?.advice,
-      hasInvestigations: !!consultationData?.investigations,
-      hasFollowUp: !!consultationData?.followUp,
-      hasInvoice: !!consultationData?.invoice,
-      invoiceItems: consultationData?.invoice || [],
-      completeAppointment,
-    });
+    const { appointmentId, consultationData, completeAppointment } = req.body;
 
     // Validation
     if (!appointmentId) {
@@ -211,26 +192,15 @@ export const saveConsultation: RequestHandler = async (req, res, next) => {
       return res.status(400).json({ message: "Investigations must be an array" });
     }
 
-    // Find appointment
-    const appointment = await AppointmentModel.findOne({
-      $or: [{ _id: appointmentId }, { id: appointmentId }],
-    }).exec();
+    const appointmentFilter = buildAccessFilter(req.user);
+    appointmentFilter.$or = [{ _id: appointmentId }, { id: appointmentId }];
+
+    const appointment = await Appointment.findOne(appointmentFilter).exec();
 
     if (!appointment) {
-      // eslint-disable-next-line no-console
-      console.log(`[Consultation Controller] Database: ${dbName} - Appointment not found: ${appointmentId}`);
       return res.status(404).json({ message: "Appointment not found" });
     }
 
-    // eslint-disable-next-line no-console
-    console.log(`[Consultation Controller] Database: ${dbName} - Found appointment:`, {
-      appointmentId: appointment.id || appointment._id,
-      patient: appointment.Patient,
-      status: appointment.Status,
-    });
-
-    // Get Consultation Model
-    const ConsultationModel = getResourceModel("consultations");
     const appointmentIdValue = appointment.id || appointment._id?.toString() || appointmentId;
     
     // Generate Consultation ID
@@ -280,44 +250,19 @@ export const saveConsultation: RequestHandler = async (req, res, next) => {
       consultationDocument.Completed_At = new Date();
     }
 
-    // eslint-disable-next-line no-console
-    console.log(`[Consultation Controller] Database: ${dbName} - Creating consultation document:`, {
-      consultationId: consultationDocument.Consultation_ID,
-      appointmentId: consultationDocument.Appointment_ID,
-      hasVitals: !!consultationDocument.Vitals,
-      hasComplaints: !!consultationDocument.Complaints,
-      hasDiagnosis: !!consultationDocument.Diagnosis,
-      hasMedications: !!consultationDocument.Medications,
-      medicationsCount: consultationDocument.Medications?.length || 0,
-      hasAdvice: !!consultationDocument.Advice,
-      hasInvestigations: !!consultationDocument.Investigations,
-      hasFollowUp: !!consultationDocument.FollowUp,
-      hasInvoice: !!consultationDocument.Invoice,
-      invoiceCount: consultationDocument.Invoice?.length || 0,
-      status: consultationDocument.Status,
-    });
+    const consultationFilter = buildAccessFilter(req.user);
+    consultationFilter.Appointment_ID = appointmentIdValue;
 
-    // Check if consultation already exists for this appointment
-    let consultation = await ConsultationModel.findOne({
-      Appointment_ID: appointmentIdValue,
-    }).exec();
+    let consultation = await Consultation.findOne(consultationFilter).exec();
 
     if (consultation) {
-      // Update existing consultation
       Object.assign(consultation, consultationDocument);
       await consultation.save();
-      // eslint-disable-next-line no-console
-      console.log(`[Consultation Controller] Database: ${dbName} - Updated existing consultation:`, {
-        consultationId: consultation.Consultation_ID || consultation.id,
-        appointmentId: consultation.Appointment_ID,
-      });
     } else {
-      // Create new consultation
-      consultation = await ConsultationModel.create(consultationDocument);
-      // eslint-disable-next-line no-console
-      console.log(`[Consultation Controller] Database: ${dbName} - Created new consultation:`, {
-        consultationId: consultation.Consultation_ID || consultation.id,
-        appointmentId: consultation.Appointment_ID,
+      const accessFilter = buildAccessFilter(req.user);
+      consultation = await Consultation.create({
+        ...consultationDocument,
+        ...accessFilter,
       });
     }
 
@@ -328,26 +273,30 @@ export const saveConsultation: RequestHandler = async (req, res, next) => {
     if (completeAppointment) {
       appointment.Status = "Checked Out";
       
-      // Also update DashboardAppointment if it exists
       try {
-        // Find User by doctor email to get correct doctorId
-        const doctorModel = getResourceModel("doctors");
-        const doctor = await doctorModel.findById(appointment.doctorId || appointment.Doctor).exec();
+        const doctorFilter = buildAccessFilter(req.user);
+        doctorFilter.$or = [
+          { _id: appointment.doctorId || appointment.Doctor },
+          { id: appointment.doctorId || appointment.Doctor },
+        ];
+        const doctor = await Doctor.findOne(doctorFilter)
+          .select("_id id Email email Name_Designation")
+          .lean()
+          .exec() as { Email?: string; email?: string } | null;
         
         if (doctor) {
           const doctorEmail = (doctor.Email || doctor.email || "").toLowerCase().trim();
           if (doctorEmail) {
-            const user = await User.findOne({ email: doctorEmail });
+            const user = await User.findOne({ email: doctorEmail }).select("_id").lean().exec();
             const dashboardDoctorId = user ? String(user._id) : appointment.doctorId;
             
-            // Find DashboardPatient by name and phone
             const dashboardPatient = await DashboardPatient.findOne({
               doctorId: dashboardDoctorId,
               name: appointment.Patient,
               phone: appointment.Phone,
-            });
+            }).lean().exec() as { _id: mongoose.Types.ObjectId } | null;
             
-            if (dashboardPatient) {
+            if (dashboardPatient && dashboardPatient._id) {
               // Parse appointment date to match
               let appointmentDate: Date;
               try {
@@ -380,72 +329,39 @@ export const saveConsultation: RequestHandler = async (req, res, next) => {
               const endOfDay = new Date(appointmentDate);
               endOfDay.setHours(23, 59, 59, 999);
               
-              await DashboardAppointment.updateMany(
-                {
-                  doctorId: dashboardDoctorId,
-                  patientId: dashboardPatient._id,
-                  datetime: { $gte: startOfDay, $lte: endOfDay },
-                },
-                { $set: { status: "Checked Out" } }
-              );
+              if (dashboardPatient._id) {
+                await DashboardAppointment.updateMany(
+                  {
+                    doctorId: dashboardDoctorId,
+                    patientId: dashboardPatient._id,
+                    datetime: { $gte: startOfDay, $lte: endOfDay },
+                  },
+                  { $set: { status: "Checked Out" } }
+                );
+              }
             }
           }
         }
       } catch (dashboardErr: any) {
-        // eslint-disable-next-line no-console
-        console.error("[Consultation] Failed to update DashboardAppointment:", dashboardErr);
+        // Failed to update DashboardAppointment - non-critical error
       }
     }
 
     await appointment.save();
-    
-    // eslint-disable-next-line no-console
-    console.log(`[Consultation Controller] Database: ${dbName} - Appointment saved successfully:`, {
-      appointmentId: appointment.id || appointment._id,
-      consultationId: appointment.Consultation_ID,
-      status: appointment.Status,
-    });
-
-    // If completing appointment and medications exist, create prescription records
-    // eslint-disable-next-line no-console
-    console.log(`[Consultation Controller] Database: ${dbName} - Checking prescription creation conditions:`, {
-      completeAppointment,
-      hasMedications: !!consultationData?.medications,
-      medicationsLength: consultationData?.medications?.length || 0,
-      medications: consultationData?.medications || [],
-      consultationId: consultation?.Consultation_ID || consultation?.id,
-      willCreatePrescriptions: !!(completeAppointment && consultationData?.medications && consultationData.medications.length > 0),
-    });
 
     if (completeAppointment && consultationData?.medications && consultationData.medications.length > 0) {
       try {
-        const PrescriptionModel = getResourceModel("doctorprescriptions");
         const prescriptionId = `#PRE${Date.now().toString().slice(-4)}`;
         const prescriptionDate = new Date().toISOString().split("T")[0];
+        const accessFilter = buildAccessFilter(req.user);
         
-        // eslint-disable-next-line no-console
-        console.log(`[Consultation Controller] Database: ${dbName} - Creating prescriptions:`, {
-          medicationCount: consultationData.medications.length,
-          doctor: appointment.Doctor,
-          patient: appointment.Patient,
-        });
-        
-        // Create a prescription for each medication
-        let createdCount = 0;
-        let skippedCount = 0;
         for (const medication of consultationData.medications) {
-          // Get medicine name - handle different field names
           const medicineName = medication.medicine || medication.Medicine || medication.name || "";
           
-          // Skip if medicine name is empty
           if (!medicineName || medicineName.trim() === "") {
-            skippedCount++;
-            // eslint-disable-next-line no-console
-            console.log(`[Consultation Controller] Database: ${dbName} - Skipping prescription (empty medicine name):`, medication);
             continue;
           }
 
-          // Ensure appointment ID is properly saved - use both id and _id for compatibility
           const appointmentIdValue = appointment.id || appointment._id?.toString() || appointmentId;
           
           const prescriptionData = {
@@ -458,29 +374,15 @@ export const saveConsultation: RequestHandler = async (req, res, next) => {
             Doctor: appointment.Doctor || "",
             Medicine: medicineName.trim(),
             Status: "Active",
-            // Store additional medication details - handle different field names
             Dosage: medication.dosage || medication.Dosage || "",
             Frequency: medication.frequency || medication.Frequency || "",
             Duration: medication.duration || medication.Duration || "",
             Appointment_ID: appointmentIdValue,
             Consultation_ID: consultation?.Consultation_ID || consultation?.id || "",
-            // Also store as appointmentId for consistency
             appointmentId: appointmentIdValue,
           };
 
-          // eslint-disable-next-line no-console
-          console.log(`[Consultation Controller] Database: ${dbName} - Prescription data:`, {
-            id: prescriptionData.id,
-            Doctor: prescriptionData.Doctor,
-            Patient: prescriptionData.Patient,
-            Medicine: prescriptionData.Medicine,
-            Dosage: prescriptionData.Dosage,
-            Frequency: prescriptionData.Frequency,
-            Duration: prescriptionData.Duration,
-          });
-
-          // Check if prescription already exists (by unique id or by same appointment + medicine)
-          const existingPrescription = await PrescriptionModel.findOne({
+          const existingPrescription = await Prescription.findOne({
             $or: [
               { id: prescriptionData.id },
               {
@@ -496,62 +398,21 @@ export const saveConsultation: RequestHandler = async (req, res, next) => {
                 ]
               }
             ]
-          }).exec();
+          }).lean().exec();
 
           if (!existingPrescription) {
-            const created = await PrescriptionModel.create(prescriptionData);
-            createdCount++;
-            // eslint-disable-next-line no-console
-            console.log(`[Consultation Controller] Database: ${dbName} - Prescription created successfully:`, {
-              id: created.id || created._id,
-              Doctor: created.Doctor,
-              Patient: created.Patient,
-              Medicine: created.Medicine,
-            });
-          } else {
-            // eslint-disable-next-line no-console
-            console.log(`[Consultation Controller] Database: ${dbName} - Prescription already exists:`, {
-              existingId: existingPrescription.id || existingPrescription._id,
-              Doctor: existingPrescription.Doctor,
-              Medicine: existingPrescription.Medicine,
+            await Prescription.create({
+              ...prescriptionData,
+              ...accessFilter,
             });
           }
         }
-        
-        // eslint-disable-next-line no-console
-        console.log(`[Consultation Controller] Database: ${dbName} - Prescription creation summary:`, {
-          totalMedications: consultationData.medications.length,
-          prescriptionsCreated: createdCount,
-          prescriptionsSkipped: skippedCount,
-        });
       } catch (prescriptionErr: any) {
-        // eslint-disable-next-line no-console
-        console.error(`[Consultation Controller] Database: ${dbName} - Failed to create prescription:`, {
-          error: prescriptionErr.message,
-          stack: prescriptionErr.stack,
-          medications: consultationData.medications,
-        });
         // Don't fail the consultation save if prescription creation fails
       }
-    } else {
-      // eslint-disable-next-line no-console
-      console.log(`[Consultation Controller] Database: ${dbName} - Skipping prescription creation:`, {
-        reason: !completeAppointment ? "Appointment not being completed" : 
-                !consultationData?.medications ? "No medications in consultation data" :
-                consultationData.medications.length === 0 ? "Medications array is empty" : "Unknown reason",
-      });
     }
 
     const updatedAppointment = typeof appointment.toObject === "function" ? appointment.toObject() : appointment;
-
-    // eslint-disable-next-line no-console
-    console.log(`[Consultation Controller] Database: ${dbName} - Consultation saved successfully:`, {
-      appointmentId: updatedAppointment.id || updatedAppointment._id,
-      status: updatedAppointment.Status,
-      hasInvoice: !!updatedAppointment.Invoice,
-      invoiceCount: updatedAppointment.Invoice?.length || 0,
-      invoiceItems: updatedAppointment.Invoice || [],
-    });
 
     res.json({
       message: completeAppointment ? "Consultation saved and appointment completed" : "Consultation saved",

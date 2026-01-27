@@ -1,6 +1,7 @@
 import { RequestHandler } from "express";
-import { getResourceModel } from "../models/resourceRegistry";
 import mongoose from "mongoose";
+import { Patient } from "../models/patientModel";
+import { buildAccessFilter } from "../middlewares/authMiddleware";
 
 export interface PatientRequest {
   _id?: string;
@@ -41,10 +42,11 @@ const validatePatientData = (
   return { isValid: true };
 };
 
-// GET /api/patients - Get all patients
 export const getAllPatients: RequestHandler = async (req, res, next) => {
   try {
-    const Model = getResourceModel("patients");
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
 
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
@@ -55,7 +57,7 @@ export const getAllPatients: RequestHandler = async (req, res, next) => {
     const status = (req.query.status as string) || "";
     const doctor = (req.query.doctor as string) || "";
 
-    const filter: Record<string, any> = {};
+    const filter = buildAccessFilter(req.user);
     if (status) filter.Status = status;
     if (doctor) filter.Doctor = new RegExp(doctor, "i");
 
@@ -65,8 +67,14 @@ export const getAllPatients: RequestHandler = async (req, res, next) => {
     }
 
     const [patients, total] = await Promise.all([
-      Model.find(filter).sort(sort).skip(skip).limit(limit).exec(),
-      Model.countDocuments(filter),
+      Patient.find(filter)
+        .select("_id id Patient Gender Patient_img Doctor_img Phone Email Doctor Role Address Last_Visit Status createdAt updatedAt")
+        .sort(sort)
+        .skip(skip)
+        .limit(limit)
+        .lean()
+        .exec(),
+      Patient.countDocuments(filter),
     ]);
 
     res.json({
@@ -83,13 +91,20 @@ export const getAllPatients: RequestHandler = async (req, res, next) => {
   }
 };
 
-// GET /api/patients/:id - Get patient by ID
 export const getPatientById: RequestHandler = async (req, res, next) => {
   try {
-    const Model = getResourceModel("patients");
-    const { id } = req.params;
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
 
-    const patient = await Model.findOne({ $or: [{ _id: id }, { id }] }).exec();
+    const { id } = req.params;
+    const filter = buildAccessFilter(req.user);
+    filter.$or = [{ _id: id }, { id }];
+
+    const patient = await Patient.findOne(filter)
+      .select("_id id Patient Gender Patient_img Doctor_img Phone Email Doctor Role Address Last_Visit Status createdAt updatedAt")
+      .lean()
+      .exec();
 
     if (!patient) {
       return res.status(404).json({ message: "Patient not found" });
@@ -101,36 +116,38 @@ export const getPatientById: RequestHandler = async (req, res, next) => {
   }
 };
 
-// POST /api/patients - Create new patient
 export const createPatient: RequestHandler = async (req, res, next) => {
   try {
-    const Model = getResourceModel("patients");
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
     const patientData: PatientRequest = req.body;
 
-    // Validate required fields
     const validation = validatePatientData(patientData);
     if (!validation.isValid) {
       return res.status(400).json({ message: validation.error });
     }
 
-    // Generate ID if not provided
     if (!patientData.id) {
       patientData.id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
     }
 
-    // Check if patient with same id already exists
-    const existing = await Model.findOne({ id: patientData.id });
+    const existing = await Patient.findOne({ id: patientData.id }).lean().exec();
     if (existing) {
       return res.status(409).json({ message: "Patient with this ID already exists" });
     }
 
-    // Check if patient with same phone already exists
-    const existingByPhone = await Model.findOne({ Phone: patientData.Phone });
+    const existingByPhone = await Patient.findOne({ Phone: patientData.Phone }).lean().exec();
     if (existingByPhone) {
       return res.status(409).json({ message: "Patient with this phone number already exists" });
     }
 
-    const patient = await Model.create(patientData);
+    const accessFilter = buildAccessFilter(req.user);
+    const patient = await Patient.create({
+      ...patientData,
+      ...accessFilter,
+    });
     res.status(201).json(formatPatientResponse(patient));
   } catch (err: any) {
     // Handle MongoDB duplicate key error
@@ -154,44 +171,39 @@ export const createPatient: RequestHandler = async (req, res, next) => {
   }
 };
 
-// PATCH /api/patients/:id - Update patient
 export const updatePatient: RequestHandler = async (req, res, next) => {
   try {
-    const Model = getResourceModel("patients");
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
     const { id } = req.params;
     const updateData: Partial<PatientRequest> = req.body;
 
-    // Don't allow updating id or _id
     const { id: _ignoredId, _id: _ignoredMongoId, ...cleanUpdateData } = updateData;
 
-    // Validate if updating required fields
     if (updateData.Status && !["Available", "Unavailable"].includes(updateData.Status)) {
       return res.status(400).json({ message: "Status must be Available or Unavailable" });
     }
 
-    // Find patient by _id or id
-    let patient;
-    if (mongoose.Types.ObjectId.isValid(id)) {
-      patient = await Model.findById(id);
-    }
+    const filter = buildAccessFilter(req.user);
+    filter.$or = [{ _id: id }, { id }];
 
-    if (!patient) {
-      patient = await Model.findOne({ id });
-    }
+    const patient = await Patient.findOne(filter).exec();
 
     if (!patient) {
       return res.status(404).json({ message: "Patient not found" });
     }
 
-    // Check for phone conflict if phone is being updated
     if (updateData.Phone && updateData.Phone !== patient.Phone) {
-      const existingByPhone = await Model.findOne({ Phone: updateData.Phone });
+      const existingByPhone = await Patient.findOne({ Phone: updateData.Phone })
+        .lean()
+        .exec() as { _id: mongoose.Types.ObjectId } | null;
       if (existingByPhone && existingByPhone._id.toString() !== patient._id.toString()) {
         return res.status(409).json({ message: "Patient with this phone number already exists" });
       }
     }
 
-    // Update patient
     Object.assign(patient, cleanUpdateData);
     await patient.save();
 
@@ -218,20 +230,17 @@ export const updatePatient: RequestHandler = async (req, res, next) => {
   }
 };
 
-// DELETE /api/patients/:id - Delete patient
 export const deletePatient: RequestHandler = async (req, res, next) => {
   try {
-    const Model = getResourceModel("patients");
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
     const { id } = req.params;
+    const filter = buildAccessFilter(req.user);
+    filter.$or = [{ _id: id }, { id }];
 
-    let patient;
-    if (mongoose.Types.ObjectId.isValid(id)) {
-      patient = await Model.findByIdAndDelete(id);
-    }
-
-    if (!patient) {
-      patient = await Model.findOneAndDelete({ id });
-    }
+    const patient = await Patient.findOneAndDelete(filter).lean().exec();
 
     if (!patient) {
       return res.status(404).json({ message: "Patient not found" });

@@ -3,7 +3,7 @@ import {
   getAppointmentForConsultation,
   saveConsultation,
 } from "../controllers/consultationController";
-import { requireUserId } from "../middleware/requireUserId";
+import { authMiddleware } from "../middlewares/authMiddleware";
 
 export const buildConsultationRouter = () => {
   const router = Router();
@@ -29,11 +29,8 @@ export const buildConsultationRouter = () => {
     return res.sendStatus(204);
   });
 
-  // GET /api/consultations/appointment/:id - Get appointment with patient details
-  router.get("/appointment/:id", requireUserId, getAppointmentForConsultation);
-
-  // POST /api/consultations - Save consultation data
-  router.post("/", requireUserId, saveConsultation);
+  router.get("/appointment/:id", authMiddleware, getAppointmentForConsultation);
+  router.post("/", authMiddleware, saveConsultation);
 
   return router;
 };
