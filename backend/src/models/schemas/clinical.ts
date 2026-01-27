@@ -28,6 +28,8 @@ export const DoctorSchema = new Schema(
     Email: { type: String, required: true },
     Fees: { type: String },
     Status: { type: String, enum: ["Available", "Unavailable"], required: true },
+    hospital: { type: Schema.Types.ObjectId, ref: "Hospital", index: true },
+    user: { type: Schema.Types.ObjectId, ref: "User", index: true },
   },
   { timestamps: true, strict: false }
 );

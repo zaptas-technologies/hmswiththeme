@@ -57,6 +57,12 @@ export interface Doctor {
   // Schedule
   schedules?: DaySchedule[];
   
+  // Schedule metadata for DoctorSchedule model
+  scheduleLocation?: string;
+  scheduleFromDate?: string; // ISO date string
+  scheduleToDate?: string; // ISO date string
+  scheduleRecursEvery?: string; // e.g., "1 Week", "1 Month"
+  
   // Appointment info
   appointmentType?: string;
   acceptBookingsInAdvance?: string; // days

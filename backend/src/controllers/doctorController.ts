@@ -2,6 +2,7 @@ import { RequestHandler } from "express";
 import mongoose from "mongoose";
 import { Doctor } from "../models/doctorModel";
 import { User } from "../models/userModel";
+import { DoctorSchedule } from "../models/doctorScheduleModel";
 import { buildAccessFilter } from "../middlewares/authMiddleware";
 
 export interface DoctorRequest {
@@ -44,6 +45,12 @@ export interface DoctorRequest {
       to: string;
     }>;
   }>;
+  
+  // Schedule metadata for DoctorSchedule model
+  scheduleLocation?: string;
+  scheduleFromDate?: string; // ISO date string
+  scheduleToDate?: string; // ISO date string
+  scheduleRecursEvery?: string; // e.g., "1 Week", "1 Month"
   
   // Appointment info
   appointmentType?: string;
@@ -237,15 +244,112 @@ export const createDoctor: RequestHandler = async (req, res, next) => {
       });
     }
 
-    // Extract password before creating doctor (password is only for User account, not doctor record)
-    const { password, email, ...doctorRecordData } = doctorData; // Remove email (lowercase) if present
+    // Extract password and schedule-related fields before creating doctor
+    const { 
+      password, 
+      email, 
+      schedules,
+      scheduleLocation,
+      scheduleFromDate,
+      scheduleToDate,
+      scheduleRecursEvery,
+      ...doctorRecordData 
+    } = doctorData;
     
     doctorRecordData.Email = normalizedEmail;
     const accessFilter = buildAccessFilter(req.user);
+    
+    // Ensure hospital is ObjectId if provided
+    // Priority: accessFilter (from user role) > doctorRecordData (from request body)
+    let hospitalId: mongoose.Types.ObjectId | undefined;
+    
+    if (accessFilter.hospital) {
+      // Hospital from user role (should be string from buildAccessFilter)
+      if (typeof accessFilter.hospital === 'string') {
+        if (mongoose.Types.ObjectId.isValid(accessFilter.hospital)) {
+          hospitalId = new mongoose.Types.ObjectId(accessFilter.hospital);
+        } else {
+          return res.status(400).json({ message: "Invalid hospital ID format from user role" });
+        }
+      } else if (accessFilter.hospital instanceof mongoose.Types.ObjectId) {
+        hospitalId = accessFilter.hospital;
+      }
+    } else if (doctorRecordData.hospital) {
+      // Hospital from request body (could be string or ObjectId)
+      if (typeof doctorRecordData.hospital === 'string') {
+        if (mongoose.Types.ObjectId.isValid(doctorRecordData.hospital)) {
+          hospitalId = new mongoose.Types.ObjectId(doctorRecordData.hospital);
+        } else {
+          return res.status(400).json({ message: "Invalid hospital ID format in request body" });
+        }
+      } else if (doctorRecordData.hospital instanceof mongoose.Types.ObjectId) {
+        hospitalId = doctorRecordData.hospital;
+      }
+    }
+    
+    // Remove hospital from doctorRecordData if it exists (we'll add it separately)
+    const { hospital, ...cleanDoctorData } = doctorRecordData;
+    
     const doctor = await Doctor.create({
-      ...doctorRecordData,
-      ...accessFilter,
+      ...cleanDoctorData,
+      ...(hospitalId && { hospital: hospitalId }),
     });
+
+    // Save schedules to DoctorSchedule model if schedules are provided
+    if (schedules && schedules.length > 0) {
+      try {
+        // Validate required schedule metadata
+        if (!scheduleLocation || scheduleLocation.trim() === "") {
+          throw new Error("Schedule location is required when schedules are provided");
+        }
+        
+        if (!scheduleFromDate || !scheduleToDate) {
+          throw new Error("Schedule start date and end date are required when schedules are provided");
+        }
+        
+        // Parse dates
+        const fromDate = new Date(scheduleFromDate);
+        const toDate = new Date(scheduleToDate);
+        
+        // Validate dates
+        if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+          throw new Error("Invalid date format for schedule dates");
+        }
+        
+        if (toDate < fromDate) {
+          throw new Error("Schedule end date must be after start date");
+        }
+        
+        const location = scheduleLocation.trim();
+        const recursEvery = scheduleRecursEvery || "1 Week";
+        
+        // Use doctor._id as the doctorId for DoctorSchedule
+        const doctorId = doctor._id.toString();
+        
+        await DoctorSchedule.create({
+          doctorId,
+          location,
+          fromDate,
+          toDate,
+          recursEvery,
+          schedules: schedules.map(schedule => ({
+            day: schedule.day as "Monday" | "Tuesday" | "Wednesday" | "Thursday" | "Friday" | "Saturday" | "Sunday",
+            timeSlots: schedule.timeSlots.map(slot => ({
+              session: slot.session,
+              from: slot.from,
+              to: slot.to,
+            })),
+          })),
+        });
+      } catch (scheduleErr: any) {
+        // If schedule creation fails, delete the doctor and return error
+        await Doctor.findByIdAndDelete(doctor._id);
+        console.error("Failed to create doctor schedule:", scheduleErr);
+        return res.status(400).json({ 
+          message: `Failed to create doctor schedule: ${scheduleErr.message || "Unknown error"}` 
+        });
+      }
+    }
 
     // Create user account for login if password is provided
     if (password) {
@@ -260,6 +364,10 @@ export const createDoctor: RequestHandler = async (req, res, next) => {
         });
       } catch (userErr: any) {
         await Doctor.findByIdAndDelete(doctor._id);
+        // Also delete schedule if it was created
+        if (schedules && schedules.length > 0) {
+          await DoctorSchedule.deleteMany({ doctorId: doctor._id.toString() });
+        }
         
         if (userErr.code === 11000) {
           return res.status(409).json({ message: "User account with this email already exists" });

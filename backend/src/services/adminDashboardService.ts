@@ -36,6 +36,9 @@ export const buildAdminDashboardPayload = async (hospitalId?: string) => {
     Patient.countDocuments(hospitalFilter),
     Appointment.countDocuments(hospitalFilter),
   ]);
+  console.log(doctorsCount,hospitalId,'DIDUD') 
+
+
 
   const [last7Doctors, prev7Doctors] = await Promise.all([
     Doctor.countDocuments({ ...hospitalFilter, createdAt: { $gte: sevenDaysAgo, $lt: now } }),

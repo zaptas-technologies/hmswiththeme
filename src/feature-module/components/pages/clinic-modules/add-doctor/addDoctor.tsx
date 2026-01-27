@@ -88,6 +88,12 @@ const AddDoctor = () => {
     Sunday: [],
   });
 
+  // Schedule metadata
+  const [scheduleLocation, setScheduleLocation] = useState("Main Clinic");
+  const [scheduleFromDate, setScheduleFromDate] = useState<Dayjs | null>(dayjs());
+  const [scheduleToDate, setScheduleToDate] = useState<Dayjs | null>(dayjs().add(1, 'year'));
+  const [scheduleRecursEvery, setScheduleRecursEvery] = useState("1 Week");
+
   // Appointment Info
   const [appointmentType, setAppointmentType] = useState("");
   const [acceptBookingsInAdvance, setAcceptBookingsInAdvance] = useState("");
@@ -222,6 +228,12 @@ const AddDoctor = () => {
         
         // Schedule
         schedules: convertScheduleToAPIFormat(),
+        
+        // Schedule metadata
+        scheduleLocation,
+        scheduleFromDate: scheduleFromDate ? scheduleFromDate.format("YYYY-MM-DD") : undefined,
+        scheduleToDate: scheduleToDate ? scheduleToDate.format("YYYY-MM-DD") : undefined,
+        scheduleRecursEvery,
         
         // Appointment info
         appointmentType,
@@ -640,6 +652,95 @@ const AddDoctor = () => {
                     </div>
                     <div className="bg-light px-3 py-2 mb-3">
                       <h6 className="fw-bold mb-0">Schedule Information</h6>
+                    </div>
+                    <div className="pb-0 mb-3">
+                      <div className="row">
+                        <div className="col-lg-6">
+                          <div className="mb-3">
+                            <label className="form-label">
+                              Location <span className="text-danger">*</span>
+                            </label>
+                            <input 
+                              type="text" 
+                              className="form-control" 
+                              value={scheduleLocation}
+                              onChange={(e) => setScheduleLocation(e.target.value)}
+                              required
+                              placeholder="e.g., Main Clinic, Branch Office"
+                            />
+                          </div>
+                        </div>
+                        <div className="col-lg-6">
+                          <div className="mb-3">
+                            <label className="form-label">
+                              Recurs Every <span className="text-danger">*</span>
+                            </label>
+                            <CommonSelect
+                              options={[
+                                { value: "1 Week", label: "1 Week" },
+                                { value: "2 Weeks", label: "2 Weeks" },
+                                { value: "1 Month", label: "1 Month" },
+                                { value: "3 Months", label: "3 Months" },
+                                { value: "6 Months", label: "6 Months" },
+                                { value: "1 Year", label: "1 Year" },
+                              ]}
+                              className="select"
+                              value={scheduleRecursEvery}
+                              onChange={setScheduleRecursEvery}
+                            />
+                          </div>
+                        </div>
+                        <div className="col-lg-6">
+                          <div className="mb-3">
+                            <label className="form-label">
+                              Schedule Start Date <span className="text-danger">*</span>
+                            </label>
+                            <div className="input-icon-end position-relative">
+                              <DatePicker
+                                className="form-control datetimepicker"
+                                format={{
+                                  format: "DD-MM-YYYY",
+                                  type: "mask",
+                                }}
+                                getPopupContainer={getModalContainer}
+                                placeholder="DD-MM-YYYY"
+                                suffixIcon={null}
+                                value={scheduleFromDate}
+                                onChange={setScheduleFromDate}
+                                required
+                              />
+                              <span className="input-icon-addon">
+                                <i className="ti ti-calendar" />
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="col-lg-6">
+                          <div className="mb-3">
+                            <label className="form-label">
+                              Schedule End Date <span className="text-danger">*</span>
+                            </label>
+                            <div className="input-icon-end position-relative">
+                              <DatePicker
+                                className="form-control datetimepicker"
+                                format={{
+                                  format: "DD-MM-YYYY",
+                                  type: "mask",
+                                }}
+                                getPopupContainer={getModalContainer}
+                                placeholder="DD-MM-YYYY"
+                                suffixIcon={null}
+                                value={scheduleToDate}
+                                onChange={setScheduleToDate}
+                                required
+                              />
+                              <span className="input-icon-addon">
+                                <i className="ti ti-calendar" />
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                     <div className="p-3">
                       <ul
