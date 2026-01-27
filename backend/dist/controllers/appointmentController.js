@@ -147,6 +147,9 @@ const createAppointment = async (req, res, next) => {
         }
         // Remove id field if present (we use MongoDB's _id)
         const { id: _ignoredId, _id: _ignoredMongoId, ...cleanApptData } = apptData;
+        // Explicitly delete id field to ensure it's not included (handles cases where id might be undefined/null/empty)
+        delete cleanApptData.id;
+        delete cleanApptData._id;
         const accessFilter = (0, authMiddleware_1.buildAccessFilter)(req.user);
         // Ensure hospital is ObjectId if provided
         let hospitalId;
@@ -180,6 +183,9 @@ const createAppointment = async (req, res, next) => {
         }
         // Remove hospital from cleanApptData if it exists (we'll add it separately)
         const { hospital, ...finalApptData } = cleanApptData;
+        // Ensure id and _id are not in finalApptData
+        delete finalApptData.id;
+        delete finalApptData._id;
         const appointmentData = {
             ...finalApptData,
             ...(hospitalId && { hospital: hospitalId }),
@@ -278,8 +284,19 @@ const createAppointment = async (req, res, next) => {
         res.status(201).json(formatAppointmentResponse(created));
     }
     catch (err) {
+        // Handle MongoDB duplicate key error
         if (err?.code === 11000) {
-            return res.status(409).json({ message: "Duplicate key error", key: err.keyValue });
+            const field = Object.keys(err.keyPattern)[0];
+            // If the error is about 'id' field, provide a more helpful message
+            if (field === 'id') {
+                return res.status(409).json({
+                    message: "An appointment with this identifier already exists. Please refresh and try again.",
+                });
+            }
+            return res.status(409).json({
+                message: `Appointment with this ${field} already exists`,
+                key: err.keyValue
+            });
         }
         if (err?.name === "ValidationError") {
             return res.status(400).json({ message: err.message });
