@@ -74,10 +74,9 @@ export const fetchDoctorLeaveById = async (id: string): Promise<DoctorLeave> => 
 export const createDoctorLeave = async (
   leaveData: Partial<DoctorLeave>
 ): Promise<DoctorLeave> => {
-  if (!leaveData.id) {
-    leaveData.id = Date.now().toString();
-  }
-  const { data } = await api.post<DoctorLeave>("/doctor-leaves", leaveData);
+  // Remove id field if present - backend uses MongoDB's _id
+  const { id: _ignoredId, ...cleanLeaveData } = leaveData;
+  const { data } = await api.post<DoctorLeave>("/doctor-leaves", cleanLeaveData);
   return data;
 };
 

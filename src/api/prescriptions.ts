@@ -82,10 +82,12 @@ export const fetchPrescriptionById = async (id: string): Promise<Prescription> =
 export const createPrescription = async (
   prescriptionData: Partial<Prescription>
 ): Promise<Prescription> => {
-  if (!prescriptionData.id && !prescriptionData.Prescription_ID) {
-    prescriptionData.Prescription_ID = `#PRE${Date.now().toString().slice(-4)}`;
+  // Remove id field if present - backend uses MongoDB's _id
+  const { id: _ignoredId, ...cleanPrescriptionData } = prescriptionData;
+  if (!cleanPrescriptionData.Prescription_ID) {
+    cleanPrescriptionData.Prescription_ID = `#PRE${Date.now().toString().slice(-4)}`;
   }
-  const { data } = await api.post<Prescription>("/prescriptions", prescriptionData);
+  const { data } = await api.post<Prescription>("/prescriptions", cleanPrescriptionData);
   return data;
 };
 

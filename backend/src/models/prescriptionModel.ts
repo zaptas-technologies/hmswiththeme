@@ -2,7 +2,6 @@ import mongoose, { Schema, Document } from "mongoose";
 import { DoctorPrescriptionSchema } from "./schemas/clinical";
 
 export interface PrescriptionDoc extends Document {
-  id: string;
   Date: string;
   Prescribed_On?: string;
   Patient: string;

@@ -6,7 +6,6 @@ import { DoctorSchedule } from "../models/doctorScheduleModel";
 import { buildAccessFilter } from "../middlewares/authMiddleware";
 
 export interface DoctorRequest {
-  id?: string;
   Name_Designation: string;
   img?: string;
   role?: string;
@@ -85,7 +84,7 @@ const formatDoctorResponse = (doctor: any) => {
   return {
     ...doc,
     _id: doc._id?.toString() || doc._id,
-    id: doc.id || doc._id?.toString(),
+    id: doc._id?.toString() || doc._id, // For backward compatibility, map _id to id
     // Ensure img field is included (use img or avatar field)
     img: doc.img || doc.avatar || "assets/img/doctors/doctor-01.jpg",
     // Map role to Designation if needed
@@ -141,7 +140,7 @@ export const getAllDoctors: RequestHandler = async (req, res, next) => {
 
     const [doctors, total] = await Promise.all([
       Doctor.find(filter)
-        .select("_id id Name_Designation img role Department Phone Email Fees Status createdAt updatedAt")
+        .select("_id Name_Designation img role Department Phone Email Fees Status createdAt updatedAt")
         .sort(sort)
         .skip(skip)
         .limit(limit)
@@ -172,10 +171,16 @@ export const getDoctorById: RequestHandler = async (req, res, next) => {
 
     const { id } = req.params;
     const filter = buildAccessFilter(req.user);
-    filter.$or = [{ _id: id }, { id }];
+    
+    // Use _id only (MongoDB ObjectId)
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      filter._id = new mongoose.Types.ObjectId(id);
+    } else {
+      return res.status(400).json({ message: "Invalid doctor ID format" });
+    }
 
     const doctor = await Doctor.findOne(filter)
-      .select("_id id Name_Designation img role Department Phone Email Fees Status createdAt updatedAt")
+      .select("_id Name_Designation img role Department Phone Email Fees Status createdAt updatedAt")
       .lean()
       .exec();
 
@@ -203,13 +208,11 @@ export const createDoctor: RequestHandler = async (req, res, next) => {
       return res.status(400).json({ message: validation.error });
     }
 
-    // Generate ID if not provided
-    if (!doctorData.id) {
-      doctorData.id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
-    }
+    // Remove id field if present (we use MongoDB's _id)
+    const { id: _ignoredId, ...cleanDoctorData } = doctorData;
 
     // Normalize email for checking (lowercase, trim)
-    const normalizedEmail = doctorData.Email.toLowerCase().trim();
+    const normalizedEmail = cleanDoctorData.Email.toLowerCase().trim();
     
     // Check if doctor with same email already exists (case-insensitive using regex)
     // Check both Email and email fields since schema might use either
@@ -230,11 +233,6 @@ export const createDoctor: RequestHandler = async (req, res, next) => {
       });
     }
 
-    const existingById = await Doctor.findOne({ id: doctorData.id }).lean().exec();
-    if (existingById) {
-      return res.status(409).json({ message: "Doctor with this ID already exists" });
-    }
-
     // Check if user account already exists with this email
     const existingUser = await User.findOne({ email: normalizedEmail });
     if (existingUser) {
@@ -245,16 +243,18 @@ export const createDoctor: RequestHandler = async (req, res, next) => {
     }
 
     // Extract password and schedule-related fields before creating doctor
+    // Also remove id field if present
     const { 
       password, 
-      email, 
+      email,
+      id: _ignoredId,
       schedules,
       scheduleLocation,
       scheduleFromDate,
       scheduleToDate,
       scheduleRecursEvery,
       ...doctorRecordData 
-    } = doctorData;
+    } = cleanDoctorData;
     
     doctorRecordData.Email = normalizedEmail;
     const accessFilter = buildAccessFilter(req.user);
@@ -422,7 +422,13 @@ export const updateDoctor: RequestHandler = async (req, res, next) => {
     }
 
     const filter = buildAccessFilter(req.user);
-    filter.$or = [{ _id: id }, { id }];
+    
+    // Use _id only (MongoDB ObjectId)
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      filter._id = new mongoose.Types.ObjectId(id);
+    } else {
+      return res.status(400).json({ message: "Invalid doctor ID format" });
+    }
 
     const doctor = await Doctor.findOne(filter).exec();
 
@@ -540,17 +546,23 @@ export const deleteDoctor: RequestHandler = async (req, res, next) => {
 
     const { id } = req.params;
     const filter = buildAccessFilter(req.user);
-    filter.$or = [{ _id: id }, { id }];
+    
+    // Use _id only (MongoDB ObjectId)
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      filter._id = new mongoose.Types.ObjectId(id);
+    } else {
+      return res.status(400).json({ message: "Invalid doctor ID format" });
+    }
 
     const doctor = await Doctor.findOneAndDelete(filter)
       .lean()
-      .exec() as { _id: mongoose.Types.ObjectId; id?: string } | null;
+      .exec() as { _id: mongoose.Types.ObjectId } | null;
 
     if (!doctor) {
       return res.status(404).json({ message: "Doctor not found" });
     }
 
-    res.json({ message: "Doctor deleted successfully", id: doctor._id?.toString() || doctor.id || "" });
+    res.json({ message: "Doctor deleted successfully", id: doctor._id?.toString() || "" });
   } catch (err) {
     next(err);
   }

@@ -14,7 +14,6 @@ export interface GRNItem {
 }
 
 export interface GRNDoc extends Document {
-  id: string;
   GRN_Number: string;
   GRN_Date: Date;
   Supplier: string;

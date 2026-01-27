@@ -5,8 +5,6 @@ import { Consultation } from "../models/consultationModel";
 import { buildAccessFilter } from "../middlewares/authMiddleware";
 
 export interface PrescriptionRequest {
-  _id?: string;
-  id?: string;
   Prescription_ID?: string;
   Date?: string;
   Prescribed_On?: string;
@@ -28,8 +26,8 @@ const formatPrescriptionResponse = (presc: any) => {
   
   // Return only relevant fields for list view
   return {
-    _id: obj._id,
-    id: obj.id,
+    _id: obj._id?.toString() || obj._id,
+    id: obj._id?.toString() || obj._id, // For backward compatibility, map _id to id
     Prescription_ID: obj.Prescription_ID,
     Date: obj.Date,
     Prescribed_On: obj.Prescribed_On,
@@ -374,7 +372,7 @@ export const getAllPrescriptions: RequestHandler = async (req, res, next) => {
 
     const [prescriptions, total] = await Promise.all([
       Prescription.find(filter)
-        .select("_id id Prescription_ID Date Prescribed_On Patient Patient_Image Doctor Medicine Status Dosage Frequency Duration Appointment_ID appointmentId Amount createdAt updatedAt")
+        .select("_id Prescription_ID Date Prescribed_On Patient Patient_Image Doctor Medicine Status Dosage Frequency Duration Appointment_ID appointmentId Amount createdAt updatedAt")
         .sort(sort)
         .skip(skip)
         .limit(limit)
@@ -405,10 +403,17 @@ export const getPrescriptionById: RequestHandler = async (req, res, next) => {
 
     const { id } = req.params;
     const filter = buildAccessFilter(req.user);
-    filter.$or = [{ _id: id }, { id }, { Prescription_ID: id }];
+    
+    // Use _id or Prescription_ID (business identifier)
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      filter._id = new mongoose.Types.ObjectId(id);
+    } else {
+      // Try Prescription_ID if not a valid ObjectId
+      filter.Prescription_ID = id;
+    }
 
     const prescription = await Prescription.findOne(filter)
-      .select("_id id Prescription_ID Date Prescribed_On Patient Patient_Image Doctor Medicine Status Dosage Frequency Duration Appointment_ID appointmentId Amount createdAt updatedAt")
+      .select("_id Prescription_ID Date Prescribed_On Patient Patient_Image Doctor Medicine Status Dosage Frequency Duration Appointment_ID appointmentId Amount createdAt updatedAt")
       .lean()
       .exec();
     
@@ -438,30 +443,26 @@ export const createPrescription: RequestHandler = async (req, res, next) => {
       return res.status(400).json({ message: validation.error });
     }
 
-    if (!prescData.id && !prescData.Prescription_ID) {
-      prescData.Prescription_ID = `#PRE${Date.now().toString().slice(-4)}`;
+    // Remove id field if present (we use MongoDB's _id)
+    const { id: _ignoredId, ...cleanPrescData } = prescData;
+    
+    if (!cleanPrescData.Prescription_ID) {
+      cleanPrescData.Prescription_ID = `#PRE${Date.now().toString().slice(-4)}`;
     }
 
-    if (!prescData.Date && !prescData.Prescribed_On) {
+    if (!cleanPrescData.Date && !cleanPrescData.Prescribed_On) {
       const today = new Date().toISOString().split("T")[0];
-      prescData.Date = today;
-      prescData.Prescribed_On = today;
-    } else if (!prescData.Prescribed_On) {
-      prescData.Prescribed_On = prescData.Date;
-    } else if (!prescData.Date) {
-      prescData.Date = prescData.Prescribed_On;
-    }
-
-    if (prescData.id) {
-      const existing = await Prescription.findOne({ id: prescData.id }).lean().exec();
-      if (existing) {
-        return res.status(409).json({ message: "Prescription with this ID already exists" });
-      }
+      cleanPrescData.Date = today;
+      cleanPrescData.Prescribed_On = today;
+    } else if (!cleanPrescData.Prescribed_On) {
+      cleanPrescData.Prescribed_On = cleanPrescData.Date;
+    } else if (!cleanPrescData.Date) {
+      cleanPrescData.Date = cleanPrescData.Prescribed_On;
     }
 
     const accessFilter = buildAccessFilter(req.user);
     const created = await Prescription.create({
-      ...prescData,
+      ...cleanPrescData,
       ...accessFilter,
     });
     res.status(201).json(formatPrescriptionResponse(created));
@@ -484,7 +485,14 @@ export const updatePrescription: RequestHandler = async (req, res, next) => {
 
     const { id } = req.params;
     const filter = buildAccessFilter(req.user);
-    filter.$or = [{ _id: id }, { id }, { Prescription_ID: id }];
+    
+    // Use _id or Prescription_ID (business identifier)
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      filter._id = new mongoose.Types.ObjectId(id);
+    } else {
+      // Try Prescription_ID if not a valid ObjectId
+      filter.Prescription_ID = id;
+    }
 
     const prescription = await Prescription.findOne(filter).exec();
 
@@ -517,7 +525,14 @@ export const deletePrescription: RequestHandler = async (req, res, next) => {
 
     const { id } = req.params;
     const filter = buildAccessFilter(req.user);
-    filter.$or = [{ _id: id }, { id }, { Prescription_ID: id }];
+    
+    // Use _id or Prescription_ID (business identifier)
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      filter._id = new mongoose.Types.ObjectId(id);
+    } else {
+      // Try Prescription_ID if not a valid ObjectId
+      filter.Prescription_ID = id;
+    }
 
     const prescription = await Prescription.findOneAndDelete(filter).lean().exec();
 

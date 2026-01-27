@@ -22,7 +22,6 @@ export const AppointmentSchema = new Schema(
 
 export const DoctorSchema = new Schema(
   {
-    id: { type: String, required: true, unique: true },
     Name_Designation: { type: String, required: true },
     img: { type: String },
     role: { type: String },
@@ -57,7 +56,6 @@ export const PatientSchema = new Schema(
 
 export const DoctorAppointmentSchema = new Schema(
   {
-    id: { type: String, required: true, unique: true },
     Date_Time: { type: String, required: true },
     Patient: { type: String, required: true },
     Phone: { type: String },
@@ -73,7 +71,6 @@ export const DoctorAppointmentSchema = new Schema(
 
 export const PatientAppointmentSchema = new Schema(
   {
-    id: { type: String, required: true, unique: true },
     Date_Time: { type: String, required: true },
     Doctor: { type: String, required: true },
     Doctor_Image: { type: String },
@@ -86,7 +83,6 @@ export const PatientAppointmentSchema = new Schema(
 
 export const DoctorPrescriptionSchema = new Schema(
   {
-    id: { type: String, required: true, unique: true },
     Date: { type: String, required: true },
     Patient: { type: String, required: true },
     Patient_Image: { type: String },
@@ -99,7 +95,6 @@ export const DoctorPrescriptionSchema = new Schema(
 
 export const PatientPrescriptionSchema = new Schema(
   {
-    id: { type: String, required: true, unique: true },
     Date: { type: String, required: true },
     Doctor: { type: String, required: true },
     Doctor_Image: { type: String },
@@ -111,7 +106,6 @@ export const PatientPrescriptionSchema = new Schema(
 
 export const DoctorLeaveSchema = new Schema(
   {
-    id: { type: String, required: true, unique: true },
     Doctor: { type: String, required: true },
     Doctor_Id: { type: String },
     Date: { type: String, required: true }, // Format: "15 Apr 2026- 15 Apr 2025" or date range
@@ -137,7 +131,6 @@ export const DoctorLeaveSchema = new Schema(
 
 export const ConsultationSchema = new Schema(
   {
-    id: { type: String, required: true, unique: true },
     Consultation_ID: { type: String, required: true, unique: true },
     Appointment_ID: { type: String, required: true, index: true }, // Reference to appointment
     Patient: { type: String, required: true },
@@ -209,7 +202,6 @@ export const ConsultationSchema = new Schema(
 
 export const InventorySchema = new Schema(
   {
-    id: { type: String, required: true, unique: true },
     Item_Name: { type: String, required: true },
     Item_Code: { type: String },
     Category: { type: String },
@@ -236,7 +228,6 @@ export const InventorySchema = new Schema(
 
 export const GRNSchema = new Schema(
   {
-    id: { type: String, required: true, unique: true },
     GRN_Number: { type: String, required: true, unique: true },
     GRN_Date: { type: Date, required: true, default: Date.now },
     Supplier: { type: String, required: true },

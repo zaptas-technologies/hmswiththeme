@@ -2,7 +2,6 @@ import mongoose, { Schema, Document } from "mongoose";
 import { DoctorLeaveSchema } from "./schemas/clinical";
 
 export interface DoctorLeaveDoc extends Document {
-  id: string;
   Doctor: string;
   Doctor_Id?: string;
   Date: string;

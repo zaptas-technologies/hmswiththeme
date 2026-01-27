@@ -4,8 +4,6 @@ import { DoctorLeave } from "../models/doctorLeaveModel";
 import { buildAccessFilter } from "../middlewares/authMiddleware";
 
 export interface DoctorLeaveRequest {
-  _id?: string;
-  id?: string;
   Doctor: string;
   Doctor_Id?: string;
   Date: string; // Format: "15 Apr 2026- 15 Apr 2025"
@@ -26,7 +24,11 @@ export interface DoctorLeaveRequest {
 const formatDoctorLeaveResponse = (leave: any) => {
   if (!leave) return leave;
   const obj = typeof leave.toObject === "function" ? leave.toObject() : leave;
-  return obj;
+  return {
+    ...obj,
+    _id: obj._id?.toString() || obj._id,
+    id: obj._id?.toString() || obj._id, // For backward compatibility, map _id to id
+  };
 };
 
 const validateDoctorLeaveData = (
@@ -131,7 +133,7 @@ export const getAllDoctorLeaves: RequestHandler = async (req, res, next) => {
 
     const [leaves, total] = await Promise.all([
       DoctorLeave.find(filter)
-        .select("_id id Doctor Doctor_Id Date From_Date To_Date Leave_Type Day No_Of_Days Applied_On Applied_On_Date Status Reason Department Designation createdAt updatedAt")
+        .select("_id Doctor Doctor_Id Date From_Date To_Date Leave_Type Day No_Of_Days Applied_On Applied_On_Date Status Reason Department Designation createdAt updatedAt")
         .sort(sort)
         .skip(skip)
         .limit(limit)
@@ -162,10 +164,16 @@ export const getDoctorLeaveById: RequestHandler = async (req, res, next) => {
 
     const { id } = req.params;
     const filter = buildAccessFilter(req.user);
-    filter.$or = [{ _id: id }, { id }];
+    
+    // Use _id only (MongoDB ObjectId)
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      filter._id = new mongoose.Types.ObjectId(id);
+    } else {
+      return res.status(400).json({ message: "Invalid doctor leave ID format" });
+    }
 
     const leave = await DoctorLeave.findOne(filter)
-      .select("_id id Doctor Doctor_Id Date From_Date To_Date Leave_Type Day No_Of_Days Applied_On Applied_On_Date Status Reason Department Designation createdAt updatedAt")
+      .select("_id Doctor Doctor_Id Date From_Date To_Date Leave_Type Day No_Of_Days Applied_On Applied_On_Date Status Reason Department Designation createdAt updatedAt")
       .lean()
       .exec();
 
@@ -193,37 +201,30 @@ export const createDoctorLeave: RequestHandler = async (req, res, next) => {
       return res.status(400).json({ message: validation.error });
     }
 
-    // Generate ID if not provided
-    if (!leaveData.id) {
-      leaveData.id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
-    }
+    // Remove id field if present (we use MongoDB's _id)
+    const { id: _ignoredId, ...cleanLeaveData } = leaveData;
 
     // Calculate days and format date string if From_Date and To_Date are provided
-    if (leaveData.From_Date && leaveData.To_Date) {
+    if (cleanLeaveData.From_Date && cleanLeaveData.To_Date) {
       const { days, dayString, dateString } = calculateLeaveDays(
-        leaveData.From_Date,
-        leaveData.To_Date
+        cleanLeaveData.From_Date,
+        cleanLeaveData.To_Date
       );
-      leaveData.No_Of_Days = days;
-      leaveData.Day = dayString;
-      if (!leaveData.Date) {
-        leaveData.Date = dateString;
+      cleanLeaveData.No_Of_Days = days;
+      cleanLeaveData.Day = dayString;
+      if (!cleanLeaveData.Date) {
+        cleanLeaveData.Date = dateString;
       }
     }
 
     // Set Applied_On_Date if Applied_On is provided
-    if (leaveData.Applied_On && !leaveData.Applied_On_Date) {
-      leaveData.Applied_On_Date = new Date();
-    }
-
-    const existing = await DoctorLeave.findOne({ id: leaveData.id }).lean().exec();
-    if (existing) {
-      return res.status(409).json({ message: "Doctor leave with this ID already exists" });
+    if (cleanLeaveData.Applied_On && !cleanLeaveData.Applied_On_Date) {
+      cleanLeaveData.Applied_On_Date = new Date();
     }
 
     const accessFilter = buildAccessFilter(req.user);
     const leave = await DoctorLeave.create({
-      ...leaveData,
+      ...cleanLeaveData,
       ...accessFilter,
     });
     res.status(201).json(formatDoctorLeaveResponse(leave));
@@ -265,7 +266,13 @@ export const updateDoctorLeave: RequestHandler = async (req, res, next) => {
     }
 
     const filter = buildAccessFilter(req.user);
-    filter.$or = [{ _id: id }, { id }];
+    
+    // Use _id only (MongoDB ObjectId)
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      filter._id = new mongoose.Types.ObjectId(id);
+    } else {
+      return res.status(400).json({ message: "Invalid doctor leave ID format" });
+    }
 
     let leave = await DoctorLeave.findOne(filter).exec();
 
@@ -319,7 +326,13 @@ export const deleteDoctorLeave: RequestHandler = async (req, res, next) => {
 
     const { id } = req.params;
     const filter = buildAccessFilter(req.user);
-    filter.$or = [{ _id: id }, { id }];
+    
+    // Use _id only (MongoDB ObjectId)
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      filter._id = new mongoose.Types.ObjectId(id);
+    } else {
+      return res.status(400).json({ message: "Invalid doctor leave ID format" });
+    }
 
     const leave = await DoctorLeave.findOneAndDelete(filter).lean().exec();
 

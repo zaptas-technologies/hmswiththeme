@@ -2,7 +2,6 @@ import { Schema } from "mongoose";
 
 export const CountrySchema = new Schema(
   {
-    id: { type: String, required: true, unique: true },
     name: { type: String, required: true },
     countryName: { type: String },
     countryId: { type: String },
@@ -15,7 +14,6 @@ export const CountrySchema = new Schema(
 
 export const CitySchema = new Schema(
   {
-    id: { type: String, required: true, unique: true },
     name: { type: String, required: true },
     cityName: { type: String },
     cityId: { type: String },
@@ -30,7 +28,6 @@ export const CitySchema = new Schema(
 
 export const StateSchema = new Schema(
   {
-    id: { type: String, required: true, unique: true },
     name: { type: String, required: true },
     stateName: { type: String },
     stateId: { type: String },
@@ -43,7 +40,6 @@ export const StateSchema = new Schema(
 
 export const LocationSchema = new Schema(
   {
-    id: { type: String, required: true, unique: true },
     Location: { type: String, required: true },
     Address: { type: String },
     Phone: { type: String },

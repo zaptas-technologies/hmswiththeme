@@ -4,8 +4,6 @@ import { Inventory } from "../models/inventoryModel";
 import mongoose from "mongoose";
 
 export interface GRNRequest {
-  _id?: string;
-  id?: string;
   GRN_Number: string;
   GRN_Date?: Date | string;
   Supplier: string;
@@ -23,7 +21,11 @@ export interface GRNRequest {
 const formatGRNResponse = (grn: any) => {
   if (!grn) return grn;
   const obj = typeof grn.toObject === "function" ? grn.toObject() : grn;
-  return obj;
+  return {
+    ...obj,
+    _id: obj._id?.toString() || obj._id,
+    id: obj._id?.toString() || obj._id, // For backward compatibility, map _id to id
+  };
 };
 
 const validateGRNData = (
@@ -99,7 +101,6 @@ const updateInventoryFromGRN = async (items: GRNItem[], hospitalId?: mongoose.Ty
     } else {
       // Create new inventory item
       const newInventoryData: any = {
-        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
         Item_Name: item.Item_Name,
         Item_Code: item.Item_Code,
         Batch_Number: item.Batch_Number,
@@ -181,7 +182,13 @@ export const getGRNById: RequestHandler = async (req, res, next) => {
     }
 
     if (!grn) {
-      grn = await GRN.findOne({ $or: [{ _id: id }, { id }, { GRN_Number: id }] });
+      // Use _id or GRN_Number (business identifier)
+      if (mongoose.Types.ObjectId.isValid(id)) {
+        grn = await GRN.findById(id);
+      } else {
+        // Try GRN_Number if not a valid ObjectId
+        grn = await GRN.findOne({ GRN_Number: id });
+      }
     }
 
     if (!grn) {
@@ -205,30 +212,28 @@ export const createGRN: RequestHandler = async (req, res, next) => {
       return res.status(400).json({ message: validation.error });
     }
 
-    // Generate ID if not provided
-    if (!grnData.id) {
-      grnData.id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
-    }
+    // Remove id field if present (we use MongoDB's _id)
+    const { id: _ignoredId, ...cleanGRNData } = grnData;
 
     // Check if GRN with same GRN_Number already exists
-    const existing = await GRN.findOne({ GRN_Number: grnData.GRN_Number });
+    const existing = await GRN.findOne({ GRN_Number: cleanGRNData.GRN_Number });
     if (existing) {
       return res.status(409).json({ message: "GRN with this number already exists" });
     }
 
     // Calculate total amount from items
     let totalAmount = 0;
-    for (const item of grnData.Items) {
+    for (const item of cleanGRNData.Items) {
       item.Total_Price = item.Quantity * item.Unit_Price;
       totalAmount += item.Total_Price;
     }
-    grnData.Total_Amount = totalAmount;
+    cleanGRNData.Total_Amount = totalAmount;
 
     // Convert GRN_Date to Date if string
-    if (grnData.GRN_Date && typeof grnData.GRN_Date === "string") {
-      grnData.GRN_Date = new Date(grnData.GRN_Date);
-    } else if (!grnData.GRN_Date) {
-      grnData.GRN_Date = new Date();
+    if (cleanGRNData.GRN_Date && typeof cleanGRNData.GRN_Date === "string") {
+      cleanGRNData.GRN_Date = new Date(cleanGRNData.GRN_Date);
+    } else if (!cleanGRNData.GRN_Date) {
+      cleanGRNData.GRN_Date = new Date();
     }
 
     // Set hospital and user from request if available
@@ -237,13 +242,13 @@ export const createGRN: RequestHandler = async (req, res, next) => {
       : undefined;
     
     if (hospitalId) {
-      grnData.hospital = hospitalId.toString();
+      cleanGRNData.hospital = hospitalId;
     }
     if (req.user && (req.user as any).id) {
-      grnData.user = (req.user as any).id;
+      cleanGRNData.user = new mongoose.Types.ObjectId((req.user as any).id);
     }
 
-    const grn = await GRN.create(grnData);
+    const grn = await GRN.create(cleanGRNData);
 
     // If status is "Received", update inventory
     if (grn.Status === "Received" && hospitalId) {
@@ -282,14 +287,13 @@ export const updateGRN: RequestHandler = async (req, res, next) => {
     // Don't allow updating id or _id
     const { id: _ignoredId, _id: _ignoredMongoId, ...cleanUpdateData } = updateData;
 
-    // Find GRN by _id, id, or GRN_Number
+    // Use _id or GRN_Number (business identifier)
     let grn;
     if (mongoose.Types.ObjectId.isValid(id)) {
       grn = await GRN.findById(id);
-    }
-
-    if (!grn) {
-      grn = await GRN.findOne({ $or: [{ id }, { GRN_Number: id }] });
+    } else {
+      // Try GRN_Number if not a valid ObjectId
+      grn = await GRN.findOne({ GRN_Number: id });
     }
 
     if (!grn) {
@@ -351,13 +355,13 @@ export const deleteGRN: RequestHandler = async (req, res, next) => {
   try {
     const { id } = req.params;
 
+    // Use _id or GRN_Number (business identifier)
     let grn;
     if (mongoose.Types.ObjectId.isValid(id)) {
       grn = await GRN.findByIdAndDelete(id);
-    }
-
-    if (!grn) {
-      grn = await GRN.findOneAndDelete({ $or: [{ id }, { GRN_Number: id }] });
+    } else {
+      // Try GRN_Number if not a valid ObjectId
+      grn = await GRN.findOneAndDelete({ GRN_Number: id });
     }
 
     if (!grn) {

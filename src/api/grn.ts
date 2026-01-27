@@ -75,13 +75,12 @@ export const fetchGRNById = async (id: string): Promise<GRN> => {
 export const createGRN = async (
   grnData: Partial<GRN>
 ): Promise<GRN> => {
-  if (!grnData.id) {
-    grnData.id = Date.now().toString();
+  // Remove id field if present - backend uses MongoDB's _id
+  const { id: _ignoredId, ...cleanGRNData } = grnData;
+  if (!cleanGRNData.GRN_Number) {
+    cleanGRNData.GRN_Number = `GRN-${Date.now()}`;
   }
-  if (!grnData.GRN_Number) {
-    grnData.GRN_Number = `GRN-${Date.now()}`;
-  }
-  const { data } = await api.post<GRN>("/grn", grnData);
+  const { data } = await api.post<GRN>("/grn", cleanGRNData);
   return data;
 };
 

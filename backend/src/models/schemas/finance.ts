@@ -33,7 +33,6 @@ export const TransactionSchema = new Schema(
 
 export const ExpenseSchema = new Schema(
   {
-    id: { type: String, required: true, unique: true },
     Expense: { type: String, required: true },
     Category: { type: String, required: true },
     Amount: { type: String, required: true },
@@ -83,7 +82,6 @@ export const PaymentSchema = new Schema(
 
 export const PayrollSchema = new Schema(
   {
-    id: { type: String, required: true, unique: true },
     Employee: { type: String, required: true },
     Image: { type: String },
     EmployeeID: { type: String },

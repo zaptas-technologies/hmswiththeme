@@ -3,8 +3,6 @@ import { Inventory, InventoryDoc } from "../models/inventoryModel";
 import mongoose from "mongoose";
 
 export interface InventoryRequest {
-  _id?: string;
-  id?: string;
   Item_Name: string;
   Item_Code?: string;
   Category?: string;
@@ -27,7 +25,11 @@ export interface InventoryRequest {
 const formatInventoryResponse = (inventory: any) => {
   if (!inventory) return inventory;
   const obj = typeof inventory.toObject === "function" ? inventory.toObject() : inventory;
-  return obj;
+  return {
+    ...obj,
+    _id: obj._id?.toString() || obj._id,
+    id: obj._id?.toString() || obj._id, // For backward compatibility, map _id to id
+  };
 };
 
 const validateInventoryData = (
@@ -126,13 +128,12 @@ export const getInventoryById: RequestHandler = async (req, res, next) => {
   try {
     const { id } = req.params;
 
+    // Use _id only (MongoDB ObjectId)
     let inventory;
     if (mongoose.Types.ObjectId.isValid(id)) {
       inventory = await Inventory.findById(id);
-    }
-
-    if (!inventory) {
-      inventory = await Inventory.findOne({ $or: [{ _id: id }, { id }] });
+    } else {
+      return res.status(400).json({ message: "Invalid inventory ID format" });
     }
 
     if (!inventory) {
@@ -156,31 +157,23 @@ export const createInventory: RequestHandler = async (req, res, next) => {
       return res.status(400).json({ message: validation.error });
     }
 
-    // Generate ID if not provided
-    if (!inventoryData.id) {
-      inventoryData.id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
-    }
-
-    // Check if inventory item with same id already exists
-    const existing = await Inventory.findOne({ id: inventoryData.id });
-    if (existing) {
-      return res.status(409).json({ message: "Inventory item with this ID already exists" });
-    }
+    // Remove id field if present (we use MongoDB's _id)
+    const { id: _ignoredId, ...cleanInventoryData } = inventoryData;
 
     // Convert Expiry_Date to Date if string
-    if (typeof inventoryData.Expiry_Date === "string") {
-      inventoryData.Expiry_Date = new Date(inventoryData.Expiry_Date);
+    if (typeof cleanInventoryData.Expiry_Date === "string") {
+      cleanInventoryData.Expiry_Date = new Date(cleanInventoryData.Expiry_Date);
     }
 
     // Set hospital and user from request if available
     if (req.user && (req.user as any).hospitalId) {
-      inventoryData.hospital = (req.user as any).hospitalId;
+      cleanInventoryData.hospital = (req.user as any).hospitalId;
     }
     if (req.user && (req.user as any).id) {
-      inventoryData.user = (req.user as any).id;
+      cleanInventoryData.user = (req.user as any).id;
     }
 
-    const inventory = await Inventory.create(inventoryData);
+    const inventory = await Inventory.create(cleanInventoryData);
     
     // Update status based on quantity and expiry
     updateInventoryStatus(inventory);
@@ -272,13 +265,12 @@ export const deleteInventory: RequestHandler = async (req, res, next) => {
   try {
     const { id } = req.params;
 
+    // Use _id only (MongoDB ObjectId)
     let inventory;
     if (mongoose.Types.ObjectId.isValid(id)) {
       inventory = await Inventory.findByIdAndDelete(id);
-    }
-
-    if (!inventory) {
-      inventory = await Inventory.findOneAndDelete({ id });
+    } else {
+      return res.status(400).json({ message: "Invalid inventory ID format" });
     }
 
     if (!inventory) {

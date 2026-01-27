@@ -68,10 +68,9 @@ export const fetchInventoryById = async (id: string): Promise<Inventory> => {
 export const createInventory = async (
   inventoryData: Partial<Inventory>
 ): Promise<Inventory> => {
-  if (!inventoryData.id) {
-    inventoryData.id = Date.now().toString();
-  }
-  const { data } = await api.post<Inventory>("/inventory", inventoryData);
+  // Remove id field if present - backend uses MongoDB's _id
+  const { id: _ignoredId, ...cleanInventoryData } = inventoryData;
+  const { data } = await api.post<Inventory>("/inventory", cleanInventoryData);
   return data;
 };
 

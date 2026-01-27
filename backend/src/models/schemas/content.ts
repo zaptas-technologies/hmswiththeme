@@ -2,7 +2,6 @@ import { Schema } from "mongoose";
 
 export const AnnouncementSchema = new Schema(
   {
-    id: { type: String, required: true, unique: true },
     CreatedOn: { type: String, required: true },
     Announcement: { type: String, required: true },
     Content: { type: String, required: true },
@@ -14,7 +13,6 @@ export const AnnouncementSchema = new Schema(
 
 export const BlogCategorySchema = new Schema(
   {
-    id: { type: String, required: true, unique: true },
     Categories: { type: String, required: true },
     Category: { type: String },
     Date: { type: String },
@@ -25,7 +23,6 @@ export const BlogCategorySchema = new Schema(
 
 export const BlogCommentSchema = new Schema(
   {
-    id: { type: String, required: true, unique: true },
     Blog: { type: String, required: true },
     Name: { type: String, required: true },
     Email: { type: String, required: true },
@@ -38,7 +35,6 @@ export const BlogCommentSchema = new Schema(
 
 export const PageSchema = new Schema(
   {
-    id: { type: String, required: true, unique: true },
     PageName: { type: String, required: true },
     Slug: { type: String, required: true, unique: true },
     Content: { type: String },
@@ -49,7 +45,6 @@ export const PageSchema = new Schema(
 
 export const NewsletterSchema = new Schema(
   {
-    id: { type: String, required: true, unique: true },
     Email: { type: String, required: true, unique: true },
     SubscribedDate: { type: String, required: true },
     Status: { type: String, enum: ["Active", "Inactive"], required: true },
@@ -59,7 +54,6 @@ export const NewsletterSchema = new Schema(
 
 export const TestimonialSchema = new Schema(
   {
-    id: { type: String, required: true, unique: true },
     Patient: { type: String, required: true },
     Patient_Image: { type: String },
     Doctor: { type: String, required: true },

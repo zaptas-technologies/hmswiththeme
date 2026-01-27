@@ -55,10 +55,16 @@ export const getAppointmentForConsultation: RequestHandler = async (req, res, ne
 
     const { id } = req.params;
     const filter = buildAccessFilter(req.user);
-    filter.$or = [{ _id: id }, { id }];
+    
+    // Use _id only (MongoDB ObjectId)
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      filter._id = new mongoose.Types.ObjectId(id);
+    } else {
+      return res.status(400).json({ message: "Invalid appointment ID format" });
+    }
 
     const appointment = await Appointment.findOne(filter)
-      .select("_id id Date_Time Patient Phone Patient_Image Doctor_Image Doctor role Mode Status Consultation_ID Fees doctorId createdAt updatedAt")
+      .select("_id Date_Time Patient Phone Patient_Image Doctor_Image Doctor role Mode Status Consultation_ID Fees doctorId createdAt updatedAt")
       .lean()
       .exec();
     if (!appointment) {
@@ -74,7 +80,7 @@ export const getAppointmentForConsultation: RequestHandler = async (req, res, ne
         { Phone: appointmentObj.Phone },
       ];
       patient = await Patient.findOne(patientFilter)
-        .select("_id id Patient Gender Patient_img Doctor_img Phone Email Doctor Role Address Last_Visit Status createdAt updatedAt")
+        .select("_id Patient Gender Patient_img Doctor_img Phone Email Doctor Role Address Last_Visit Status createdAt updatedAt")
         .lean()
         .exec();
     }
@@ -85,11 +91,10 @@ export const getAppointmentForConsultation: RequestHandler = async (req, res, ne
       const consultationFilter = buildAccessFilter(req.user);
       consultationFilter.$or = [
         { Consultation_ID: consultationId },
-        { id: consultationId },
-        { Appointment_ID: appointmentObj.id || appointmentObj._id?.toString() },
+        { Appointment_ID: appointmentObj._id?.toString() },
       ];
       consultation = await Consultation.findOne(consultationFilter)
-        .select("_id id Consultation_ID Appointment_ID Patient Patient_Image Doctor Doctor_Image Vitals Complaints Diagnosis Medications Advice Investigations FollowUp Invoice Status Consultation_Date Completed_At createdAt updatedAt")
+        .select("_id Consultation_ID Appointment_ID Patient Patient_Image Doctor Doctor_Image Vitals Complaints Diagnosis Medications Advice Investigations FollowUp Invoice Status Consultation_Date Completed_At createdAt updatedAt")
         .lean()
         .exec();
     }
@@ -193,7 +198,13 @@ export const saveConsultation: RequestHandler = async (req, res, next) => {
     }
 
     const appointmentFilter = buildAccessFilter(req.user);
-    appointmentFilter.$or = [{ _id: appointmentId }, { id: appointmentId }];
+    
+    // Use _id only (MongoDB ObjectId)
+    if (mongoose.Types.ObjectId.isValid(appointmentId)) {
+      appointmentFilter._id = new mongoose.Types.ObjectId(appointmentId);
+    } else {
+      return res.status(400).json({ message: "Invalid appointment ID format" });
+    }
 
     const appointment = await Appointment.findOne(appointmentFilter).exec();
 
@@ -205,11 +216,9 @@ export const saveConsultation: RequestHandler = async (req, res, next) => {
     
     // Generate Consultation ID
     const consultationId = `CONS${Date.now().toString().slice(-8)}`;
-    const consultationIdValue = `${consultationId}-${Math.random().toString(36).slice(2, 7)}`;
 
     // Prepare consultation document data
     const consultationDocument: any = {
-      id: consultationIdValue,
       Consultation_ID: consultationId,
       Appointment_ID: appointmentIdValue,
       Patient: appointment.Patient || "",
@@ -280,7 +289,7 @@ export const saveConsultation: RequestHandler = async (req, res, next) => {
           { id: appointment.doctorId || appointment.Doctor },
         ];
         const doctor = await Doctor.findOne(doctorFilter)
-          .select("_id id Email email Name_Designation")
+          .select("_id Email email Name_Designation")
           .lean()
           .exec() as { Email?: string; email?: string } | null;
         
@@ -365,7 +374,6 @@ export const saveConsultation: RequestHandler = async (req, res, next) => {
           const appointmentIdValue = appointment.id || appointment._id?.toString() || appointmentId;
           
           const prescriptionData = {
-            id: `${prescriptionId}-${Math.random().toString(36).slice(2, 7)}`,
             Prescription_ID: prescriptionId,
             Date: prescriptionDate,
             Prescribed_On: prescriptionDate,

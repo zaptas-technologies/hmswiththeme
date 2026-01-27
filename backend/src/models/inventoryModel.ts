@@ -2,7 +2,6 @@ import mongoose, { Document } from "mongoose";
 import { InventorySchema } from "./schemas/clinical";
 
 export interface InventoryDoc extends Document {
-  id: string;
   Item_Name: string;
   Item_Code?: string;
   Category?: string;

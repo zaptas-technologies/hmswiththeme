@@ -2,7 +2,6 @@ import { Schema } from "mongoose";
 
 export const AssetSchema = new Schema(
   {
-    id: { type: String, required: true, unique: true },
     AssetID: { type: String, required: true, unique: true },
     AssetUser: { type: String, required: true },
     Image: { type: String },
@@ -22,7 +21,6 @@ export const AssetSchema = new Schema(
 
 export const StaffSchema = new Schema(
   {
-    id: { type: String, required: true, unique: true },
     Staff: { type: String, required: true },
     Image: { type: String },
     Designation: { type: String, required: true },
@@ -50,7 +48,6 @@ export const LeaveSchema = new Schema(
 
 export const ServiceSchema = new Schema(
   {
-    id: { type: String, required: true, unique: true },
     ServiceName: { type: String, required: true },
     Department: { type: String, required: true },
     Price: { type: String, required: true },
@@ -61,7 +58,6 @@ export const ServiceSchema = new Schema(
 
 export const SpecializationSchema = new Schema(
   {
-    id: { type: String, required: true, unique: true },
     Specialization: { type: String, required: true },
     img: { type: String },
     Image: { type: String },
@@ -75,7 +71,6 @@ export const SpecializationSchema = new Schema(
 
 export const DesignationSchema = new Schema(
   {
-    id: { type: String, required: true, unique: true },
     Designation: { type: String, required: true },
     Department: { type: String, required: true },
     Status: { type: String, enum: ["Active", "Inactive"], required: true },
