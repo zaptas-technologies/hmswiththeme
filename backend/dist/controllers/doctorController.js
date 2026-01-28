@@ -47,6 +47,13 @@ const validateDoctorData = (data) => {
     if (!data.Status || !["Available", "Unavailable"].includes(data.Status)) {
         return { isValid: false, error: "Status must be 'Available' or 'Unavailable'" };
     }
+    // Time slot minutes (required, default handled in schema but we validate if provided)
+    if (data.timeSlotMinutes !== undefined) {
+        const n = Number(data.timeSlotMinutes);
+        if (!Number.isFinite(n) || n <= 0) {
+            return { isValid: false, error: "timeSlotMinutes must be a positive number" };
+        }
+    }
     return { isValid: true };
 };
 const getAllDoctors = async (req, res, next) => {
@@ -61,7 +68,7 @@ const getAllDoctors = async (req, res, next) => {
         const filter = (0, authMiddleware_1.buildAccessFilter)(req.user);
         const [doctors, total] = await Promise.all([
             doctorModel_1.Doctor.find(filter)
-                .select("_id Name_Designation img role Department Phone Email Fees Status createdAt updatedAt")
+                .select("_id Name_Designation img role Department Phone Email Fees Status timeSlotMinutes createdAt updatedAt")
                 .sort(sort)
                 .skip(skip)
                 .limit(limit)
@@ -99,7 +106,7 @@ const getDoctorById = async (req, res, next) => {
             return res.status(400).json({ message: "Invalid doctor ID format" });
         }
         const doctor = await doctorModel_1.Doctor.findOne(filter)
-            .select("_id Name_Designation img role Department Phone Email Fees Status createdAt updatedAt")
+            .select("_id Name_Designation img role Department Phone Email Fees Status timeSlotMinutes createdAt updatedAt")
             .lean()
             .exec();
         if (!doctor) {

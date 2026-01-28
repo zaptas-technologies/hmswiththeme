@@ -14,6 +14,7 @@ export interface DaySchedule {
 export interface DoctorScheduleDoc extends Document {
   doctorId: mongoose.Types.ObjectId;
   location: string;
+  hospital?: mongoose.Types.ObjectId; // Hospital ObjectId for filtering
   fromDate: Date;
   toDate: Date;
   recursEvery: string; // "1 Week", "1 Month", etc.
@@ -47,6 +48,7 @@ const DoctorScheduleSchema = new Schema<DoctorScheduleDoc>(
   {
     doctorId: { type: Schema.Types.ObjectId, ref: "Doctor", required: true, index: true },
     location: { type: String, required: true },
+    hospital: { type: Schema.Types.ObjectId, ref: "Hospital", index: true },
     fromDate: { type: Date, required: true },
     toDate: { type: Date, required: true },
     recursEvery: { type: String, required: true },
@@ -61,6 +63,7 @@ const DoctorScheduleSchema = new Schema<DoctorScheduleDoc>(
 // Index for efficient queries
 DoctorScheduleSchema.index({ doctorId: 1, fromDate: -1 });
 DoctorScheduleSchema.index({ doctorId: 1, createdAt: -1 });
+DoctorScheduleSchema.index({ doctorId: 1, hospital: 1 }); // For hospital-based filtering
 
 export const DoctorSchedule =
   mongoose.models.DoctorSchedule ||

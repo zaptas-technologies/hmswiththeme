@@ -20,9 +20,13 @@ export interface ScheduleResponse {
   schedules: DaySchedule[];
 }
 
-export const fetchSchedule = async (token: string): Promise<ScheduleResponse> => {
+export const fetchSchedule = async (token: string, hospitalId?: string): Promise<ScheduleResponse> => {
   setAuthToken(token);
-  const { data } = await api.get<ScheduleResponse>("/schedule");
+  const queryParams = new URLSearchParams();
+  if (hospitalId) queryParams.append("hospitalId", hospitalId);
+  const queryString = queryParams.toString();
+  const url = `/schedule${queryString ? `?${queryString}` : ""}`;
+  const { data } = await api.get<ScheduleResponse>(url);
   return data;
 };
 

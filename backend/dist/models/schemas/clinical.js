@@ -27,6 +27,8 @@ exports.DoctorSchema = new mongoose_1.Schema({
     Email: { type: String, required: true },
     Fees: { type: String },
     Status: { type: String, enum: ["Available", "Unavailable"], required: true },
+    // Time slot configuration for bookings (minutes)
+    timeSlotMinutes: { type: Number, required: true, default: 15 },
     hospital: { type: mongoose_1.Schema.Types.ObjectId, ref: "Hospital", index: true },
     user: { type: mongoose_1.Schema.Types.ObjectId, ref: "User", index: true },
 }, { timestamps: true, strict: false });

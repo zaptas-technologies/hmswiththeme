@@ -34,6 +34,9 @@ export interface Doctor {
   Email: string;
   Fees?: string;
   Status: "Available" | "Unavailable";
+
+  // Time slot configuration (minutes)
+  timeSlotMinutes?: number;
   
   // Extended fields from form
   username?: string;

@@ -20,7 +20,6 @@ import PhoneInput from "react-phone-number-input";
 import "react-phone-number-input/style.css";
 import { createDoctor } from "../../../../../api/doctors";
 import type { Doctor, DaySchedule, TimeSlot, Education, Award } from "../../../../../api/doctors";
-import { fetchLocations } from "../../../../../api/locations";
 import type { Option } from "../../../../../core/common/common-select/commonSelect";
 
 interface ScheduleRow {
@@ -98,6 +97,8 @@ const AddDoctor = () => {
   const [appointmentType, setAppointmentType] = useState("");
   const [acceptBookingsInAdvance, setAcceptBookingsInAdvance] = useState("");
   const [appointmentDuration, setAppointmentDuration] = useState("");
+  // Time slot (minutes) - compulsory, default 15
+  const [timeSlotMinutes, setTimeSlotMinutes] = useState<number>(15);
   const [consultationCharge, setConsultationCharge] = useState("");
   const [maxBookingsPerSlot, setMaxBookingsPerSlot] = useState("");
   const [displayOnBookingPage, setDisplayOnBookingPage] = useState(false);
@@ -108,7 +109,7 @@ const AddDoctor = () => {
   const [certifications, setCertifications] = useState<AwardRow[]>([{ id: Date.now(), name: "", from: null }]);
 
   // Dynamic Options
-  const [locations] = useState<Option[]>([]);
+  const [] = useState<Option[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -188,6 +189,11 @@ const AddDoctor = () => {
       alert("Please fill in required fields: Name, Email, Phone, and Password");
       return;
     }
+
+    if (!Number.isFinite(timeSlotMinutes) || timeSlotMinutes <= 0) {
+      alert("Time Slot (minutes) is required and must be a valid number.");
+      return;
+    }
     
     if (password.length < 6) {
       alert("Password must be at least 6 characters long");
@@ -239,6 +245,7 @@ const AddDoctor = () => {
         appointmentType,
         acceptBookingsInAdvance,
         appointmentDuration,
+        timeSlotMinutes,
         consultationCharge,
         maxBookingsPerSlot,
         displayOnBookingPage,
@@ -836,6 +843,28 @@ const AddDoctor = () => {
                                 Mins
                               </span>
                             </div>
+                          </div>
+                        </div>
+                        <div className="col-lg-6">
+                          <div className="mb-3">
+                            <label className="form-label">
+                              Time Slot <span className="text-danger">*</span>
+                            </label>
+                            <div className="input-group">
+                              <input
+                                type="number"
+                                className="form-control"
+                                value={timeSlotMinutes}
+                                min={5}
+                                step={1}
+                                required
+                                onChange={(e) => setTimeSlotMinutes(Number(e.target.value))}
+                              />
+                              <span className="input-group-text bg-transparent text-dark fs-14">
+                                Minutes
+                              </span>
+                            </div>
+                            <small className="text-muted">Default is 15 minutes per slot.</small>
                           </div>
                         </div>
                         <div className="col-lg-6">

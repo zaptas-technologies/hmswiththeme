@@ -21,6 +21,7 @@ interface ScheduleRow {
 interface LocationOption {
   value: string;
   label: string;
+  hospitalId?: string; // Hospital ObjectId for filtering
 }
 
 const DoctorSchedules = () => {
@@ -37,6 +38,7 @@ const DoctorSchedules = () => {
 
   // Form state
   const [location, setLocation] = useState("Select");
+  const [selectedHospitalId, setSelectedHospitalId] = useState<string | undefined>(undefined);
   const [fromDate, setFromDate] = useState<Dayjs | null>(null);
   const [toDate, setToDate] = useState<Dayjs | null>(null);
   const [recursEvery, setRecursEvery] = useState(Recures_Every[0]?.value || "");
@@ -81,6 +83,7 @@ const DoctorSchedules = () => {
               return {
                 value: label, // store readable location string in schedule
                 label,
+                hospitalId: h._id, // Store hospital ID for filtering
               };
             }),
         ];
@@ -94,7 +97,7 @@ const DoctorSchedules = () => {
     loadLocations();
   }, []);
 
-  // Load schedule data on mount
+  // Load schedule data on mount and when hospital filter changes
   useEffect(() => {
     const loadSchedule = async () => {
       if (!token) return;
@@ -102,10 +105,15 @@ const DoctorSchedules = () => {
       try {
         setLoading(true);
         setError(null);
-        const data = await fetchSchedule(token);
+        // Fetch schedule filtered by selected hospital if location is set
+        const data = await fetchSchedule(token, selectedHospitalId);
 
-        // Set form fields
-        setLocation(data.location || "Select");
+        // Set form fields (only update location if it's different to avoid loops)
+        const loadedLocation = data.location || "Select";
+        if (loadedLocation !== location) {
+          setLocation(loadedLocation);
+        }
+        
         setFromDate(data.fromDate ? dayjs(data.fromDate) : null);
         setToDate(data.toDate ? dayjs(data.toDate) : null);
         setRecursEvery(data.recursEvery || Recures_Every[0]?.value || "");
@@ -144,7 +152,8 @@ const DoctorSchedules = () => {
     };
 
     loadSchedule();
-  }, [token]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, selectedHospitalId]);
 
   const getModalContainer = () => {
     const modalElement = document.getElementById("modal-datepicker");
@@ -530,7 +539,14 @@ const DoctorSchedules = () => {
                               options={locations}
                               className="select"
                               value={location}
-                              onChange={(value) => setLocation(value)}
+                              onChange={(value) => {
+                                setLocation(value);
+                                // Find hospital ID from selected location and reload schedule
+                                const selectedLoc = locations.find((loc) => loc.value === value);
+                                const hospitalId = selectedLoc?.hospitalId;
+                                setSelectedHospitalId(hospitalId);
+                                // Schedule will reload automatically via useEffect dependency on selectedHospitalId
+                              }}
                             />
                           </div>
                         </div>

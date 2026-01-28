@@ -30,6 +30,8 @@ export const DoctorSchema = new Schema(
     Email: { type: String, required: true },
     Fees: { type: String },
     Status: { type: String, enum: ["Available", "Unavailable"], required: true },
+    // Time slot configuration for bookings (minutes)
+    timeSlotMinutes: { type: Number, required: true, default: 15 },
     hospital: { type: Schema.Types.ObjectId, ref: "Hospital", index: true },
     user: { type: Schema.Types.ObjectId, ref: "User", index: true },
   },

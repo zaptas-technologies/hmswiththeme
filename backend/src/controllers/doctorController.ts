@@ -15,6 +15,7 @@ export interface DoctorRequest {
   password?: string; // Password for creating user account
   Fees?: string;
   Status: "Available" | "Unavailable";
+  timeSlotMinutes?: number;
   
   // Extended fields
   username?: string;
@@ -122,6 +123,14 @@ const validateDoctorData = (data: Partial<DoctorRequest>): { isValid: boolean; e
     return { isValid: false, error: "Status must be 'Available' or 'Unavailable'" };
   }
 
+  // Time slot minutes (required, default handled in schema but we validate if provided)
+  if (data.timeSlotMinutes !== undefined) {
+    const n = Number(data.timeSlotMinutes);
+    if (!Number.isFinite(n) || n <= 0) {
+      return { isValid: false, error: "timeSlotMinutes must be a positive number" };
+    }
+  }
+
   return { isValid: true };
 };
 
@@ -140,7 +149,7 @@ export const getAllDoctors: RequestHandler = async (req, res, next) => {
 
     const [doctors, total] = await Promise.all([
       Doctor.find(filter)
-        .select("_id Name_Designation img role Department Phone Email Fees Status createdAt updatedAt")
+        .select("_id Name_Designation img role Department Phone Email Fees Status timeSlotMinutes createdAt updatedAt")
         .sort(sort)
         .skip(skip)
         .limit(limit)
@@ -180,7 +189,7 @@ export const getDoctorById: RequestHandler = async (req, res, next) => {
     }
 
     const doctor = await Doctor.findOne(filter)
-      .select("_id Name_Designation img role Department Phone Email Fees Status createdAt updatedAt")
+      .select("_id Name_Designation img role Department Phone Email Fees Status timeSlotMinutes createdAt updatedAt")
       .lean()
       .exec();
 

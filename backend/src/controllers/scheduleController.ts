@@ -47,6 +47,7 @@ const formatScheduleResponse = (schedule: DoctorScheduleDoc) => {
     id: schedule._id.toString(),
     doctorId: schedule.doctorId.toString(),
     location: schedule.location,
+    hospitalId: schedule.hospital?.toString(),
     fromDate: schedule.fromDate.toISOString().split("T")[0],
     toDate: schedule.toDate.toISOString().split("T")[0],
     recursEvery: schedule.recursEvery,
@@ -84,8 +85,22 @@ export const getSchedule: RequestHandler = async (req, res, next) => {
       return res.status(403).json({ message: "Doctor profile not found for this user" });
     }
 
-    // Get the most recent active schedule for this doctor
-    const schedule = await DoctorSchedule.findOne({ doctorId })
+    // Optional hospital filter from query param
+    const hospitalIdParam = req.query.hospitalId as string | undefined;
+    let hospitalId: mongoose.Types.ObjectId | undefined;
+    
+    if (hospitalIdParam && mongoose.Types.ObjectId.isValid(hospitalIdParam)) {
+      hospitalId = new mongoose.Types.ObjectId(hospitalIdParam);
+    }
+
+    // Build filter: doctorId + optional hospital
+    const filter: any = { doctorId };
+    if (hospitalId) {
+      filter.hospital = hospitalId;
+    }
+
+    // Get the most recent active schedule for this doctor (optionally filtered by hospital)
+    const schedule = await DoctorSchedule.findOne(filter)
       .sort({ createdAt: -1 })
       .exec();
 
@@ -118,17 +133,29 @@ export const saveSchedule: RequestHandler = async (req, res, next) => {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
+    // Get doctor's hospital ID for saving with schedule
+    const doctor = await Doctor.findById(doctorId).select("hospital").lean<{ hospital?: mongoose.Types.ObjectId } | null>();
+    const hospitalId = doctor?.hospital ? new mongoose.Types.ObjectId(doctor.hospital.toString()) : undefined;
+
     // Debug logging (remove in production)
-    console.log("Saving schedule for doctorId:", doctorId);
+    console.log("Saving schedule for doctorId:", doctorId, "hospitalId:", hospitalId);
     console.log("Schedules data:", JSON.stringify(schedules, null, 2));
 
     // Parse dates
     const fromDateObj = new Date(fromDate);
     const toDateObj = new Date(toDate);
 
-    // Find existing schedule for this doctor
-    // We'll update the most recent one or create a new one
-    const existingSchedule = await DoctorSchedule.findOne({ doctorId })
+    // Find existing schedule for this doctor and location/hospital
+    // If hospitalId is provided, filter by it; otherwise match by location string
+    const filter: any = { doctorId };
+    if (hospitalId) {
+      filter.hospital = hospitalId;
+    } else {
+      // Fallback: match by location string if hospital ID not available
+      filter.location = location.trim();
+    }
+    
+    const existingSchedule = await DoctorSchedule.findOne(filter)
       .sort({ createdAt: -1 })
       .exec();
 
@@ -146,6 +173,7 @@ export const saveSchedule: RequestHandler = async (req, res, next) => {
       // Update existing schedule - use set() to ensure Mongoose detects changes
       existingSchedule.set({
         location: location.trim(),
+        hospital: hospitalId, // Update hospital ID if doctor's hospital changed
         fromDate: fromDateObj,
         toDate: toDateObj,
         recursEvery: recursEvery.trim(),
@@ -167,8 +195,8 @@ export const saveSchedule: RequestHandler = async (req, res, next) => {
       
       return res.json(formatScheduleResponse(savedSchedule));
     } else {
-      // Create new schedule
-      const scheduleData = {
+      // Create new schedule with hospital ID
+      const scheduleData: any = {
         doctorId,
         location: location.trim(),
         fromDate: fromDateObj,
@@ -176,6 +204,11 @@ export const saveSchedule: RequestHandler = async (req, res, next) => {
         recursEvery: recursEvery.trim(),
         schedules: normalizedSchedules,
       };
+      
+      // Add hospital ID if available
+      if (hospitalId) {
+        scheduleData.hospital = hospitalId;
+      }
 
       const newSchedule = await DoctorSchedule.create(scheduleData);
 
