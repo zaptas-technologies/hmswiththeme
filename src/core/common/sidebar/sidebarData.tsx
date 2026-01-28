@@ -690,23 +690,21 @@ const DoctorSidebarData = [
 // Admin Sidebar Data (default - for admin, receptionist, etc.)
 const AdminSidebarData = [
   {
-    tittle: "Main Menu",
+   tittle: "Main Menu",
     icon: "airplay",
     showAsTab: true,
     separateRoute: false,
     submenuItems: [
       {
         label: "Dashboard",
-        link: "index",
-        submenu: true,
+        link: routes.superAdminDashboard,
+        submenu: false,
         showSubRoute: false,
         icon: "layout-dashboard",
         base: "dashboard",
         materialicons: "start",
         dot: true,
-        submenuItems: [
-          { label: "Admin Dashboard", link: routes.dashboard },
-        ],
+        submenuItems: [],
       },
       // {
       //   label: "Applications",
