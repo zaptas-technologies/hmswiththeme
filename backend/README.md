@@ -18,6 +18,28 @@ Professional backend API with explicit Mongoose schemas for all datasets from `s
 4. Seed theme data into Mongo: `npm run seed` (loads all 47+ datasets)
 5. Start API: `npm run dev` (or `npm run start` after `npm run build`)
 
+### Seed Dummy Data for Reports
+
+To populate the database with realistic dummy data for testing reports:
+
+```bash
+npm run seed-dummy-data
+```
+
+This script creates:
+- 1 Superadmin user
+- 1 Hospital with Hospital Admin user
+- 10 Doctors (with user accounts)
+- 25 Patients
+- 25 Appointments (with various statuses)
+- 15 Consultations (for completed appointments)
+- Multiple Prescriptions (linked to consultations)
+
+**Login Credentials:**
+- Superadmin: `superadmin@preclinic.com` / `123456`
+- Hospital Admin: `hospitaladmin@preclinic.com` / `123456`
+- Doctors: `<doctor-email>` / `123456`
+
 ### API Endpoints
 
 - `GET /api` — list all available resources

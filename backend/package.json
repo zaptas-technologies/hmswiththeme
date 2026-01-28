@@ -8,7 +8,8 @@
     "dev:nodemon": "nodemon --watch src --ext ts,js,json --exec \"ts-node src/server.ts\"",
     "build": "tsc",
     "start": "node dist/server.js",
-    "create-superadmin": "ts-node src/scripts/create-superadmin.ts"
+    "create-superadmin": "ts-node src/scripts/create-superadmin.ts",
+    "seed-dummy-data": "ts-node src/scripts/seed-dummy-data.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
