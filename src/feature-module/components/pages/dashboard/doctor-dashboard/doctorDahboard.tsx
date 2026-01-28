@@ -148,7 +148,7 @@ const DoctorDahboard = () => {
               </p>
             </div>
             <div className="d-flex align-items-center flex-wrap gap-2">
-              <Link
+              {/* <Link
                 to="#"
                 className="btn btn-primary d-inline-flex align-items-center"
                 data-bs-toggle="offcanvas"
@@ -156,7 +156,7 @@ const DoctorDahboard = () => {
               >
                 <i className="ti ti-plus me-1" />
                 New Appointment
-              </Link>
+              </Link> */}
               {/* <Link
                 to="#"
                 className="btn btn-outline-white bg-white d-inline-flex align-items-center"
