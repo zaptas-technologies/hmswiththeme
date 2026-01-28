@@ -12,6 +12,13 @@ export interface PrescriptionDoc extends Document {
   Dosage?: string;
   Frequency?: string;
   Duration?: string;
+  Medications?: Array<{
+    medicine: string;
+    dosage?: string;
+    frequency?: string;
+    duration?: string;
+    inventoryId?: mongoose.Types.ObjectId;
+  }>;
   Appointment_ID: mongoose.Types.ObjectId;
   Prescription_ID?: string;
   Amount?: number;

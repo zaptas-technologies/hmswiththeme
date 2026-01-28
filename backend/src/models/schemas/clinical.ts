@@ -93,12 +93,24 @@ export const DoctorPrescriptionSchema = new Schema(
     Patient_Image: { type: String },
     Doctor: { type: String, required: true },
 
-    Medicine: { type: String, required: true },
+    // Legacy single-medicine fields (kept for backward compatibility)
+    Medicine: { type: String, required: false },
     Status: { type: String, required: true },
 
     Dosage: { type: String },
     Frequency: { type: String },
     Duration: { type: String },
+
+    // New: one prescription can contain multiple medicines
+    Medications: [
+      {
+        medicine: { type: String, required: true },
+        dosage: { type: String },
+        frequency: { type: String },
+        duration: { type: String },
+        inventoryId: { type: Schema.Types.ObjectId, ref: "Inventory", index: true },
+      },
+    ],
 
     // Must be a real MongoDB ObjectId
     Appointment_ID: { type: Schema.Types.ObjectId, ref: "Appointment", required: true, index: true },

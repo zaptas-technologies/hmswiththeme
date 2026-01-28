@@ -71,11 +71,22 @@ exports.DoctorPrescriptionSchema = new mongoose_1.Schema({
     Patient: { type: String, required: true },
     Patient_Image: { type: String },
     Doctor: { type: String, required: true },
-    Medicine: { type: String, required: true },
+    // Legacy single-medicine fields (kept for backward compatibility)
+    Medicine: { type: String, required: false },
     Status: { type: String, required: true },
     Dosage: { type: String },
     Frequency: { type: String },
     Duration: { type: String },
+    // New: one prescription can contain multiple medicines
+    Medications: [
+        {
+            medicine: { type: String, required: true },
+            dosage: { type: String },
+            frequency: { type: String },
+            duration: { type: String },
+            inventoryId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Inventory", index: true },
+        },
+    ],
     // Must be a real MongoDB ObjectId
     Appointment_ID: { type: mongoose_1.Schema.Types.ObjectId, ref: "Appointment", required: true, index: true },
     // ObjectId references (always use MongoDB ObjectId)

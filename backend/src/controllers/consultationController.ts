@@ -518,62 +518,88 @@ export const saveConsultation: RequestHandler = async (req, res, next) => {
           ? new mongoose.Types.ObjectId(String(consultation._id))
           : undefined;
         
-        for (const medication of consultationData.medications) {
-          const medicineName = medication.medicine || medication.Medicine || medication.name || "";
-          
-          if (!medicineName || medicineName.trim() === "") {
-            continue;
-          }
+        const appointmentObjectId = new mongoose.Types.ObjectId(String(appointment._id));
 
-          const appointmentObjectId = new mongoose.Types.ObjectId(String(appointment._id));
-          
-          const prescriptionData: any = {
+        const meds = consultationData.medications
+          .map((m: any) => {
+            const medicineName = (m.medicine || m.Medicine || m.name || "").trim();
+            if (!medicineName) return null;
+            const inventoryIdStr = String(m.inventoryId || "").trim();
+            const inventoryId =
+              inventoryIdStr && mongoose.Types.ObjectId.isValid(inventoryIdStr)
+                ? new mongoose.Types.ObjectId(inventoryIdStr)
+                : undefined;
+            return {
+              medicine: medicineName,
+              dosage: String(m.dosage || m.Dosage || "").trim(),
+              frequency: String(m.frequency || m.Frequency || "").trim(),
+              duration: String(m.duration || m.Duration || "").trim(),
+              ...(inventoryId ? { inventoryId } : {}),
+            };
+          })
+          .filter(Boolean) as Array<any>;
+
+        if (meds.length === 0) return;
+
+        // One prescription per appointment/consultation (store multiple meds inside Medications[])
+        const normalizedPrescriptionAccessFilter: any = {};
+        if (accessFilter.user && typeof accessFilter.user === "string") {
+          normalizedPrescriptionAccessFilter.user = new mongoose.Types.ObjectId(accessFilter.user);
+        }
+        if (accessFilter.hospital && typeof accessFilter.hospital === "string") {
+          normalizedPrescriptionAccessFilter.hospital = new mongoose.Types.ObjectId(accessFilter.hospital);
+        }
+
+        // If already exists for same appointment+consultation, update it; else create
+        const existingPrescription = await Prescription.findOne({
+          Appointment_ID: appointmentObjectId,
+          ...(consultationIdObj ? { consultationId: consultationIdObj } : {}),
+          ...(normalizedPrescriptionAccessFilter.user ? { user: normalizedPrescriptionAccessFilter.user } : {}),
+          ...(normalizedPrescriptionAccessFilter.hospital ? { hospital: normalizedPrescriptionAccessFilter.hospital } : {}),
+        }).exec();
+
+        if (existingPrescription) {
+          existingPrescription.set({
+            Date: prescriptionDate,
+            Prescribed_On: prescriptionDate,
+            Patient: appointment.Patient || "",
+            Patient_Image: appointment.Patient_Image || "",
+            Doctor: appointment.Doctor || "",
+            Status: "Active",
+            Appointment_ID: appointmentObjectId,
+            ...(consultationIdObj ? { consultationId: consultationIdObj } : {}),
+            ...(patientId ? { patientId } : {}),
+            ...(doctorIdObj ? { doctorId: doctorIdObj } : {}),
+            // Keep legacy single fields in sync (first medicine)
+            Medicine: meds[0]?.medicine || "",
+            Dosage: meds[0]?.dosage || "",
+            Frequency: meds[0]?.frequency || "",
+            Duration: meds[0]?.duration || "",
+            Medications: meds,
+          });
+          existingPrescription.markModified("Medications");
+          await existingPrescription.save();
+        } else {
+          await Prescription.create({
             Prescription_ID: prescriptionId,
             Date: prescriptionDate,
             Prescribed_On: prescriptionDate,
             Patient: appointment.Patient || "",
             Patient_Image: appointment.Patient_Image || "",
             Doctor: appointment.Doctor || "",
-            Medicine: medicineName.trim(),
             Status: "Active",
-            Dosage: medication.dosage || medication.Dosage || "",
-            Frequency: medication.frequency || medication.Frequency || "",
-            Duration: medication.duration || medication.Duration || "",
             Appointment_ID: appointmentObjectId,
             ...(consultationIdObj ? { consultationId: consultationIdObj } : {}),
             ...(patientId ? { patientId } : {}),
             ...(doctorIdObj ? { doctorId: doctorIdObj } : {}),
-            ...(medication.inventoryId && mongoose.Types.ObjectId.isValid(String(medication.inventoryId))
-              ? { inventoryId: new mongoose.Types.ObjectId(String(medication.inventoryId)) }
-              : {}),
-          };
-
-          const existingPrescription = await Prescription.findOne({
-            $and: [
-              {
-                $or: [
-                  { Appointment_ID: prescriptionData.Appointment_ID },
-                ]
-              },
-              { Medicine: prescriptionData.Medicine },
-              { Patient: prescriptionData.Patient },
-            ]
-          }).lean().exec();
-
-          if (!existingPrescription) {
-            // Convert user and hospital strings to ObjectIds for proper MongoDB storage
-            const normalizedPrescriptionAccessFilter: any = {};
-            if (accessFilter.user && typeof accessFilter.user === "string") {
-              normalizedPrescriptionAccessFilter.user = new mongoose.Types.ObjectId(accessFilter.user);
-            }
-            if (accessFilter.hospital && typeof accessFilter.hospital === "string") {
-              normalizedPrescriptionAccessFilter.hospital = new mongoose.Types.ObjectId(accessFilter.hospital);
-            }
-            await Prescription.create({
-              ...prescriptionData,
-              ...normalizedPrescriptionAccessFilter,
-            });
-          }
+            // Legacy single fields (first medicine)
+            Medicine: meds[0]?.medicine || "",
+            Dosage: meds[0]?.dosage || "",
+            Frequency: meds[0]?.frequency || "",
+            Duration: meds[0]?.duration || "",
+            Medications: meds,
+            ...normalizedPrescriptionAccessFilter,
+          });
         }
       } catch (prescriptionErr: any) {
         // Don't fail the consultation save if prescription creation fails

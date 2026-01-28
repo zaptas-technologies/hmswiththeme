@@ -383,7 +383,7 @@ export const getAllPrescriptions: RequestHandler = async (req, res, next) => {
 
     const [prescriptions, total] = await Promise.all([
       Prescription.find(filter)
-        .select("_id Prescription_ID Date Prescribed_On Patient Patient_Image Doctor Medicine Status Dosage Frequency Duration Appointment_ID appointmentId Amount createdAt updatedAt")
+        .select("_id Prescription_ID Date Prescribed_On Patient Patient_Image Doctor Medicine Status Dosage Frequency Duration Medications Appointment_ID consultationId patientId doctorId inventoryId Amount createdAt updatedAt")
         .sort(sort)
         .skip(skip)
         .limit(limit)
@@ -424,7 +424,7 @@ export const getPrescriptionById: RequestHandler = async (req, res, next) => {
     }
 
     const prescription = await Prescription.findOne(filter)
-      .select("_id Prescription_ID Date Prescribed_On Patient Patient_Image Doctor Medicine Status Dosage Frequency Duration Appointment_ID appointmentId Amount createdAt updatedAt")
+      .select("_id Prescription_ID Date Prescribed_On Patient Patient_Image Doctor Medicine Status Dosage Frequency Duration Medications Appointment_ID consultationId patientId doctorId inventoryId Amount createdAt updatedAt")
       .lean()
       .exec();
     
