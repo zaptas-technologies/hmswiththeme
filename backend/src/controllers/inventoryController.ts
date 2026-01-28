@@ -2,6 +2,8 @@ import { RequestHandler } from "express";
 import { Inventory, InventoryDoc } from "../models/inventoryModel";
 import mongoose from "mongoose";
 import { buildAccessFilter } from "../middlewares/authMiddleware";
+import { Doctor } from "../models/doctorModel";
+import { User } from "../models/userModel";
 
 export interface InventoryRequest {
   Item_Name: string;
@@ -127,6 +129,117 @@ export const getAllInventory: RequestHandler = async (req, res, next) => {
         limit,
         pages: Math.ceil(total / limit),
       },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET /api/inventory/search/medicines - Search medicines for autocomplete (filtered by hospital)
+export const searchMedicines: RequestHandler = async (req, res, next) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const search = (req.query.search as string) || "";
+    const limit = parseInt(req.query.limit as string) || 20;
+
+    // Build filter similar to getAllAppointments - filter by hospital for doctors
+    const filter: any = {};
+    
+    // For doctors (USER role), find their hospital
+    if (req.user.role === "USER") {
+      try {
+        // Find doctor by user ID or email (same approach as getAllAppointments)
+        let doctor = await Doctor.findOne({ user: req.user.userId })
+          .select("_id hospital Email Name_Designation")
+          .lean() as { _id?: any; hospital?: any; Email?: string; Name_Designation?: string } | null;
+
+        // If not found by user ID, try to find by email from User model
+        if (!doctor) {
+          const user = await User.findById(req.user.userId).select("email").lean();
+          if (user?.email) {
+            doctor = await Doctor.findOne({
+              $or: [
+                { Email: new RegExp(`^${user.email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+                { email: new RegExp(`^${user.email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+              ],
+            })
+              .select("_id hospital Email Name_Designation")
+              .lean() as { _id?: any; hospital?: any; Email?: string; Name_Designation?: string } | null;
+          }
+        }
+
+        // Add hospital filter if doctor is associated with a hospital
+        if (doctor?.hospital) {
+          filter.hospital = new mongoose.Types.ObjectId(doctor.hospital.toString());
+        }
+      } catch (error) {
+        // If we can't find doctor, continue without filters
+        // eslint-disable-next-line no-console
+        console.error("Error fetching doctor for medicine search:", error);
+      }
+    } else {
+      // For other roles, use buildAccessFilter
+      const accessFilter = buildAccessFilter(req.user);
+      Object.assign(filter, accessFilter);
+    }
+    
+    // Filter by medicine category or item name containing search term
+    if (search) {
+      const rx = new RegExp(search, "i");
+      const searchConditions = {
+        $or: [
+          { Item_Name: rx },
+          { Category: rx },
+          { Manufacturer: rx },
+        ],
+      };
+      // Combine with existing filter conditions
+      if (filter.$or) {
+        filter.$and = filter.$and || [];
+        filter.$and.push(searchConditions);
+      } else {
+        Object.assign(filter, searchConditions);
+      }
+    }
+
+    // Only return available medicines (not expired or out of stock)
+    filter.Status = { $in: ["Available", "Low Stock"] };
+
+    const medicines = await Inventory.find(filter)
+      .select("Item_Name Item_Code Category Manufacturer Unit Unit_Price Quantity Status")
+      .sort({ Item_Name: 1 })
+      .limit(limit)
+      .lean()
+      .exec();
+
+    // Format response for autocomplete
+    const formattedMedicines = medicines.map((med: any) => ({
+      value: med.Item_Name,
+      label: med.Item_Name,
+      code: med.Item_Code || "",
+      category: med.Category || "",
+      manufacturer: med.Manufacturer || "",
+      unit: med.Unit || "",
+      unitPrice: med.Unit_Price || 0,
+      quantity: med.Quantity || 0,
+      status: med.Status || "Available",
+      details: {
+        code: med.Item_Code || "",
+        category: med.Category || "",
+        manufacturer: med.Manufacturer || "",
+        unit: med.Unit || "",
+        unitPrice: med.Unit_Price || 0,
+        quantity: med.Quantity || 0,
+        status: med.Status || "Available",
+      },
+    }));
+
+    res.json({
+      data: formattedMedicines,
+      count: formattedMedicines.length,
     });
   } catch (err) {
     next(err);

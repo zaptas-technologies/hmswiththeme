@@ -13,7 +13,7 @@ export interface AppointmentDoc extends Document {
   Status: string;
   Consultation_ID?: string;
   Fees?: string | number;
-  doctorId?: string;
+  doctorId?: mongoose.Types.ObjectId;
   user?: mongoose.Types.ObjectId;
   hospital?: mongoose.Types.ObjectId;
   createdAt: Date;
@@ -24,6 +24,7 @@ export interface AppointmentDoc extends Document {
 AppointmentSchema.index({ user: 1, createdAt: -1 });
 AppointmentSchema.index({ hospital: 1, createdAt: -1 });
 AppointmentSchema.index({ Doctor: 1, createdAt: -1 });
+AppointmentSchema.index({ doctorId: 1, createdAt: -1 });
 AppointmentSchema.index({ Status: 1, createdAt: -1 });
 
 export const Appointment =

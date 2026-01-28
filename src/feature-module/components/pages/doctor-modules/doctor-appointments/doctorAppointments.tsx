@@ -119,8 +119,10 @@ const DoctorAppointments = () => {
   }, [user]);
 
   // Load appointments with proper server-side pagination
+  // Backend automatically filters by userId, hospital, and doctor name
   const loadAppointments = useCallback(async () => {
-    if (!doctorName) {
+    // If user is not a doctor, don't proceed
+    if (!user || user.role !== "doctor") {
       setLoading(false);
       return;
     }
@@ -137,6 +139,7 @@ const DoctorAppointments = () => {
       
       if (hasMultipleFilters) {
         // Fetch all matching records for client-side filtering
+        // Backend will automatically filter by userId, hospital, and doctor name
         const response = await fetchAppointments({
           page: 1,
           limit: 1000, // Get enough data for filtering
@@ -144,7 +147,7 @@ const DoctorAppointments = () => {
           search: searchText || undefined,
           status: selectedStatus.length === 1 ? selectedStatus[0] : undefined,
           mode: selectedMode.length === 1 ? selectedMode[0] : undefined,
-          doctor: doctorName,
+          doctor: doctorName || undefined, // Optional - backend will get it from database if not provided
         });
         
         // Apply client-side filtering
@@ -180,6 +183,7 @@ const DoctorAppointments = () => {
         setTotal(filteredData.length);
       } else {
         // Use server-side pagination for better performance
+        // Backend will automatically filter by userId, hospital, and doctor name
         const response = await fetchAppointments({
           page,
           limit: pageSize,
@@ -187,7 +191,7 @@ const DoctorAppointments = () => {
           search: searchText || undefined,
           status: selectedStatus.length === 1 ? selectedStatus[0] : undefined,
           mode: selectedMode.length === 1 ? selectedMode[0] : undefined,
-          doctor: doctorName,
+          doctor: doctorName || undefined, // Optional - backend will get it from database if not provided
         });
         
         // Apply date filter client-side if needed (backend doesn't support date filtering yet)
@@ -217,10 +221,11 @@ const DoctorAppointments = () => {
     } finally {
       setLoading(false);
     }
-  }, [doctorName, page, pageSize, searchText, selectedStatus, selectedMode, selectedDate, sortBy]);
+  }, [user, doctorName, page, pageSize, searchText, selectedStatus, selectedMode, selectedDate, sortBy]);
 
   useEffect(() => {
-    if (!doctorName) {
+    // Backend will filter by userId and hospital automatically, so we can load even without doctorName
+    if (!user || user.role !== "doctor") {
       setLoading(false);
       return;
     }
@@ -230,7 +235,7 @@ const DoctorAppointments = () => {
     }, searchText ? 500 : 0);
 
     return () => clearTimeout(timer);
-  }, [loadAppointments, doctorName, searchText]);
+  }, [loadAppointments, user, searchText]);
 
   const handleSearch = (value: string) => {
     setSearchText(value);

@@ -54,7 +54,52 @@ export const getAppointmentForConsultation: RequestHandler = async (req, res, ne
     }
 
     const { id } = req.params;
-    const filter = buildAccessFilter(req.user);
+    
+    // Build filter similar to getAllAppointments - filter by doctorId and hospital for doctors
+    const filter: any = {};
+    
+    // For doctors (USER role), filter by hospital and doctorId
+    if (req.user.role === "USER") {
+      try {
+        // Find doctor by user ID or email (same approach as getAllAppointments)
+        let doctor = await Doctor.findOne({ user: req.user.userId })
+          .select("_id hospital Email Name_Designation")
+          .lean() as { _id?: any; hospital?: any; Email?: string; Name_Designation?: string } | null;
+
+        // If not found by user ID, try to find by email from User model
+        if (!doctor) {
+          const user = await User.findById(req.user.userId).select("email").lean();
+          if (user?.email) {
+            doctor = await Doctor.findOne({
+              $or: [
+                { Email: new RegExp(`^${user.email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+                { email: new RegExp(`^${user.email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+              ],
+            })
+              .select("_id hospital Email Name_Designation")
+              .lean() as { _id?: any; hospital?: any; Email?: string; Name_Designation?: string } | null;
+          }
+        }
+
+        // Add doctorId filter - ensures appointments are filtered by specific doctor
+        if (doctor?._id) {
+          filter.doctorId = new mongoose.Types.ObjectId(doctor._id.toString());
+        }
+
+        // Add hospital filter if doctor is associated with a hospital
+        if (doctor?.hospital) {
+          filter.hospital = new mongoose.Types.ObjectId(doctor.hospital.toString());
+        }
+      } catch (error) {
+        // If we can't find doctor, continue without filters
+        // eslint-disable-next-line no-console
+        console.error("Error fetching doctor for consultation:", error);
+      }
+    } else {
+      // For other roles, use buildAccessFilter
+      const accessFilter = buildAccessFilter(req.user);
+      Object.assign(filter, accessFilter);
+    }
     
     // Use _id only (MongoDB ObjectId)
     if (mongoose.Types.ObjectId.isValid(id)) {
@@ -197,7 +242,51 @@ export const saveConsultation: RequestHandler = async (req, res, next) => {
       return res.status(400).json({ message: "Investigations must be an array" });
     }
 
-    const appointmentFilter = buildAccessFilter(req.user);
+    // Build filter similar to getAllAppointments - filter by doctorId and hospital for doctors
+    const appointmentFilter: any = {};
+    
+    // For doctors (USER role), filter by hospital and doctorId
+    if (req.user.role === "USER") {
+      try {
+        // Find doctor by user ID or email (same approach as getAllAppointments)
+        let doctor = await Doctor.findOne({ user: req.user.userId })
+          .select("_id hospital Email Name_Designation")
+          .lean() as { _id?: any; hospital?: any; Email?: string; Name_Designation?: string } | null;
+
+        // If not found by user ID, try to find by email from User model
+        if (!doctor) {
+          const user = await User.findById(req.user.userId).select("email").lean();
+          if (user?.email) {
+            doctor = await Doctor.findOne({
+              $or: [
+                { Email: new RegExp(`^${user.email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+                { email: new RegExp(`^${user.email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+              ],
+            })
+              .select("_id hospital Email Name_Designation")
+              .lean() as { _id?: any; hospital?: any; Email?: string; Name_Designation?: string } | null;
+          }
+        }
+
+        // Add doctorId filter - ensures appointments are filtered by specific doctor
+        if (doctor?._id) {
+          appointmentFilter.doctorId = new mongoose.Types.ObjectId(doctor._id.toString());
+        }
+
+        // Add hospital filter if doctor is associated with a hospital
+        if (doctor?.hospital) {
+          appointmentFilter.hospital = new mongoose.Types.ObjectId(doctor.hospital.toString());
+        }
+      } catch (error) {
+        // If we can't find doctor, continue without filters
+        // eslint-disable-next-line no-console
+        console.error("Error fetching doctor for consultation save:", error);
+      }
+    } else {
+      // For other roles, use buildAccessFilter
+      const accessFilter = buildAccessFilter(req.user);
+      Object.assign(appointmentFilter, accessFilter);
+    }
     
     // Use _id only (MongoDB ObjectId)
     if (mongoose.Types.ObjectId.isValid(appointmentId)) {

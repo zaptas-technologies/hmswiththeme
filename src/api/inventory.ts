@@ -85,3 +85,40 @@ export const updateInventory = async (
 export const deleteInventory = async (id: string): Promise<void> => {
   await api.delete(`/inventory/${id}`);
 };
+
+export interface MedicineSearchResult {
+  value: string;
+  label: string;
+  code: string;
+  category: string;
+  manufacturer: string;
+  unit: string;
+  unitPrice: number;
+  quantity: number;
+  status: string;
+  details: {
+    code: string;
+    category: string;
+    manufacturer: string;
+    unit: string;
+    unitPrice: number;
+    quantity: number;
+    status: string;
+  };
+}
+
+export interface MedicineSearchResponse {
+  data: MedicineSearchResult[];
+  count: number;
+}
+
+export const searchMedicines = async (search: string, limit: number = 20): Promise<MedicineSearchResponse> => {
+  const queryParams = new URLSearchParams();
+  if (search) queryParams.append("search", search);
+  if (limit) queryParams.append("limit", limit.toString());
+
+  const queryString = queryParams.toString();
+  const url = `/inventory/search/medicines${queryString ? `?${queryString}` : ""}`;
+  const { data } = await api.get<MedicineSearchResponse>(url);
+  return data;
+};

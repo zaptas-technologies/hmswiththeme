@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Medicine_Name, Frequency, Timing } from "../selectOption";
+import { Frequency, Timing } from "../selectOption";
 import CommonSelect from "../common-select/commonSelect";
+import MedicineAutocomplete from "../medicine-autocomplete/MedicineAutocomplete";
 
 export interface MedicationItem {
   id: number;
@@ -115,10 +116,8 @@ const MedicalForm: React.FC<MedicalFormProps> = ({ value, onChange }) => {
                         Medicine Name
                       </label>
                     )}
-                    <CommonSelect
-                      options={Medicine_Name}
-                      className="select"
-                      value={item.medicine || Medicine_Name[0]?.value}
+                    <MedicineAutocomplete
+                      value={item.medicine}
                       onChange={(value) => {
                         setMedications((prev) =>
                           prev.map((med) =>
@@ -126,6 +125,8 @@ const MedicalForm: React.FC<MedicalFormProps> = ({ value, onChange }) => {
                           )
                         );
                       }}
+                      placeholder="Search medicine..."
+                      className="select"
                     />
                   </div>
                 </div>

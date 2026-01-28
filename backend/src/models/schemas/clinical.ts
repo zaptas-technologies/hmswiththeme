@@ -13,7 +13,7 @@ export const AppointmentSchema = new Schema(
     Status: { type: String, required: true },
     Consultation_ID: { type: String, index: true }, // Reference to consultation document
     Fees: { type: Schema.Types.Mixed },
-    doctorId: { type: String },
+    doctorId: { type: Schema.Types.ObjectId, ref: "Doctor", index: true },
     hospital: { type: Schema.Types.ObjectId, ref: "Hospital", index: true },
     user: { type: Schema.Types.ObjectId, ref: "User", index: true },
   },
