@@ -83,12 +83,32 @@ export const PatientAppointmentSchema = new Schema(
 
 export const DoctorPrescriptionSchema = new Schema(
   {
+    // Business identifier (human readable)
+    Prescription_ID: { type: String, index: true },
+
     Date: { type: String, required: true },
+    Prescribed_On: { type: String },
+
     Patient: { type: String, required: true },
     Patient_Image: { type: String },
     Doctor: { type: String, required: true },
+
     Medicine: { type: String, required: true },
     Status: { type: String, required: true },
+
+    Dosage: { type: String },
+    Frequency: { type: String },
+    Duration: { type: String },
+
+    // Must be a real MongoDB ObjectId
+    Appointment_ID: { type: Schema.Types.ObjectId, ref: "Appointment", required: true, index: true },
+
+    // If medicine is selected from inventory, store the inventory document _id
+    inventoryId: { type: Schema.Types.ObjectId, ref: "Inventory", index: true },
+
+    // Role-based access
+    user: { type: Schema.Types.ObjectId, ref: "User", index: true },
+    hospital: { type: Schema.Types.ObjectId, ref: "Hospital", index: true },
   },
   { timestamps: true, strict: false }
 );
@@ -131,8 +151,9 @@ export const DoctorLeaveSchema = new Schema(
 
 export const ConsultationSchema = new Schema(
   {
-    Consultation_ID: { type: String, required: true, unique: true },
-    Appointment_ID: { type: String, required: true }, // Reference to appointment
+    // Use MongoDB _id as the primary consultation identifier.
+    // Appointment link MUST be stored as ObjectId.
+    Appointment_ID: { type: Schema.Types.ObjectId, ref: "Appointment", required: true, index: true },
     Patient: { type: String, required: true },
     Patient_Image: { type: String },
     Doctor: { type: String, required: true },
@@ -164,6 +185,8 @@ export const ConsultationSchema = new Schema(
       dosage: { type: String },
       frequency: { type: String },
       duration: { type: String },
+      // Optional link to inventory item when medicine comes from inventory
+      inventoryId: { type: Schema.Types.ObjectId, ref: "Inventory", index: true },
     }],
     // Advice
     Advice: [{

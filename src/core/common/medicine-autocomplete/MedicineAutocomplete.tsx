@@ -1,6 +1,8 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import Select from "react-select";
 import { searchMedicines, type MedicineSearchResult } from "../../../api/inventory";
+import { useAuth } from "../../context/AuthContext";
+import dayjs from "dayjs";
 
 // Types for react-select v5 (not exported directly)
 type InputActionMeta = {
@@ -9,12 +11,12 @@ type InputActionMeta = {
 
 type SingleValue<Option> = Option | null;
 
-// Simple debounce function
+// Simple debounce function (no NodeJS types needed)
 const debounce = <T extends (...args: any[]) => any>(
   func: T,
   wait: number
 ): ((...args: Parameters<T>) => void) => {
-  let timeout: NodeJS.Timeout | null = null;
+  let timeout: ReturnType<typeof setTimeout> | null = null;
   return (...args: Parameters<T>) => {
     if (timeout) clearTimeout(timeout);
     timeout = setTimeout(() => func(...args), wait);
@@ -26,14 +28,22 @@ export interface MedicineOption {
   label: string;
   isManual?: boolean;
   details?: MedicineSearchResult["details"];
+  inventoryCode?: string; // Store inventory item code for reference
+  inventoryId?: string; // Store inventory _id for DB references
 }
 
 interface MedicineAutocompleteProps {
   value?: string;
-  onChange?: (value: string, details?: MedicineSearchResult["details"]) => void;
+  onChange?: (
+    value: string,
+    details?: MedicineSearchResult["details"],
+    inventoryCode?: string,
+    inventoryId?: string
+  ) => void;
   placeholder?: string;
   className?: string;
   disabled?: boolean;
+  showStockWarnings?: boolean;
 }
 
 const MedicineAutocomplete: React.FC<MedicineAutocompleteProps> = ({
@@ -42,7 +52,9 @@ const MedicineAutocomplete: React.FC<MedicineAutocompleteProps> = ({
   placeholder = "Search or type medicine name...",
   className = "",
   disabled = false,
+  showStockWarnings = true,
 }) => {
+  const { user } = useAuth();
   const [options, setOptions] = useState<MedicineOption[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [inputValue, setInputValue] = useState("");
@@ -52,26 +64,28 @@ const MedicineAutocomplete: React.FC<MedicineAutocompleteProps> = ({
   // Initialize selected option from value prop
   useEffect(() => {
     if (value) {
-      // Only update if value changed and doesn't match current selection
-      if (!selectedOption || selectedOption.value !== value) {
-        setSelectedOption({
-          value: value,
-          label: value,
-          isManual: true,
-        });
-        setInputValue(value);
-      }
-    } else if (selectedOption) {
-      // Clear selection if value is cleared
-      setSelectedOption(null);
-      setInputValue("");
+      setInputValue(value);
+      setSelectedOption((prev) =>
+        prev?.value === value
+          ? prev
+          : {
+              value,
+              label: value,
+              isManual: true,
+            }
+      );
+      return;
     }
+
+    // Clear selection if value is cleared
+    setInputValue("");
+    setSelectedOption(null);
   }, [value]); // Removed selectedOption from dependencies to prevent loop
 
   // Debounced search function
   const debouncedSearch = useCallback(
     debounce(async (searchTerm: string) => {
-      if (!searchTerm || searchTerm.trim().length < 2) {
+      if (!searchTerm || searchTerm.trim().length < 1) {
         setOptions([]);
         setIsLoading(false);
         return;
@@ -86,13 +100,15 @@ const MedicineAutocomplete: React.FC<MedicineAutocompleteProps> = ({
 
       try {
         setIsLoading(true);
-        const response = await searchMedicines(searchTerm.trim(), 20);
+        const response = await searchMedicines(searchTerm.trim(), 20, user?.hospitalId);
         
         const medicineOptions: MedicineOption[] = response.data.map((med) => ({
           value: med.value,
           label: med.label,
           isManual: false,
           details: med.details,
+          inventoryCode: med.code || undefined,
+          inventoryId: med.inventoryId || med.details?.inventoryId || undefined,
         }));
 
         // Add manual entry option if search doesn't match exactly
@@ -134,7 +150,7 @@ const MedicineAutocomplete: React.FC<MedicineAutocompleteProps> = ({
   const handleInputChange = (newValue: string, actionMeta: InputActionMeta | undefined) => {
     if (actionMeta?.action === "input-change") {
       setInputValue(newValue);
-      if (newValue.trim().length >= 2) {
+      if (newValue.trim().length >= 1) {
         debouncedSearch(newValue);
       } else {
         setOptions([]);
@@ -148,7 +164,7 @@ const MedicineAutocomplete: React.FC<MedicineAutocompleteProps> = ({
     setSelectedOption(selected);
     
     if (onChange) {
-      onChange(selected.value, selected.details);
+      onChange(selected.value, selected.details, selected.inventoryCode, selected.inventoryId);
     }
   };
 
@@ -163,16 +179,75 @@ const MedicineAutocomplete: React.FC<MedicineAutocompleteProps> = ({
       );
     }
 
+    const stockStatus = details?.status || "Available";
+    const quantity = details?.quantity ?? 0;
+    const isLowStock = stockStatus === "Low Stock";
+    const isOutOfStock = stockStatus === "Out of Stock";
+    const expiry = details?.expiryDate ? dayjs(details.expiryDate) : null;
+    const expiryLabel = expiry?.isValid() ? expiry.format("DD MMM YYYY") : "";
+
     return (
-      <div>
-        <div className="fw-medium">{label}</div>
+      <div className="w-100">
+        <div className="d-flex align-items-center justify-content-between">
+          <div className="fw-medium">{label}</div>
+          {details && showStockWarnings && (
+            <span
+              className={`badge badge-sm ms-2 ${
+                isOutOfStock
+                  ? "bg-danger"
+                  : isLowStock
+                  ? "bg-warning"
+                  : "bg-success"
+              }`}
+            >
+              {isOutOfStock
+                ? "Out of Stock"
+                : isLowStock
+                ? "Low Stock"
+                : "Available"}
+            </span>
+          )}
+        </div>
         {details && (
-          <div className="text-muted small">
-            {details.category && <span className="me-2">{details.category}</span>}
-            {details.manufacturer && <span className="me-2">• {details.manufacturer}</span>}
-            {details.quantity !== undefined && (
-              <span className={`badge badge-sm ${details.status === "Available" ? "bg-success" : "bg-warning"}`}>
-                Qty: {details.quantity} {details.unit}
+          <div className="text-muted small mt-1">
+            {details.code && (
+              <span className="me-2">
+                <i className="ti ti-barcode me-1" />
+                {details.code}
+              </span>
+            )}
+            {details.batchNumber && (
+              <span className="me-2">
+                <i className="ti ti-tag me-1" />
+                Batch: {details.batchNumber}
+              </span>
+            )}
+            {details.category && (
+              <span className="me-2">
+                <i className="ti ti-category me-1" />
+                {details.category}
+              </span>
+            )}
+            {details.manufacturer && (
+              <span className="me-2">
+                <i className="ti ti-building me-1" />
+                {details.manufacturer}
+              </span>
+            )}
+            {expiryLabel && (
+              <span className="me-2">
+                <i className="ti ti-calendar-event me-1" />
+                Exp: {expiryLabel}
+              </span>
+            )}
+            {quantity !== undefined && quantity !== null && (
+              <span className="d-block mt-1">
+                <strong>Stock:</strong> {quantity} {details.unit || "units"}
+                {details.unitPrice && (
+                  <span className="ms-2">
+                    <strong>Price:</strong> ₹{details.unitPrice.toFixed(2)}/{details.unit || "unit"}
+                  </span>
+                )}
               </span>
             )}
           </div>
@@ -205,6 +280,10 @@ const MedicineAutocomplete: React.FC<MedicineAutocompleteProps> = ({
       ...base,
       zIndex: 9999,
     }),
+    menuPortal: (base: any) => ({
+      ...base,
+      zIndex: 999999,
+    }),
   };
 
   return (
@@ -222,12 +301,24 @@ const MedicineAutocomplete: React.FC<MedicineAutocompleteProps> = ({
       isClearable
       placeholder={placeholder}
       formatOptionLabel={formatOptionLabel}
+      menuPortalTarget={typeof document !== "undefined" ? document.body : null}
+      menuPosition="fixed"
+      onBlur={() => {
+        // Manual add UX: if user typed something but didn't select, treat it as manual entry
+        const typed = inputValue.trim();
+        if (!typed) return;
+        if (selectedOption?.value === typed) return;
+
+        const manual: MedicineOption = { value: typed, label: typed, isManual: true };
+        setSelectedOption(manual);
+        onChange?.(typed, undefined, undefined, undefined);
+      }}
       noOptionsMessage={({ inputValue }) =>
-        inputValue && inputValue.length < 2
-          ? "Type at least 2 characters to search"
-          : "No medicines found. You can add manually."
+        inputValue && inputValue.length < 1
+          ? "Type to search inventory"
+          : "No medicines found. Select the manual entry to add."
       }
-      loadingMessage={() => "Searching medicines..."}
+      loadingMessage={() => "Searching inventory..."}
       isDisabled={disabled}
       filterOption={() => true} // Disable client-side filtering, we handle it server-side
     />

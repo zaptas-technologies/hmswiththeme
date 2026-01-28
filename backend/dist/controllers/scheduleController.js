@@ -6,6 +6,35 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getScheduleHistory = exports.deleteSchedule = exports.updateSchedule = exports.saveSchedule = exports.getSchedule = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const doctorScheduleModel_1 = require("../models/doctorScheduleModel");
+const doctorModel_1 = require("../models/doctorModel");
+const userModel_1 = require("../models/userModel");
+const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/**
+ * Resolve the "Doctor" document _id for the currently logged-in user.
+ * Auth middleware attaches `req.user.userId` (User model id).
+ */
+const resolveDoctorId = async (req) => {
+    const userIdStr = req.user?.userId;
+    if (!userIdStr || !mongoose_1.default.Types.ObjectId.isValid(userIdStr))
+        return null;
+    // Primary: Doctor.user points to User._id
+    const byUser = await doctorModel_1.Doctor.findOne({ user: new mongoose_1.default.Types.ObjectId(userIdStr) })
+        .select("_id")
+        .lean();
+    if (byUser?._id)
+        return new mongoose_1.default.Types.ObjectId(byUser._id.toString());
+    // Fallback: match by email if doctor.user linkage is missing
+    const user = await userModel_1.User.findById(userIdStr).select("email").lean();
+    if (user?.email) {
+        const rx = new RegExp(`^${escapeRegExp(user.email)}$`, "i");
+        const byEmail = await doctorModel_1.Doctor.findOne({ $or: [{ Email: rx }, { email: rx }] })
+            .select("_id")
+            .lean();
+        if (byEmail?._id)
+            return new mongoose_1.default.Types.ObjectId(byEmail._id.toString());
+    }
+    return null;
+};
 // Helper to format schedule response
 const formatScheduleResponse = (schedule) => {
     return {
@@ -38,12 +67,13 @@ const getDefaultSchedule = () => ({
 });
 const getSchedule = async (req, res, next) => {
     try {
-        const doctorIdStr = req.userId;
-        if (!doctorIdStr) {
+        if (!req.user) {
             return res.status(401).json({ message: "Unauthorized" });
         }
-        // Convert string doctorId to ObjectId
-        const doctorId = new mongoose_1.default.Types.ObjectId(doctorIdStr);
+        const doctorId = await resolveDoctorId(req);
+        if (!doctorId) {
+            return res.status(403).json({ message: "Doctor profile not found for this user" });
+        }
         // Get the most recent active schedule for this doctor
         const schedule = await doctorScheduleModel_1.DoctorSchedule.findOne({ doctorId })
             .sort({ createdAt: -1 })
@@ -61,12 +91,13 @@ const getSchedule = async (req, res, next) => {
 exports.getSchedule = getSchedule;
 const saveSchedule = async (req, res, next) => {
     try {
-        const doctorIdStr = req.userId;
-        if (!doctorIdStr) {
+        if (!req.user) {
             return res.status(401).json({ message: "Unauthorized" });
         }
-        // Convert string doctorId to ObjectId
-        const doctorId = new mongoose_1.default.Types.ObjectId(doctorIdStr);
+        const doctorId = await resolveDoctorId(req);
+        if (!doctorId) {
+            return res.status(403).json({ message: "Doctor profile not found for this user" });
+        }
         const { location, fromDate, toDate, recursEvery, schedules } = req.body;
         // Validation is handled by middleware, but double-check here for safety
         if (!location || !fromDate || !toDate || !recursEvery) {
@@ -161,12 +192,13 @@ const saveSchedule = async (req, res, next) => {
 exports.saveSchedule = saveSchedule;
 const updateSchedule = async (req, res, next) => {
     try {
-        const doctorIdStr = req.userId;
-        if (!doctorIdStr) {
+        if (!req.user) {
             return res.status(401).json({ message: "Unauthorized" });
         }
-        // Convert string doctorId to ObjectId
-        const doctorId = new mongoose_1.default.Types.ObjectId(doctorIdStr);
+        const doctorId = await resolveDoctorId(req);
+        if (!doctorId) {
+            return res.status(403).json({ message: "Doctor profile not found for this user" });
+        }
         const updateData = req.body;
         // Find existing schedule
         const schedule = await doctorScheduleModel_1.DoctorSchedule.findOne({ doctorId })
@@ -218,12 +250,13 @@ const updateSchedule = async (req, res, next) => {
 exports.updateSchedule = updateSchedule;
 const deleteSchedule = async (req, res, next) => {
     try {
-        const doctorIdStr = req.userId;
-        if (!doctorIdStr) {
+        if (!req.user) {
             return res.status(401).json({ message: "Unauthorized" });
         }
-        // Convert string doctorId to ObjectId
-        const doctorId = new mongoose_1.default.Types.ObjectId(doctorIdStr);
+        const doctorId = await resolveDoctorId(req);
+        if (!doctorId) {
+            return res.status(403).json({ message: "Doctor profile not found for this user" });
+        }
         const schedule = await doctorScheduleModel_1.DoctorSchedule.findOne({ doctorId })
             .sort({ createdAt: -1 })
             .exec();
@@ -240,12 +273,13 @@ const deleteSchedule = async (req, res, next) => {
 exports.deleteSchedule = deleteSchedule;
 const getScheduleHistory = async (req, res, next) => {
     try {
-        const doctorIdStr = req.userId;
-        if (!doctorIdStr) {
+        if (!req.user) {
             return res.status(401).json({ message: "Unauthorized" });
         }
-        // Convert string doctorId to ObjectId
-        const doctorId = new mongoose_1.default.Types.ObjectId(doctorIdStr);
+        const doctorId = await resolveDoctorId(req);
+        if (!doctorId) {
+            return res.status(403).json({ message: "Doctor profile not found for this user" });
+        }
         const limit = Number(req.query.limit) || 10;
         const page = Number(req.query.page) || 1;
         const skip = (page - 1) * limit;

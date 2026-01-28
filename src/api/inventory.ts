@@ -87,6 +87,7 @@ export const deleteInventory = async (id: string): Promise<void> => {
 };
 
 export interface MedicineSearchResult {
+  inventoryId?: string;
   value: string;
   label: string;
   code: string;
@@ -96,7 +97,10 @@ export interface MedicineSearchResult {
   unitPrice: number;
   quantity: number;
   status: string;
+  expiryDate?: string;
+  batchNumber?: string;
   details: {
+    inventoryId?: string;
     code: string;
     category: string;
     manufacturer: string;
@@ -104,6 +108,8 @@ export interface MedicineSearchResult {
     unitPrice: number;
     quantity: number;
     status: string;
+    expiryDate?: string;
+    batchNumber?: string;
   };
 }
 
@@ -112,10 +118,15 @@ export interface MedicineSearchResponse {
   count: number;
 }
 
-export const searchMedicines = async (search: string, limit: number = 20): Promise<MedicineSearchResponse> => {
+export const searchMedicines = async (
+  search: string,
+  limit: number = 20,
+  hospitalId?: string
+): Promise<MedicineSearchResponse> => {
   const queryParams = new URLSearchParams();
   if (search) queryParams.append("search", search);
   if (limit) queryParams.append("limit", limit.toString());
+  if (hospitalId) queryParams.append("hospitalId", hospitalId);
 
   const queryString = queryParams.toString();
   const url = `/inventory/search/medicines${queryString ? `?${queryString}` : ""}`;

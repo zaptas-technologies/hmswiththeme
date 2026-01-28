@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { Frequency, Timing } from "../selectOption";
 import CommonSelect from "../common-select/commonSelect";
@@ -14,6 +14,18 @@ export interface MedicationItem {
   timing?: string;
   instruction?: string;
   duration?: string;
+  // Inventory document id (MongoDB ObjectId as string)
+  inventoryId?: string;
+  // Inventory metadata (optional, for medicines from inventory)
+  inventoryCode?: string;
+  inventoryCategory?: string;
+  inventoryManufacturer?: string;
+  inventoryStock?: number;
+  inventoryStatus?: "Available" | "Low Stock" | "Out of Stock" | "Expired";
+  inventoryUnit?: string;
+  inventoryUnitPrice?: number;
+  inventoryExpiryDate?: string;
+  inventoryBatchNumber?: string;
 }
 
 interface MedicalFormProps {
@@ -22,18 +34,24 @@ interface MedicalFormProps {
 }
 
 const MedicalForm: React.FC<MedicalFormProps> = ({ value, onChange }) => {
+  const createEmptyRow = (): MedicationItem => ({
+    id: Date.now() + Math.random(),
+    medicine: "",
+    dosageMg: "",
+    dosageM: "",
+    instruction: "",
+    frequency: Frequency[0]?.value,
+    timing: Timing[0]?.value,
+    duration: "",
+  });
+
   const [medications, setMedications] = useState<MedicationItem[]>(
-    value || [
-      {
-        id: Date.now(),
-        dosageMg: "",
-        dosageM: "",
-        instruction: "",
-      },
-    ]
+    value && value.length > 0 ? value : [createEmptyRow()]
   );
+  const [quickAddValue, setQuickAddValue] = useState<string>("");
   const onChangeRef = useRef(onChange);
   const prevValueRef = useRef(value);
+  const syncingFromPropsRef = useRef(false);
 
   // Keep onChange ref updated
   useEffect(() => {
@@ -43,10 +61,56 @@ const MedicalForm: React.FC<MedicalFormProps> = ({ value, onChange }) => {
   // Sync with external value prop (only if changed externally, not from our own updates)
   useEffect(() => {
     if (value && value !== prevValueRef.current) {
-      setMedications(value);
+      syncingFromPropsRef.current = true;
+      // Pro UX: if parent sends empty list, still show one editable row
+      setMedications(value.length > 0 ? value : [createEmptyRow()]);
       prevValueRef.current = value;
     }
   }, [value]);
+
+  // Notify parent when our internal medications change (but not when syncing from props)
+  useEffect(() => {
+    if (syncingFromPropsRef.current) {
+      syncingFromPropsRef.current = false;
+      return;
+    }
+    onChangeRef.current?.(medications);
+  }, [medications]);
+
+  const addMedicineFromSearch = useCallback(
+    (medicineName: string, details?: any, inventoryCode?: string, inventoryId?: string) => {
+      const name = (medicineName || "").trim();
+      if (!name) return;
+
+      const newMedication: MedicationItem = {
+        ...createEmptyRow(),
+        medicine: name,
+        inventoryId,
+        inventoryCode,
+        inventoryCategory: details?.category,
+        inventoryManufacturer: details?.manufacturer,
+        inventoryStock: details?.quantity,
+        inventoryStatus: details?.status,
+        inventoryUnit: details?.unit,
+        inventoryUnitPrice: details?.unitPrice,
+      };
+
+      setMedications((prev) => {
+        const list = prev && prev.length > 0 ? [...prev] : [createEmptyRow()];
+        const last = list[list.length - 1];
+        const hasEmptyLastRow = !last?.medicine && !last?.inventoryCode;
+
+        // Keep one empty row at the end for fast entry UX
+        const tail = hasEmptyLastRow ? last : createEmptyRow();
+        const body = hasEmptyLastRow ? list.slice(0, -1) : list;
+
+        return [...body, newMedication, tail];
+      });
+    },
+    // createEmptyRow is stable enough for this use-case
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
 
   // Add a new medication row above last
   const handleAddAboveLast = () => {
@@ -59,77 +123,72 @@ const MedicalForm: React.FC<MedicalFormProps> = ({ value, onChange }) => {
 
     setMedications((prev) => {
       const last = prev[prev.length - 1];
-      const updated = [...prev.slice(0, -1), newMedication, last];
-      // Notify parent immediately
-      if (onChangeRef.current) {
-        onChangeRef.current(updated);
-      }
-      return updated;
+      return [...prev.slice(0, -1), newMedication, last];
     });
   };
 
   // Remove medication row by id
   const handleRemove = (id: number) => {
-    setMedications((prev) => {
-      const updated = prev.filter((item) => item.id !== id);
-      // Notify parent immediately
-      if (onChangeRef.current) {
-        onChangeRef.current(updated);
-      }
-      return updated;
-    });
+    setMedications((prev) => prev.filter((item) => item.id !== id));
   };
 
   // Handlers for controlled inputs
   const handleDosageMgChange = (id: number, value: string) => {
-    setMedications((prev) => {
-      const updated = prev.map((item) => {
+    setMedications((prev) =>
+      prev.map((item) => {
         if (item.id === id) {
           const dosage = value ? `${value}mg` : (item.dosageM ? `${item.dosageM}m` : "");
           return { ...item, dosageMg: value, dosage };
         }
         return item;
-      });
-      // Notify parent immediately
-      if (onChangeRef.current) {
-        onChangeRef.current(updated);
-      }
-      return updated;
-    });
+      })
+    );
   };
 
   const handleDosageMChange = (id: number, value: string) => {
-    setMedications((prev) => {
-      const updated = prev.map((item) => {
+    setMedications((prev) =>
+      prev.map((item) => {
         if (item.id === id) {
           const dosage = value ? `${value}m` : (item.dosageMg ? `${item.dosageMg}mg` : "");
           return { ...item, dosageM: value, dosage };
         }
         return item;
-      });
-      // Notify parent immediately
-      if (onChangeRef.current) {
-        onChangeRef.current(updated);
-      }
-      return updated;
-    });
+      })
+    );
   };
 
   const handleInstructionChange = (id: number, value: string) => {
-    setMedications((prev) => {
-      const updated = prev.map((item) =>
-        item.id === id ? { ...item, instruction: value } : item
-      );
-      // Notify parent immediately
-      if (onChangeRef.current) {
-        onChangeRef.current(updated);
-      }
-      return updated;
-    });
+    setMedications((prev) => prev.map((item) => (item.id === id ? { ...item, instruction: value } : item)));
   };
 
   return (
     <div className="medication-list">
+      {/* Pro UX: global search to add medicines quickly */}
+      <div className="medication-searchbar">
+        <div className="medication-searchbar__header">
+          <div>
+            <label className="form-label mb-1 text-dark fs-14 fw-medium">
+              Search medicine (Inventory)
+            </label>
+            <div className="text-muted fs-12">
+              Select an item to auto-fill code, stock and price.
+            </div>
+          </div>
+        </div>
+        <div className="medication-searchbar__control">
+          <MedicineAutocomplete
+            value={quickAddValue}
+            onChange={(value, details, inventoryCode, inventoryId) => {
+              addMedicineFromSearch(value, details, inventoryCode, inventoryId);
+              setQuickAddValue("");
+            }}
+            placeholder="Type medicine name…"
+            className="medication-searchbar__select"
+            showStockWarnings={true}
+          />
+        </div>
+      </div>
+
       {medications.map((item, index) => {
         const isLast = index === medications.length - 1;
         return (
@@ -144,23 +203,122 @@ const MedicalForm: React.FC<MedicalFormProps> = ({ value, onChange }) => {
                         Medicine Name
                       </label>
                     )}
-                    <MedicineAutocomplete
-                      value={item.medicine}
-                      onChange={(value) => {
-                        setMedications((prev) => {
-                          const updated = prev.map((med) =>
-                            med.id === item.id ? { ...med, medicine: value } : med
-                          );
-                          // Notify parent immediately
-                          if (onChangeRef.current) {
-                            onChangeRef.current(updated);
-                          }
-                          return updated;
-                        });
+                    {/* Medicine name is now a plain input (no search dropdown). 
+                        Use the top Inventory search bar to add medicines with details. */}
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={item.medicine || ""}
+                      placeholder="Enter medicine name"
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setMedications((prev) =>
+                          prev.map((med) =>
+                            med.id === item.id
+                              ? {
+                                  ...med,
+                                  medicine: val,
+                                  // If user edits manually, clear inventory link fields
+                                  ...(val !== (item.medicine || "")
+                                    ? {
+                                        inventoryId: undefined,
+                                        inventoryCode: undefined,
+                                        inventoryCategory: undefined,
+                                        inventoryManufacturer: undefined,
+                                        inventoryStock: undefined,
+                                        inventoryStatus: undefined,
+                                        inventoryUnit: undefined,
+                                        inventoryUnitPrice: undefined,
+                                        inventoryExpiryDate: undefined,
+                                        inventoryBatchNumber: undefined,
+                                      }
+                                    : {}),
+                                }
+                              : med
+                          )
+                        );
                       }}
-                      placeholder="Search medicine..."
-                      className="select"
                     />
+                    {/* Display inventory metadata if available */}
+                    {(item.inventoryCode || item.inventoryExpiryDate || item.inventoryBatchNumber) && (
+                      <div className="mt-1 medicine-meta">
+                        <small className="text-muted d-flex align-items-center gap-2 flex-wrap medicine-meta__chips">
+                          {item.inventoryCode && (
+                            <span>
+                              <i className="ti ti-barcode me-1" />
+                              Code: {item.inventoryCode}
+                            </span>
+                          )}
+                          {item.inventoryBatchNumber && (
+                            <span>
+                              <i className="ti ti-tag me-1" />
+                              Batch: {item.inventoryBatchNumber}
+                            </span>
+                          )}
+                          {item.inventoryCategory && (
+                            <span>
+                              <i className="ti ti-category me-1" />
+                              {item.inventoryCategory}
+                            </span>
+                          )}
+                          {item.inventoryManufacturer && (
+                            <span>
+                              <i className="ti ti-building me-1" />
+                              {item.inventoryManufacturer}
+                            </span>
+                          )}
+                          {item.inventoryExpiryDate && (
+                            <span className="medicine-meta__expiry">
+                              <i className="ti ti-calendar-event me-1" />
+                              Exp: {item.inventoryExpiryDate}
+                            </span>
+                          )}
+                          {item.inventoryStatus && (
+                            <span
+                              className={`badge badge-sm ${
+                                item.inventoryStatus === "Out of Stock"
+                                  ? "bg-danger"
+                                  : item.inventoryStatus === "Low Stock"
+                                  ? "bg-warning"
+                                  : "bg-success"
+                              }`}
+                            >
+                              {item.inventoryStatus === "Out of Stock"
+                                ? "Out of Stock"
+                                : item.inventoryStatus === "Low Stock"
+                                ? "Low Stock"
+                                : "In Stock"}
+                              {item.inventoryStock !== undefined && item.inventoryStock !== null && (
+                                <span className="ms-1">
+                                  ({item.inventoryStock} {item.inventoryUnit || "units"})
+                                </span>
+                              )}
+                            </span>
+                          )}
+                          {item.inventoryUnitPrice && item.inventoryUnitPrice > 0 && (
+                            <span>
+                              <i className="ti ti-currency-rupee me-1" />
+                              ₹{item.inventoryUnitPrice.toFixed(2)}/{item.inventoryUnit || "unit"}
+                            </span>
+                          )}
+                        </small>
+                        {/* Show warning for out of stock or low stock */}
+                        {item.inventoryStatus === "Out of Stock" && (
+                          <div className="alert alert-danger alert-sm mt-1 mb-0 py-1 px-2">
+                            <i className="ti ti-alert-circle me-1" />
+                            <small>This medicine is currently out of stock in inventory.</small>
+                          </div>
+                        )}
+                        {item.inventoryStatus === "Low Stock" && (
+                          <div className="alert alert-warning alert-sm mt-1 mb-0 py-1 px-2">
+                            <i className="ti ti-alert-triangle me-1" />
+                            <small>
+                              Low stock warning: Only {item.inventoryStock} {item.inventoryUnit || "units"} available.
+                            </small>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="col-lg-2">
@@ -219,16 +377,9 @@ const MedicalForm: React.FC<MedicalFormProps> = ({ value, onChange }) => {
                       className="select"
                       value={item.frequency || Frequency[0]?.value}
                       onChange={(value) => {
-                        setMedications((prev) => {
-                          const updated = prev.map((med) =>
-                            med.id === item.id ? { ...med, frequency: value } : med
-                          );
-                          // Notify parent immediately
-                          if (onChangeRef.current) {
-                            onChangeRef.current(updated);
-                          }
-                          return updated;
-                        });
+                        setMedications((prev) =>
+                          prev.map((med) => (med.id === item.id ? { ...med, frequency: value } : med))
+                        );
                       }}
                     />
                   </div>
@@ -245,16 +396,9 @@ const MedicalForm: React.FC<MedicalFormProps> = ({ value, onChange }) => {
                       className="select"
                       value={item.timing || Timing[0]?.value}
                       onChange={(value) => {
-                        setMedications((prev) => {
-                          const updated = prev.map((med) =>
-                            med.id === item.id ? { ...med, timing: value } : med
-                          );
-                          // Notify parent immediately
-                          if (onChangeRef.current) {
-                            onChangeRef.current(updated);
-                          }
-                          return updated;
-                        });
+                        setMedications((prev) =>
+                          prev.map((med) => (med.id === item.id ? { ...med, timing: value } : med))
+                        );
                       }}
                     />
                   </div>

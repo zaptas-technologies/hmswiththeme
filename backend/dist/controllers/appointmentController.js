@@ -6,8 +6,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteAppointment = exports.updateAppointment = exports.createAppointment = exports.getAppointmentById = exports.getAllAppointments = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const appointmentModel_1 = require("../models/appointmentModel");
-const dashboardAppointmentModel_1 = require("../models/dashboardAppointmentModel");
-const dashboardPatientModel_1 = require("../models/dashboardPatientModel");
 const userModel_1 = require("../models/userModel");
 const doctorModel_1 = require("../models/doctorModel");
 const authMiddleware_1 = require("../middlewares/authMiddleware");
@@ -62,19 +60,61 @@ const getAllAppointments = async (req, res, next) => {
         const search = req.query.search || "";
         const Status = req.query.status || "";
         const Mode = req.query.mode || "";
-        const Doctor = req.query.doctor || "";
         const Patient = req.query.patient || "";
-        const filter = (0, authMiddleware_1.buildAccessFilter)(req.user);
+        // Build filter similar to dashboardService - simple approach
+        const filter = {};
+        // For doctors (USER role), filter by hospital and doctorId
+        if (req.user.role === "USER") {
+            try {
+                // Find doctor by user ID or email (same approach as dashboardService)
+                let doctor = await doctorModel_1.Doctor.findOne({ user: req.user.userId })
+                    .select("_id hospital Email Name_Designation")
+                    .lean();
+                // If not found by user ID, try to find by email from User model
+                if (!doctor) {
+                    const user = await userModel_1.User.findById(req.user.userId).select("email").lean();
+                    if (user?.email) {
+                        doctor = await doctorModel_1.Doctor.findOne({
+                            $or: [
+                                { Email: new RegExp(`^${user.email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+                                { email: new RegExp(`^${user.email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+                            ],
+                        })
+                            .select("_id hospital Email Name_Designation")
+                            .lean();
+                    }
+                }
+                // Add doctorId filter - ensures appointments are filtered by specific doctor
+                if (doctor?._id) {
+                    filter.doctorId = new mongoose_1.default.Types.ObjectId(doctor._id.toString());
+                }
+                // Add hospital filter if doctor is associated with a hospital
+                if (doctor?.hospital) {
+                    filter.hospital = new mongoose_1.default.Types.ObjectId(doctor.hospital.toString());
+                }
+                // Add doctor name filter (same as dashboardService)
+                if (doctor?.Name_Designation) {
+                    filter.Doctor = doctor.Name_Designation;
+                }
+            }
+            catch (error) {
+                // If we can't find doctor, continue without filters
+                // eslint-disable-next-line no-console
+                console.error("Error fetching doctor for appointments:", error);
+            }
+        }
+        else {
+            // For other roles, use buildAccessFilter
+            const accessFilter = (0, authMiddleware_1.buildAccessFilter)(req.user);
+            Object.assign(filter, accessFilter);
+        }
+        // Apply additional filters
         if (Status)
             filter.Status = Status;
         if (Mode)
             filter.Mode = Mode;
         if (Patient)
             filter.Patient = Patient;
-        if (Doctor) {
-            const doctorRx = new RegExp(Doctor.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
-            filter.Doctor = doctorRx;
-        }
         if (search) {
             const rx = new RegExp(search, "i");
             filter.$or = [{ Patient: rx }, { Doctor: rx }, { Phone: rx }];
@@ -181,106 +221,28 @@ const createAppointment = async (req, res, next) => {
                 hospitalId = cleanApptData.hospital;
             }
         }
-        // Remove hospital from cleanApptData if it exists (we'll add it separately)
-        const { hospital, ...finalApptData } = cleanApptData;
+        // Remove hospital and doctorId from cleanApptData if they exist (we'll add them separately)
+        const { hospital, doctorId, ...finalApptData } = cleanApptData;
         // Ensure id and _id are not in finalApptData
         delete finalApptData.id;
         delete finalApptData._id;
+        // Convert doctorId to ObjectId if provided
+        let doctorObjectId;
+        if (doctorId) {
+            const doctorIdStr = String(doctorId).trim();
+            if (mongoose_1.default.Types.ObjectId.isValid(doctorIdStr)) {
+                doctorObjectId = new mongoose_1.default.Types.ObjectId(doctorIdStr);
+            }
+            else {
+                return res.status(400).json({ message: "Invalid doctorId format. Must be a valid ObjectId." });
+            }
+        }
         const appointmentData = {
             ...finalApptData,
             ...(hospitalId && { hospital: hospitalId }),
+            ...(doctorObjectId && { doctorId: doctorObjectId }),
         };
         const created = await appointmentModel_1.Appointment.create(appointmentData);
-        if (apptData.doctorId) {
-            try {
-                const doctorIdStr = String(apptData.doctorId).trim();
-                const doctor = await doctorModel_1.Doctor.findById(doctorIdStr)
-                    .lean()
-                    .exec();
-                if (doctor) {
-                    const doctorEmail = (doctor.Email || doctor.email || "").toLowerCase().trim();
-                    if (doctorEmail) {
-                        const user = await userModel_1.User.findOne({ email: doctorEmail }).select("_id").lean().exec();
-                        const dashboardDoctorId = user ? String(user._id) : doctorIdStr;
-                        let dashboardPatient = await dashboardPatientModel_1.DashboardPatient.findOne({
-                            doctorId: dashboardDoctorId,
-                            name: apptData.Patient,
-                            phone: apptData.Phone,
-                        })
-                            .lean()
-                            .exec();
-                        if (!dashboardPatient) {
-                            const newPatient = await dashboardPatientModel_1.DashboardPatient.create({
-                                doctorId: dashboardDoctorId,
-                                name: apptData.Patient,
-                                phone: apptData.Phone,
-                                avatar: apptData.Patient_Image || "assets/img/profiles/avatar-02.jpg",
-                            });
-                            dashboardPatient = { _id: newPatient._id };
-                        }
-                        let appointmentDate;
-                        try {
-                            appointmentDate = new Date(apptData.Date_Time);
-                            if (isNaN(appointmentDate.getTime())) {
-                                const monthMap = {
-                                    "Jan": 0, "Feb": 1, "Mar": 2, "Apr": 3, "May": 4, "Jun": 5,
-                                    "Jul": 6, "Aug": 7, "Sep": 8, "Oct": 9, "Nov": 10, "Dec": 11
-                                };
-                                const match = apptData.Date_Time.match(/(\d{1,2})\s+(\w{3})\s+(\d{4}),\s+(\d{1,2}):(\d{2})\s+(AM|PM)/i);
-                                if (match) {
-                                    const [, day, month, year, hour, minute, ampm] = match;
-                                    const monthNum = monthMap[month];
-                                    if (monthNum !== undefined) {
-                                        let hour24 = parseInt(hour, 10);
-                                        if (ampm.toUpperCase() === "PM" && hour24 !== 12)
-                                            hour24 += 12;
-                                        if (ampm.toUpperCase() === "AM" && hour24 === 12)
-                                            hour24 = 0;
-                                        appointmentDate = new Date(parseInt(year, 10), monthNum, parseInt(day, 10), hour24, parseInt(minute, 10));
-                                    }
-                                    else {
-                                        appointmentDate = new Date();
-                                    }
-                                }
-                                else {
-                                    appointmentDate = new Date();
-                                }
-                            }
-                        }
-                        catch {
-                            appointmentDate = new Date();
-                        }
-                        const statusMap = {
-                            "Schedule": "Schedule",
-                            "Scheduled": "Schedule",
-                            "Checked In": "Checked in",
-                            "Checked Out": "Checked Out",
-                            "Completed": "Checked Out",
-                            "Confirmed": "Schedule",
-                        };
-                        const dashboardStatus = statusMap[apptData.Status] || "Schedule";
-                        const modeMap = {
-                            "Online": "Online",
-                            "In-Person": "In-Person",
-                            "In Person": "In-Person",
-                        };
-                        const dashboardMode = modeMap[apptData.Mode || ""] || "In-Person";
-                        const fee = parseFloat(String(apptData.Fees)) || 0;
-                        await dashboardAppointmentModel_1.DashboardAppointment.create({
-                            doctorId: dashboardDoctorId,
-                            patientId: dashboardPatient._id,
-                            datetime: appointmentDate,
-                            mode: dashboardMode,
-                            status: dashboardStatus,
-                            fee: fee,
-                        });
-                    }
-                }
-            }
-            catch (dashboardErr) {
-                // Log error but don't fail the appointment creation
-            }
-        }
         res.status(201).json(formatAppointmentResponse(created));
     }
     catch (err) {
