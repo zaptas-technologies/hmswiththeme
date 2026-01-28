@@ -35,6 +35,7 @@ const formatAppointmentResponse = (appt: any) => {
     Mode: obj.Mode,
     Status: obj.Status,
     Fees: obj.Fees,
+    hospital: obj.hospital?.toString?.() || obj.hospital,
     createdAt: obj.createdAt,
     updatedAt: obj.updatedAt,
   };
@@ -220,11 +221,51 @@ export const createAppointment: RequestHandler = async (req, res, next) => {
 
     const accessFilter = buildAccessFilter(req.user);
     
-    // Ensure hospital is ObjectId if provided
-    let hospitalId: mongoose.Types.ObjectId | undefined;
+    // Convert user to ObjectId (always required)
+    const userId = accessFilter.user 
+      ? (typeof accessFilter.user === 'string' 
+          ? new mongoose.Types.ObjectId(accessFilter.user)
+          : accessFilter.user)
+      : new mongoose.Types.ObjectId(req.user.userId);
     
-    if (accessFilter.hospital) {
-      // Hospital from user role (should be string from buildAccessFilter)
+    // Resolve hospital ID (prefer auth context if available)
+    let hospitalId: mongoose.Types.ObjectId | undefined;
+
+    // If auth middleware attached hospitalId, always prefer it
+    if (req.user.hospitalId && mongoose.Types.ObjectId.isValid(req.user.hospitalId)) {
+      hospitalId = new mongoose.Types.ObjectId(req.user.hospitalId);
+    }
+    
+    if (req.user.role === "USER") {
+      // For doctors, find their hospital from Doctor model
+      try {
+        let doctor = await Doctor.findOne({ user: req.user.userId })
+          .select("hospital")
+          .lean() as { hospital?: any } | null;
+        
+        if (!doctor) {
+          const user = await User.findById(req.user.userId).select("email").lean();
+          if (user?.email) {
+            doctor = await Doctor.findOne({
+              $or: [
+                { Email: new RegExp(`^${user.email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+                { email: new RegExp(`^${user.email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+              ],
+            })
+              .select("hospital")
+              .lean() as { hospital?: any } | null;
+          }
+        }
+        
+        if (!hospitalId && doctor?.hospital) {
+          hospitalId = new mongoose.Types.ObjectId(doctor.hospital.toString());
+        }
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.error("Error fetching doctor hospital for appointment:", error);
+      }
+    } else if (accessFilter.hospital) {
+      // For HOSPITAL_ADMIN or SUPER_ADMIN, use from accessFilter
       if (typeof accessFilter.hospital === 'string') {
         if (mongoose.Types.ObjectId.isValid(accessFilter.hospital)) {
           hospitalId = new mongoose.Types.ObjectId(accessFilter.hospital);
@@ -234,8 +275,10 @@ export const createAppointment: RequestHandler = async (req, res, next) => {
       } else if (accessFilter.hospital instanceof mongoose.Types.ObjectId) {
         hospitalId = accessFilter.hospital;
       }
-    } else if (cleanApptData.hospital) {
-      // Hospital from request body (could be string or ObjectId)
+    }
+    
+    // Allow hospital override from request body (if provided)
+    if (cleanApptData.hospital) {
       if (typeof cleanApptData.hospital === 'string') {
         if (mongoose.Types.ObjectId.isValid(cleanApptData.hospital)) {
           hospitalId = new mongoose.Types.ObjectId(cleanApptData.hospital);
@@ -267,7 +310,8 @@ export const createAppointment: RequestHandler = async (req, res, next) => {
     
     const appointmentData: any = {
       ...finalApptData,
-      ...(hospitalId && { hospital: hospitalId }),
+      user: userId, // Always include user as ObjectId
+      ...(hospitalId && { hospital: hospitalId }), // Include hospital if available
       ...(doctorObjectId && { doctorId: doctorObjectId }),
     };
 

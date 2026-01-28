@@ -378,9 +378,17 @@ export const saveConsultation: RequestHandler = async (req, res, next) => {
       await consultation.save();
     } else {
       const accessFilter = buildAccessFilter(req.user);
+      // Convert user and hospital strings to ObjectIds for proper MongoDB storage
+      const normalizedAccessFilter: any = {};
+      if (accessFilter.user && typeof accessFilter.user === "string") {
+        normalizedAccessFilter.user = new mongoose.Types.ObjectId(accessFilter.user);
+      }
+      if (accessFilter.hospital && typeof accessFilter.hospital === "string") {
+        normalizedAccessFilter.hospital = new mongoose.Types.ObjectId(accessFilter.hospital);
+      }
       consultation = await Consultation.create({
         ...consultationDocument,
-        ...accessFilter,
+        ...normalizedAccessFilter,
       });
     }
 
@@ -522,9 +530,17 @@ export const saveConsultation: RequestHandler = async (req, res, next) => {
           }).lean().exec();
 
           if (!existingPrescription) {
+            // Convert user and hospital strings to ObjectIds for proper MongoDB storage
+            const normalizedPrescriptionAccessFilter: any = {};
+            if (accessFilter.user && typeof accessFilter.user === "string") {
+              normalizedPrescriptionAccessFilter.user = new mongoose.Types.ObjectId(accessFilter.user);
+            }
+            if (accessFilter.hospital && typeof accessFilter.hospital === "string") {
+              normalizedPrescriptionAccessFilter.hospital = new mongoose.Types.ObjectId(accessFilter.hospital);
+            }
             await Prescription.create({
               ...prescriptionData,
-              ...accessFilter,
+              ...normalizedPrescriptionAccessFilter,
             });
           }
         }

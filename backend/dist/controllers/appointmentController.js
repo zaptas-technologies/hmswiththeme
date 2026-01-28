@@ -24,6 +24,7 @@ const formatAppointmentResponse = (appt) => {
         Mode: obj.Mode,
         Status: obj.Status,
         Fees: obj.Fees,
+        hospital: obj.hospital?.toString?.() || obj.hospital,
         createdAt: obj.createdAt,
         updatedAt: obj.updatedAt,
     };
@@ -191,10 +192,48 @@ const createAppointment = async (req, res, next) => {
         delete cleanApptData.id;
         delete cleanApptData._id;
         const accessFilter = (0, authMiddleware_1.buildAccessFilter)(req.user);
-        // Ensure hospital is ObjectId if provided
+        // Convert user to ObjectId (always required)
+        const userId = accessFilter.user
+            ? (typeof accessFilter.user === 'string'
+                ? new mongoose_1.default.Types.ObjectId(accessFilter.user)
+                : accessFilter.user)
+            : new mongoose_1.default.Types.ObjectId(req.user.userId);
+        // Resolve hospital ID (prefer auth context if available)
         let hospitalId;
-        if (accessFilter.hospital) {
-            // Hospital from user role (should be string from buildAccessFilter)
+        // If auth middleware attached hospitalId, always prefer it
+        if (req.user.hospitalId && mongoose_1.default.Types.ObjectId.isValid(req.user.hospitalId)) {
+            hospitalId = new mongoose_1.default.Types.ObjectId(req.user.hospitalId);
+        }
+        if (req.user.role === "USER") {
+            // For doctors, find their hospital from Doctor model
+            try {
+                let doctor = await doctorModel_1.Doctor.findOne({ user: req.user.userId })
+                    .select("hospital")
+                    .lean();
+                if (!doctor) {
+                    const user = await userModel_1.User.findById(req.user.userId).select("email").lean();
+                    if (user?.email) {
+                        doctor = await doctorModel_1.Doctor.findOne({
+                            $or: [
+                                { Email: new RegExp(`^${user.email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+                                { email: new RegExp(`^${user.email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+                            ],
+                        })
+                            .select("hospital")
+                            .lean();
+                    }
+                }
+                if (!hospitalId && doctor?.hospital) {
+                    hospitalId = new mongoose_1.default.Types.ObjectId(doctor.hospital.toString());
+                }
+            }
+            catch (error) {
+                // eslint-disable-next-line no-console
+                console.error("Error fetching doctor hospital for appointment:", error);
+            }
+        }
+        else if (accessFilter.hospital) {
+            // For HOSPITAL_ADMIN or SUPER_ADMIN, use from accessFilter
             if (typeof accessFilter.hospital === 'string') {
                 if (mongoose_1.default.Types.ObjectId.isValid(accessFilter.hospital)) {
                     hospitalId = new mongoose_1.default.Types.ObjectId(accessFilter.hospital);
@@ -207,8 +246,8 @@ const createAppointment = async (req, res, next) => {
                 hospitalId = accessFilter.hospital;
             }
         }
-        else if (cleanApptData.hospital) {
-            // Hospital from request body (could be string or ObjectId)
+        // Allow hospital override from request body (if provided)
+        if (cleanApptData.hospital) {
             if (typeof cleanApptData.hospital === 'string') {
                 if (mongoose_1.default.Types.ObjectId.isValid(cleanApptData.hospital)) {
                     hospitalId = new mongoose_1.default.Types.ObjectId(cleanApptData.hospital);
@@ -239,7 +278,8 @@ const createAppointment = async (req, res, next) => {
         }
         const appointmentData = {
             ...finalApptData,
-            ...(hospitalId && { hospital: hospitalId }),
+            user: userId, // Always include user as ObjectId
+            ...(hospitalId && { hospital: hospitalId }), // Include hospital if available
             ...(doctorObjectId && { doctorId: doctorObjectId }),
         };
         const created = await appointmentModel_1.Appointment.create(appointmentData);

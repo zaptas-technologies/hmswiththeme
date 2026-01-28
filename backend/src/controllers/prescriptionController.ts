@@ -481,11 +481,20 @@ export const createPrescription: RequestHandler = async (req, res, next) => {
         ? new mongoose.Types.ObjectId(inventoryIdStr)
         : undefined;
 
+    // Convert user and hospital strings to ObjectIds for proper MongoDB storage
+    const normalizedAccessFilter: any = {};
+    if (accessFilter.user && typeof accessFilter.user === "string") {
+      normalizedAccessFilter.user = new mongoose.Types.ObjectId(accessFilter.user);
+    }
+    if (accessFilter.hospital && typeof accessFilter.hospital === "string") {
+      normalizedAccessFilter.hospital = new mongoose.Types.ObjectId(accessFilter.hospital);
+    }
+
     const created = await Prescription.create({
       ...cleanPrescData,
       Appointment_ID: new mongoose.Types.ObjectId(appointmentIdStr),
       ...(inventoryId ? { inventoryId } : {}),
-      ...accessFilter,
+      ...normalizedAccessFilter,
     });
     res.status(201).json(formatPrescriptionResponse(created));
   } catch (err: any) {
