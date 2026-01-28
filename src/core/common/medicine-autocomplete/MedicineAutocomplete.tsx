@@ -51,15 +51,22 @@ const MedicineAutocomplete: React.FC<MedicineAutocompleteProps> = ({
 
   // Initialize selected option from value prop
   useEffect(() => {
-    if (value && !selectedOption) {
-      setSelectedOption({
-        value: value,
-        label: value,
-        isManual: true,
-      });
-      setInputValue(value);
+    if (value) {
+      // Only update if value changed and doesn't match current selection
+      if (!selectedOption || selectedOption.value !== value) {
+        setSelectedOption({
+          value: value,
+          label: value,
+          isManual: true,
+        });
+        setInputValue(value);
+      }
+    } else if (selectedOption) {
+      // Clear selection if value is cleared
+      setSelectedOption(null);
+      setInputValue("");
     }
-  }, [value, selectedOption]);
+  }, [value]); // Removed selectedOption from dependencies to prevent loop
 
   // Debounced search function
   const debouncedSearch = useCallback(

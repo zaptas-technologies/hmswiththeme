@@ -1,5 +1,5 @@
 import { Link, useSearchParams, useNavigate } from "react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import ImageWithBasePath from "../../../../../core/imageWithBasePath";
 import CommonSelect from "../../../../../core/common/common-select/commonSelect";
 import { empty_Stomach } from "../../../../../core/common/selectOption";
@@ -76,6 +76,41 @@ const OnlineConsultations = () => {
     amount: string;
     paymentMode?: string;
   }>>([{ id: Date.now(), service: "", amount: "" }]);
+
+  // Memoize MedicalForm value and onChange to prevent infinite loops
+  const medicalFormValue = useMemo(
+    () =>
+      medications.map((med, idx) => ({
+        id: idx,
+        medicine: med.medicine,
+        dosage: med.dosage,
+        frequency: med.frequency,
+        duration: med.duration,
+      })),
+    [medications]
+  );
+
+  const handleMedicalFormChange = useCallback(
+    (meds: Array<{
+      id: number;
+      medicine?: string;
+      dosage?: string;
+      dosageMg?: string;
+      dosageM?: string;
+      frequency?: string;
+      duration?: string;
+    }>) => {
+      setMedications(
+        meds.map((med) => ({
+          medicine: med.medicine || "",
+          dosage: med.dosage || med.dosageMg || med.dosageM || "",
+          frequency: med.frequency || "",
+          duration: med.duration || "",
+        }))
+      );
+    },
+    []
+  );
 
   // Fetch appointment and patient data
   useEffect(() => {
@@ -674,23 +709,8 @@ const OnlineConsultations = () => {
             {/* end card header */}
             <div className="card-body pb-0">
               <MedicalForm
-                value={medications.map((med, idx) => ({
-                  id: idx,
-                  medicine: med.medicine,
-                  dosage: med.dosage,
-                  frequency: med.frequency,
-                  duration: med.duration,
-                }))}
-                onChange={(meds) => {
-                  setMedications(
-                    meds.map((med) => ({
-                      medicine: med.medicine || "",
-                      dosage: med.dosage || med.dosageMg || med.dosageM || "",
-                      frequency: med.frequency || "",
-                      duration: med.duration || "",
-                    }))
-                  );
-                }}
+                value={medicalFormValue}
+                onChange={handleMedicalFormChange}
               />
             </div>
             {/* end card-body */}

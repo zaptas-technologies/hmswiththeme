@@ -41,24 +41,79 @@ const DiagnosisForm: React.FC<DiagnosisFormProps> = ({ value, onChange }) => {
     const newDiagnosis: DiagnosisItem = {
       id: Date.now() + Math.random(),
       complaintText: "",
+      type: Diagnosis_Type[0]?.value || "",
     };
 
     setDiagnoses((prev) => {
       const last = prev[prev.length - 1];
-      return [...prev.slice(0, -1), newDiagnosis, last];
+      const updated = [...prev.slice(0, -1), newDiagnosis, last];
+      // Notify parent component
+      if (onChange) {
+        const formatted = updated
+          .filter((item) => item.complaintText && item.complaintText.trim() !== "")
+          .map((item) => ({
+            diagnosis: item.complaintText.trim(),
+            type: item.type || "",
+          }));
+        onChange(formatted);
+      }
+      return updated;
     });
   };
 
   const handleRemove = (id: number) => {
-    setDiagnoses((prev) => prev.filter((item) => item.id !== id));
+    setDiagnoses((prev) => {
+      const updated = prev.filter((item) => item.id !== id);
+      // Notify parent component
+      if (onChange) {
+        const formatted = updated
+          .filter((item) => item.complaintText && item.complaintText.trim() !== "")
+          .map((item) => ({
+            diagnosis: item.complaintText.trim(),
+            type: item.type || "",
+          }));
+        onChange(formatted);
+      }
+      return updated;
+    });
   };
 
   const handleComplaintTextChange = (id: number, value: string) => {
-    setDiagnoses((prev) =>
-      prev.map((item) =>
+    setDiagnoses((prev) => {
+      const updated = prev.map((item) =>
         item.id === id ? { ...item, complaintText: value } : item
-      )
-    );
+      );
+      // Notify parent component
+      if (onChange) {
+        const formatted = updated
+          .filter((item) => item.complaintText && item.complaintText.trim() !== "")
+          .map((item) => ({
+            diagnosis: item.complaintText.trim(),
+            type: item.type || "",
+          }));
+        onChange(formatted);
+      }
+      return updated;
+    });
+  };
+
+  const handleTypeChange = (id: number, value: string) => {
+    setDiagnoses((prev) => {
+      const updated = prev.map((item) =>
+        item.id === id ? { ...item, type: value } : item
+      );
+      // Notify parent component
+      if (onChange) {
+        const formatted = updated
+          .filter((item) => item.complaintText && item.complaintText.trim() !== "")
+          .map((item) => ({
+            diagnosis: item.complaintText.trim(),
+            type: item.type || "",
+          }));
+        onChange(formatted);
+      }
+      return updated;
+    });
   };
 
   return (
