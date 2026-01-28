@@ -67,14 +67,14 @@ const DoctorsAppointmentDetails = () => {
                   <i className="ti ti-calendar-event fs-14 text-body" />
                 </Link>
               </div>
-              <Link
+              {/* <Link
                 to="#"
                 className="btn btn-primary ms-2 fs-13 btn-md"
                 data-bs-toggle="offcanvas"
                 data-bs-target="#new_appointment"
               >
                 <i className="ti ti-plus me-1" /> New Appointment
-              </Link>
+              </Link> */}
             </div>
           </div>
           {/* End Page Header */}
