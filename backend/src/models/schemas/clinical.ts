@@ -89,7 +89,6 @@ export const DoctorPrescriptionSchema = new Schema(
     Date: { type: String, required: true },
     Prescribed_On: { type: String },
 
-    // Display names (for backward compatibility and UI)
     Patient: { type: String, required: true },
     Patient_Image: { type: String },
     Doctor: { type: String, required: true },
@@ -101,11 +100,13 @@ export const DoctorPrescriptionSchema = new Schema(
     Frequency: { type: String },
     Duration: { type: String },
 
-    // MongoDB ObjectId references (required for proper relationships)
+    // Must be a real MongoDB ObjectId
     Appointment_ID: { type: Schema.Types.ObjectId, ref: "Appointment", required: true, index: true },
+    
+    // ObjectId references (always use MongoDB ObjectId)
+    consultationId: { type: Schema.Types.ObjectId, ref: "Consultation", index: true },
     patientId: { type: Schema.Types.ObjectId, ref: "Patient", index: true },
     doctorId: { type: Schema.Types.ObjectId, ref: "Doctor", index: true },
-    consultationId: { type: Schema.Types.ObjectId, ref: "Consultation", index: true }, // Replaces Consultation_ID string
 
     // If medicine is selected from inventory, store the inventory document _id
     inventoryId: { type: Schema.Types.ObjectId, ref: "Inventory", index: true },

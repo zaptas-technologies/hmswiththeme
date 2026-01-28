@@ -17,9 +17,9 @@ export interface PrescriptionRequest {
   Frequency?: string;
   Duration?: string;
   Appointment_ID?: string; // ObjectId string
+  consultationId?: string; // ObjectId string (optional)
   patientId?: string; // ObjectId string (optional)
   doctorId?: string; // ObjectId string (optional)
-  consultationId?: string; // ObjectId string (optional, replaces Consultation_ID)
   inventoryId?: string; // ObjectId string (optional)
   [key: string]: any;
 }
@@ -31,13 +31,6 @@ const formatPrescriptionResponse = (presc: any) => {
     obj.Appointment_ID && typeof obj.Appointment_ID === "object" && typeof obj.Appointment_ID.toString === "function"
       ? obj.Appointment_ID.toString()
       : (obj.Appointment_ID || obj.appointmentId || "");
-  
-  // Helper to convert ObjectId to string
-  const toIdStr = (id: any) => {
-    if (!id) return undefined;
-    if (typeof id === "object" && typeof id.toString === "function") return id.toString();
-    return String(id);
-  };
   
   // Return only relevant fields for list view
   return {
@@ -56,10 +49,10 @@ const formatPrescriptionResponse = (presc: any) => {
     Duration: obj.Duration || "",
     Appointment_ID: appointmentIdStr,
     appointmentId: appointmentIdStr,
-    patientId: toIdStr(obj.patientId),
-    doctorId: toIdStr(obj.doctorId),
-    consultationId: toIdStr(obj.consultationId), // Replaces Consultation_ID
-    inventoryId: toIdStr(obj.inventoryId),
+    consultationId: obj.consultationId?.toString?.() || obj.consultationId,
+    patientId: obj.patientId?.toString?.() || obj.patientId,
+    doctorId: obj.doctorId?.toString?.() || obj.doctorId,
+    inventoryId: obj.inventoryId?.toString?.() || obj.inventoryId,
     Amount: obj.Amount,
     createdAt: obj.createdAt,
     updatedAt: obj.updatedAt,
@@ -266,7 +259,6 @@ export const getAllPrescriptions: RequestHandler = async (req, res, next) => {
           $or: [
             { Patient: rx },
             { Doctor: rx },
-            { Consultation_ID: rx },
             { Appointment_ID: rx },
             { "Medications.medicine": rx },
           ],
@@ -322,7 +314,7 @@ export const getAllPrescriptions: RequestHandler = async (req, res, next) => {
           Prescription_ID: {
             $concat: [
               "CONS-",
-              { $ifNull: ["$Consultation_ID", { $toString: "$_id" }] },
+              { $toString: "$_id" },
               "-",
               { $toString: { $add: [{ $ifNull: ["$medIndex", 0] }, 1] } },
             ],
@@ -494,6 +486,12 @@ export const createPrescription: RequestHandler = async (req, res, next) => {
         ? new mongoose.Types.ObjectId(inventoryIdStr)
         : undefined;
 
+    const consultationIdStr = String((cleanPrescData as any).consultationId || "").trim();
+    const consultationId =
+      consultationIdStr && mongoose.Types.ObjectId.isValid(consultationIdStr)
+        ? new mongoose.Types.ObjectId(consultationIdStr)
+        : undefined;
+
     const patientIdStr = String((cleanPrescData as any).patientId || "").trim();
     const patientId =
       patientIdStr && mongoose.Types.ObjectId.isValid(patientIdStr)
@@ -504,12 +502,6 @@ export const createPrescription: RequestHandler = async (req, res, next) => {
     const doctorId =
       doctorIdStr && mongoose.Types.ObjectId.isValid(doctorIdStr)
         ? new mongoose.Types.ObjectId(doctorIdStr)
-        : undefined;
-
-    const consultationIdStr = String((cleanPrescData as any).consultationId || "").trim();
-    const consultationId =
-      consultationIdStr && mongoose.Types.ObjectId.isValid(consultationIdStr)
-        ? new mongoose.Types.ObjectId(consultationIdStr)
         : undefined;
 
     // Convert user and hospital strings to ObjectIds for proper MongoDB storage
@@ -525,9 +517,9 @@ export const createPrescription: RequestHandler = async (req, res, next) => {
       ...cleanPrescData,
       Appointment_ID: new mongoose.Types.ObjectId(appointmentIdStr),
       ...(inventoryId ? { inventoryId } : {}),
+      ...(consultationId ? { consultationId } : {}),
       ...(patientId ? { patientId } : {}),
       ...(doctorId ? { doctorId } : {}),
-      ...(consultationId ? { consultationId } : {}),
       ...normalizedAccessFilter,
     });
     res.status(201).json(formatPrescriptionResponse(created));

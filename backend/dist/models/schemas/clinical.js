@@ -68,7 +68,6 @@ exports.DoctorPrescriptionSchema = new mongoose_1.Schema({
     Prescription_ID: { type: String, index: true },
     Date: { type: String, required: true },
     Prescribed_On: { type: String },
-    // Display names (for backward compatibility and UI)
     Patient: { type: String, required: true },
     Patient_Image: { type: String },
     Doctor: { type: String, required: true },
@@ -77,11 +76,12 @@ exports.DoctorPrescriptionSchema = new mongoose_1.Schema({
     Dosage: { type: String },
     Frequency: { type: String },
     Duration: { type: String },
-    // MongoDB ObjectId references (required for proper relationships)
+    // Must be a real MongoDB ObjectId
     Appointment_ID: { type: mongoose_1.Schema.Types.ObjectId, ref: "Appointment", required: true, index: true },
+    // ObjectId references (always use MongoDB ObjectId)
+    consultationId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Consultation", index: true },
     patientId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Patient", index: true },
     doctorId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Doctor", index: true },
-    consultationId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Consultation", index: true }, // Replaces Consultation_ID string
     // If medicine is selected from inventory, store the inventory document _id
     inventoryId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Inventory", index: true },
     // Role-based access

@@ -18,11 +18,13 @@ export interface Prescription {
   Duration?: string;
   Appointment_ID?: string;
   appointmentId?: string;
-  patientId?: string; // ObjectId reference to Patient
-  doctorId?: string; // ObjectId reference to Doctor
-  consultationId?: string; // ObjectId reference to Consultation (replaces Consultation_ID string)
-  inventoryId?: string; // ObjectId reference to Inventory
+  consultationId?: string; // MongoDB ObjectId as string
+  patientId?: string; // MongoDB ObjectId as string
+  doctorId?: string; // MongoDB ObjectId as string
+  inventoryId?: string; // MongoDB ObjectId as string
   Amount?: string | number;
+  createdAt?: Date | string;
+  updatedAt?: Date | string;
   [key: string]: any;
 }
 
