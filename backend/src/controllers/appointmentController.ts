@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import { Appointment } from "../models/appointmentModel";
 import { User } from "../models/userModel";
 import { Doctor } from "../models/doctorModel";
+import { DoctorSchedule } from "../models/doctorScheduleModel";
 import { buildAccessFilter } from "../middlewares/authMiddleware";
 
 export interface AppointmentRequest {
@@ -425,6 +426,237 @@ export const deleteAppointment: RequestHandler = async (req, res, next) => {
     if (err?.name === "CastError") {
       return res.status(400).json({ message: "Invalid appointment id" });
     }
+    next(err);
+  }
+};
+
+// GET /api/appointments/available-slots - Get available time slots for a doctor on a specific date
+export const getAvailableSlots: RequestHandler = async (req, res, next) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const doctorId = req.query.doctorId as string;
+    const date = req.query.date as string; // Format: YYYY-MM-DD
+    const hospitalId = req.query.hospitalId as string | undefined;
+
+    if (!doctorId || !date) {
+      return res.status(400).json({ message: "doctorId and date are required" });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(doctorId)) {
+      return res.status(400).json({ message: "Invalid doctorId format" });
+    }
+
+    // Parse date and get day name
+    const selectedDate = new Date(date + "T00:00:00.000Z");
+    if (isNaN(selectedDate.getTime())) {
+      return res.status(400).json({ message: "Invalid date format. Use YYYY-MM-DD" });
+    }
+
+    const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    const dayName = dayNames[selectedDate.getUTCDay()];
+
+    // Get doctor info (including timeSlotMinutes)
+    const doctor = await Doctor.findById(doctorId).select("timeSlotMinutes hospital").lean() as {
+      timeSlotMinutes?: number;
+      hospital?: mongoose.Types.ObjectId;
+    } | null;
+    if (!doctor) {
+      return res.status(404).json({ message: "Doctor not found" });
+    }
+
+    // Get doctor's schedule for the selected hospital (or default)
+    const scheduleFilter: any = { doctorId: new mongoose.Types.ObjectId(doctorId) };
+    if (hospitalId && mongoose.Types.ObjectId.isValid(hospitalId)) {
+      scheduleFilter.hospital = new mongoose.Types.ObjectId(hospitalId);
+    } else if (doctor.hospital) {
+      scheduleFilter.hospital = doctor.hospital;
+    }
+
+    const schedule = await DoctorSchedule.findOne(scheduleFilter)
+      .sort({ createdAt: -1 })
+      .lean() as {
+      fromDate: Date;
+      toDate: Date;
+      schedules: Array<{
+        day: string;
+        timeSlots: Array<{ from: string; to: string }>;
+      }>;
+    } | null;
+
+    if (!schedule) {
+      return res.json({
+        availableSlots: [],
+        suggestions: [],
+        message: "Doctor has no schedule configured",
+      });
+    }
+
+    // Check if date is within schedule range
+    const fromDate = new Date(schedule.fromDate);
+    const toDate = new Date(schedule.toDate);
+    if (selectedDate < fromDate || selectedDate > toDate) {
+      return res.json({
+        availableSlots: [],
+        suggestions: [],
+        message: `Doctor schedule is valid from ${fromDate.toISOString().split("T")[0]} to ${toDate.toISOString().split("T")[0]}`,
+      });
+    }
+
+    // Find schedule for the selected day
+    const daySchedule = schedule.schedules.find((s: { day: string; timeSlots: Array<{ from: string; to: string }> }) => s.day === dayName);
+    if (!daySchedule || daySchedule.timeSlots.length === 0) {
+      // Suggest next available days
+      const suggestions: Array<{ date: string; day: string; timeSlots: Array<{ from: string; to: string }> }> = [];
+      for (let i = 1; i <= 14; i++) {
+        const checkDate = new Date(selectedDate);
+        checkDate.setUTCDate(checkDate.getUTCDate() + i);
+        const checkDayName = dayNames[checkDate.getUTCDay()];
+        const checkDaySchedule = schedule.schedules.find((s: { day: string; timeSlots: Array<{ from: string; to: string }> }) => s.day === checkDayName);
+        if (checkDaySchedule && checkDaySchedule.timeSlots.length > 0) {
+          suggestions.push({
+            date: checkDate.toISOString().split("T")[0],
+            day: checkDayName,
+            timeSlots: checkDaySchedule.timeSlots,
+          });
+          if (suggestions.length >= 3) break;
+        }
+      }
+
+      return res.json({
+        availableSlots: [],
+        suggestions,
+        message: `Doctor is not available on ${dayName}. Suggested dates:`,
+      });
+    }
+
+    // Get timeSlotMinutes (default 15 minutes)
+    const slotDurationMinutes = (doctor as { timeSlotMinutes?: number }).timeSlotMinutes || 15;
+
+    // Get existing appointments for this doctor on this date
+    const startOfDay = new Date(selectedDate);
+    startOfDay.setUTCHours(0, 0, 0, 0);
+    const endOfDay = new Date(selectedDate);
+    endOfDay.setUTCHours(23, 59, 59, 999);
+
+    const existingAppointments = await Appointment.find({
+      doctorId: new mongoose.Types.ObjectId(doctorId),
+      Date_Time: {
+        $gte: startOfDay.toISOString(),
+        $lte: endOfDay.toISOString(),
+      },
+      Status: { $nin: ["Cancelled"] }, // Exclude cancelled appointments
+    })
+      .select("Date_Time")
+      .lean();
+
+    // Parse booked times
+    const bookedTimes = existingAppointments.map((apt) => {
+      try {
+        const aptDate = new Date(apt.Date_Time);
+        return {
+          hour: aptDate.getUTCHours(),
+          minute: aptDate.getUTCMinutes(),
+        };
+      } catch {
+        return null;
+      }
+    }).filter(Boolean) as Array<{ hour: number; minute: number }>;
+
+    // Generate all slots for each time slot range (marking booked vs available)
+    const allSlots: Array<{ time: string; display: string; isBooked: boolean }> = [];
+    const availableSlots: Array<{ time: string; display: string }> = [];
+
+    daySchedule.timeSlots.forEach((timeSlot: { from: string; to: string }) => {
+      const [fromHour, fromMinute] = timeSlot.from.split(":").map(Number);
+      const [toHour, toMinute] = timeSlot.to.split(":").map(Number);
+
+      let currentHour = fromHour;
+      let currentMinute = fromMinute;
+
+      while (
+        currentHour < toHour ||
+        (currentHour === toHour && currentMinute + slotDurationMinutes <= toMinute)
+      ) {
+        const slotTime = `${String(currentHour).padStart(2, "0")}:${String(currentMinute).padStart(2, "0")}`;
+        const slotEndHour = Math.floor((currentMinute + slotDurationMinutes) / 60) + currentHour;
+        const slotEndMinute = (currentMinute + slotDurationMinutes) % 60;
+        const slotEndTime = `${String(slotEndHour).padStart(2, "0")}:${String(slotEndMinute).padStart(2, "0")}`;
+
+        // Check if slot overlaps with any booked appointment
+        const isBooked = bookedTimes.some((booked) => {
+          const bookedMinutes = booked.hour * 60 + booked.minute;
+          const slotStartMinutes = currentHour * 60 + currentMinute;
+          const slotEndMinutes = slotEndHour * 60 + slotEndMinute;
+          return bookedMinutes >= slotStartMinutes && bookedMinutes < slotEndMinutes;
+        });
+
+        // Store slot with its booking status
+        const slot = {
+          time: slotTime,
+          display: `${slotTime} - ${slotEndTime}`,
+          isBooked,
+        };
+        allSlots.push(slot);
+
+        // Only expose truly available slots in the simple list
+        if (!isBooked) {
+          availableSlots.push({
+            time: slot.time,
+            display: slot.display,
+          });
+        }
+
+        // Move to next slot
+        currentMinute += slotDurationMinutes;
+        if (currentMinute >= 60) {
+          currentHour += Math.floor(currentMinute / 60);
+          currentMinute = currentMinute % 60;
+        }
+      }
+    });
+
+    // Derive a compact list of booked slots for UI (same structure as availableSlots)
+    const bookedSlots: Array<{ time: string; display: string }> = allSlots
+      .filter((slot) => slot.isBooked)
+      .map((slot) => ({
+        time: slot.time,
+        display: slot.display,
+      }));
+
+    // If no slots available, suggest next available days
+    let suggestions: Array<{ date: string; day: string; timeSlots: Array<{ from: string; to: string }> }> = [];
+    if (availableSlots.length === 0) {
+      for (let i = 1; i <= 14; i++) {
+        const checkDate = new Date(selectedDate);
+        checkDate.setUTCDate(checkDate.getUTCDate() + i);
+        const checkDayName = dayNames[checkDate.getUTCDay()];
+        const checkDaySchedule = schedule.schedules.find((s: { day: string; timeSlots: Array<{ from: string; to: string }> }) => s.day === checkDayName);
+        if (checkDaySchedule && checkDaySchedule.timeSlots.length > 0) {
+          suggestions.push({
+            date: checkDate.toISOString().split("T")[0],
+            day: checkDayName,
+            timeSlots: checkDaySchedule.timeSlots,
+          });
+          if (suggestions.length >= 3) break;
+        }
+      }
+    }
+
+    res.json({
+      availableSlots,
+      bookedSlots,
+      slots: allSlots,
+      suggestions,
+      slotDurationMinutes,
+      daySchedule: {
+        day: dayName,
+        timeSlots: daySchedule.timeSlots,
+      },
+    });
+  } catch (err) {
     next(err);
   }
 };

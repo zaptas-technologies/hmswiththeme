@@ -609,6 +609,103 @@
   }
 }
 
+/* ============================
+   Time Slot Picker (Pro UX)
+   ============================ */
+.time-slot-picker {
+  .time-slot-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px;
+    margin-top: 12px;
+  }
+
+  .time-slot-btn {
+    padding: 10px 16px;
+    border: 2px solid var(--pr-border-color);
+    border-radius: 8px;
+    background: white;
+    color: var(--pr-body-color);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: center;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+
+    &:hover:not(:disabled) {
+      border-color: var(--pr-primary);
+      background: rgba(46, 55, 164, 0.05);
+      color: var(--pr-primary);
+      transform: translateY(-1px);
+      box-shadow: 0 2px 8px rgba(46, 55, 164, 0.15);
+    }
+
+    &.active {
+      border-color: var(--pr-primary);
+      background: var(--pr-primary);
+      color: white;
+      box-shadow: 0 2px 12px rgba(46, 55, 164, 0.3);
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    &.booked {
+      border-color: #f97373;
+      background: #fff5f5;
+      color: #b91c1c;
+    }
+
+    &__time {
+      font-weight: 500;
+    }
+
+    &__status {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      border-radius: 999px;
+      padding: 2px 8px;
+      background: rgba(185, 28, 28, 0.1);
+      color: #b91c1c;
+    }
+  }
+
+  .no-slots {
+    .suggestions {
+      margin-top: 16px;
+      padding: 16px;
+      background: var(--pr-secondary-bg);
+      border-radius: 10px;
+      border: 1px solid var(--pr-border-color);
+
+      .suggestion-list {
+        margin-top: 12px;
+      }
+
+      .suggestion-item {
+        padding: 12px;
+        margin-bottom: 8px;
+        background: white;
+        border-radius: 8px;
+        border: 1px solid var(--pr-border-color);
+
+        &:last-child {
+          margin-bottom: 0;
+        }
+      }
+    }
+  }
+}
+
 /* Print styles - Hide navigation elements when printing */
 @media print {
   /* Hide all navigation, header, sidebar elements */

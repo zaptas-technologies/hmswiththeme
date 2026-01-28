@@ -75,6 +75,9 @@ import AddGRN from "../components/pages/clinic-modules/grn/add-grn";
 import Specializations from "../components/pages/clinic-modules/specializations/specializations";
 import HospitalsList from "../components/pages/clinic-modules/hospitals/hospitals";
 import AddHospital from "../components/pages/clinic-modules/hospitals/add-hospital";
+import Pharmacies from "../components/pages/clinic-modules/pharmacies/pharmacies";
+import AddPharmacy from "../components/pages/clinic-modules/pharmacies/add-pharmacy";
+import EditPharmacy from "../components/pages/clinic-modules/pharmacies/edit-pharmacy";
 import AddBlog from "../components/pages/content-modules/add-blog/addBlog";
 import AddPages from "../components/pages/content-modules/add-page/addPages";
 import BlogCategories from "../components/pages/content-modules/blog-categories/blogCategories";
@@ -1387,6 +1390,21 @@ export const publicRoutes = [
   {
     path: routes.addHospital,
     element: <AddHospital />,
+    route: Route,
+  },
+  {
+    path: routes.pharmacies,
+    element: <Pharmacies />,
+    route: Route,
+  },
+  {
+    path: routes.addPharmacy,
+    element: <AddPharmacy />,
+    route: Route,
+  },
+  {
+    path: routes.editPharmacy,
+    element: <EditPharmacy />,
     route: Route,
   },
   {

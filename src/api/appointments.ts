@@ -90,3 +90,50 @@ export const deleteAppointment = async (id: string): Promise<void> => {
   await api.delete(`/appointments/${id}`);
 };
 
+export interface AvailableSlot {
+  time: string; // HH:mm format
+  display: string; // "HH:mm - HH:mm" format
+  // When returned from /available-slots, this can be used to
+  // visually differentiate already-booked vs free slots.
+  isBooked?: boolean;
+}
+
+export interface SlotSuggestion {
+  date: string; // YYYY-MM-DD format
+  day: string;
+  timeSlots: Array<{ from: string; to: string }>;
+}
+
+export interface AvailableSlotsResponse {
+  availableSlots: AvailableSlot[];
+  // Slots that are already booked (for clear UX)
+  bookedSlots?: AvailableSlot[];
+  // Full timeline of slots for the day (both booked & available)
+  slots?: AvailableSlot[];
+  suggestions: SlotSuggestion[];
+  slotDurationMinutes: number;
+  daySchedule?: {
+    day: string;
+    timeSlots: Array<{ from: string; to: string }>;
+  };
+  message?: string;
+}
+
+export const fetchAvailableSlots = async (params: {
+  doctorId: string;
+  date: string; // YYYY-MM-DD format
+  hospitalId?: string;
+}): Promise<AvailableSlotsResponse> => {
+  const queryParams = new URLSearchParams();
+  queryParams.append("doctorId", params.doctorId);
+  queryParams.append("date", params.date);
+  if (params.hospitalId) {
+    queryParams.append("hospitalId", params.hospitalId);
+  }
+
+  const { data } = await api.get<AvailableSlotsResponse>(
+    `/appointments/available-slots?${queryParams.toString()}`
+  );
+  return data;
+};
+

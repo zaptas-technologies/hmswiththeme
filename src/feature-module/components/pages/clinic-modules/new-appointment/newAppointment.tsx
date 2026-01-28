@@ -6,28 +6,30 @@ import {
   Status_Checkout,
 } from "../../../../../core/common/selectOption";
 import CommonSelect from "../../../../../core/common/common-select/commonSelect";
-import { DatePicker, TimePicker, type TimePickerProps } from "antd";
+import { DatePicker } from "antd";
 import type { Dayjs } from "dayjs";
-import dayjs from "dayjs";
 import { useState, useEffect, useMemo } from "react";
 import Modals from "./modals/modals";
 import { createAppointment, type Appointment } from "../../../../../api/appointments";
 import { fetchDoctors, type Doctor } from "../../../../../api/doctors";
 import { fetchPatients, type Patient } from "../../../../../api/patients";
 import type { Option } from "../../../../../core/common/common-select/commonSelect";
+import TimeSlotPicker from "../../../../../core/common/time-slot-picker/TimeSlotPicker";
+import { useAuth } from "../../../../../core/context/AuthContext";
 
 const NewAppointment = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
+  const [selectedSlotTime, setSelectedSlotTime] = useState<string>(""); // HH:mm format
   const [formData, setFormData] = useState({
     Patient: "",
     Department: "",
     Doctor: "",
     Appointment_Type: "",
     Date: null as Dayjs | null,
-    Time: null as Dayjs | null,
     Reason: "",
     Status: "",
   });
@@ -79,9 +81,13 @@ const NewAppointment = () => {
     [patients]
   );
 
-  const onChangeTime: TimePickerProps["onChange"] = (time) => {
-    setFormData({ ...formData, Time: time });
-  };
+  // Get selected doctor's ID and hospital ID
+  const selectedDoctor = useMemo(() => {
+    return doctors.find((d) => d.Name_Designation === formData.Doctor);
+  }, [doctors, formData.Doctor]);
+
+  const doctorId = selectedDoctor?._id || selectedDoctor?.id || "";
+  const hospitalId = user?.hospitalId || selectedDoctor?.hospital;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,10 +97,10 @@ const NewAppointment = () => {
       !formData.Doctor ||
       !formData.Appointment_Type ||
       !formData.Date ||
-      !formData.Time ||
+      !selectedSlotTime ||
       !formData.Status
     ) {
-      alert("Please fill in all required fields");
+      alert("Please fill in all required fields including selecting a time slot");
       return;
     }
 
@@ -108,18 +114,14 @@ const NewAppointment = () => {
         return;
       }
 
-      // Find selected doctor to get doctor ID
-      const selectedDoctor = doctors.find((d) => d.Name_Designation === formData.Doctor);
       if (!selectedDoctor) {
         alert("Selected doctor not found");
         return;
       }
 
-      // Combine date and time
-      const dateTime = formData.Date
-        .hour(formData.Time?.hour() || 0)
-        .minute(formData.Time?.minute() || 0)
-        .second(0);
+      // Combine date and selected slot time
+      const [hour, minute] = selectedSlotTime.split(":").map(Number);
+      const dateTime = formData.Date.hour(hour).minute(minute).second(0);
 
       const appointmentData: Partial<Appointment> = {
         Date_Time: dateTime.format("DD MMM YYYY, hh:mm A"),
@@ -245,7 +247,7 @@ const NewAppointment = () => {
                       <div className="col-md-6">
                         <div className="mb-3">
                           <label className="form-label mb-1 fw-medium">
-                            Appointment Type
+                            Appointment Typec
                             <span className="text-danger ms-1">*</span>
                           </label>
                           <CommonSelect
@@ -288,23 +290,37 @@ const NewAppointment = () => {
                       <div className="col-md-6">
                         <div className="mb-3">
                           <label className="form-label mb-1 fw-medium">
-                            Time<span className="text-danger ms-1">*</span>
+                            Time Slot<span className="text-danger ms-1">*</span>
                           </label>
-                          <div className="input-icon-end position-relative">
-                            <TimePicker
-                              className="form-control"
-                              onChange={onChangeTime}
-                              value={formData.Time}
-                              defaultOpenValue={dayjs("00:00:00", "HH:mm:ss")}
-                              format="HH:mm"
+                          {formData.Doctor && formData.Date ? (
+                            <TimeSlotPicker
+                              doctorId={doctorId}
+                              date={formData.Date}
+                              hospitalId={hospitalId}
+                              value={selectedSlotTime}
+                              onChange={setSelectedSlotTime}
+                              disabled={loading}
                             />
-                            <span className="input-icon-addon">
-                              <i className="ti ti-clock text-gray-7" />
-                            </span>
-                          </div>
+                          ) : (
+                            <div className="alert alert-info mb-0">
+                              <i className="ti ti-info-circle me-2" />
+                              Please select a doctor and date to view available time slots.
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
+                    {selectedSlotTime && (
+                      <div className="row">
+                        <div className="col-12">
+                          <div className="alert alert-success mb-3">
+                            <i className="ti ti-check me-2" />
+                            Selected time: <strong>{selectedSlotTime}</strong> on{" "}
+                            <strong>{formData.Date?.format("DD MMM YYYY")}</strong>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     <div className="mb-3">
                       <label className="form-label mb-1 fw-medium">
                         Appointment Reason

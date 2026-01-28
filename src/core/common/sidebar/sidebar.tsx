@@ -3,7 +3,7 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import ImageWithBasePath from "../../imageWithBasePath";
 import React, { useEffect, useState } from "react";
-import { SidebarData } from "./sidebarData";
+import { getSidebarDataByRole } from "./sidebarData";
 import { useDispatch, useSelector } from "react-redux";
 import { setExpandMenu, setMobileSidebar } from "../../redux/sidebarSlice";
 import { updateTheme } from "../../redux/themeSlice";
@@ -302,7 +302,7 @@ const Sidebar = () => {
               </div>
             )} */}
             <ul>
-              {SidebarData?.map((mainLabel, index) => (
+              {getSidebarDataByRole(user?.role)?.map((mainLabel, index) => (
                 <React.Fragment key={`main-${index}`}>
                   <li className="menu-title">
                     <span>{mainLabel?.tittle}</span>

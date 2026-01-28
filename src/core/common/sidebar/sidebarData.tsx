@@ -370,6 +370,20 @@ const HospitalAdminSidebarData = [
         dot: true,
         submenuItems: [],
       },
+      {
+        label: "Pharmacy",
+        link: "index",
+        submenu: true,
+        showSubRoute: false,
+        icon: "pills",
+        base: "Pharmacy",
+        materialicons: "start",
+        dot: true,
+        submenuItems: [
+          { label: "Pharmacies", link: routes.pharmacies },
+          { label: "Add Pharmacy User", link: routes.addPharmacy },
+        ],
+      },
     ],
   },
   {
