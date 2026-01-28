@@ -1,6 +1,13 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
-import Select, { OptionsOrGroups, ActionMeta, SingleValue } from "react-select";
+import Select from "react-select";
 import { searchMedicines, type MedicineSearchResult } from "../../../api/inventory";
+
+// Types for react-select v5 (not exported directly)
+type InputActionMeta = {
+  action: "input-change" | "set-value" | "input-blur" | "menu-close";
+};
+
+type SingleValue<Option> = Option | null;
 
 // Simple debounce function
 const debounce = <T extends (...args: any[]) => any>(
@@ -117,8 +124,8 @@ const MedicineAutocomplete: React.FC<MedicineAutocompleteProps> = ({
   );
 
   // Handle input change
-  const handleInputChange = (newValue: string, actionMeta: ActionMeta<string>) => {
-    if (actionMeta.action === "input-change") {
+  const handleInputChange = (newValue: string, actionMeta: InputActionMeta | undefined) => {
+    if (actionMeta?.action === "input-change") {
       setInputValue(newValue);
       if (newValue.trim().length >= 2) {
         debouncedSearch(newValue);
