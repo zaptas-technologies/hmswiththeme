@@ -148,6 +148,12 @@ export const searchMedicines: RequestHandler = async (req, res, next) => {
     // Build filter similar to getAllAppointments - filter by hospital for doctors
     const filter: any = {};
     
+    // If auth middleware already attached hospitalId, always prefer it
+    // (prevents accidental cross-hospital search when doctor lookup fails)
+    if (req.user.hospitalId && mongoose.Types.ObjectId.isValid(req.user.hospitalId)) {
+      filter.hospital = new mongoose.Types.ObjectId(req.user.hospitalId);
+    }
+
     // For doctors (USER role), find their hospital
     if (req.user.role === "USER") {
       try {
@@ -176,9 +182,15 @@ export const searchMedicines: RequestHandler = async (req, res, next) => {
           filter.hospital = new mongoose.Types.ObjectId(doctor.hospital.toString());
         }
       } catch (error) {
-        // If we can't find doctor, continue without filters
+        // If we can't find doctor, do NOT continue without filters (would leak cross-hospital inventory)
         // eslint-disable-next-line no-console
         console.error("Error fetching doctor for medicine search:", error);
+      }
+
+      // If we still can't resolve a hospital context for a doctor, return empty results
+      // This makes "hospital-wise medicine search" compulsory.
+      if (!filter.hospital) {
+        return res.json({ data: [], count: 0 });
       }
     } else {
       // For other roles, use buildAccessFilter
@@ -209,7 +221,7 @@ export const searchMedicines: RequestHandler = async (req, res, next) => {
     filter.Status = { $in: ["Available", "Low Stock"] };
 
     const medicines = await Inventory.find(filter)
-      .select("Item_Name Item_Code Category Manufacturer Unit Unit_Price Quantity Status")
+      .select("_id Item_Name Item_Code Category Manufacturer Unit Unit_Price Quantity Status Expiry_Date Batch_Number")
       .sort({ Item_Name: 1 })
       .limit(limit)
       .lean()
@@ -217,6 +229,7 @@ export const searchMedicines: RequestHandler = async (req, res, next) => {
 
     // Format response for autocomplete
     const formattedMedicines = medicines.map((med: any) => ({
+      inventoryId: med._id?.toString() || "",
       value: med.Item_Name,
       label: med.Item_Name,
       code: med.Item_Code || "",
@@ -226,7 +239,10 @@ export const searchMedicines: RequestHandler = async (req, res, next) => {
       unitPrice: med.Unit_Price || 0,
       quantity: med.Quantity || 0,
       status: med.Status || "Available",
+      expiryDate: med.Expiry_Date ? new Date(med.Expiry_Date).toISOString() : "",
+      batchNumber: med.Batch_Number || "",
       details: {
+        inventoryId: med._id?.toString() || "",
         code: med.Item_Code || "",
         category: med.Category || "",
         manufacturer: med.Manufacturer || "",
@@ -234,6 +250,8 @@ export const searchMedicines: RequestHandler = async (req, res, next) => {
         unitPrice: med.Unit_Price || 0,
         quantity: med.Quantity || 0,
         status: med.Status || "Available",
+        expiryDate: med.Expiry_Date ? new Date(med.Expiry_Date).toISOString() : "",
+        batchNumber: med.Batch_Number || "",
       },
     }));
 

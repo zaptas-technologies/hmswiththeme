@@ -49,6 +49,16 @@ const OnlineConsultations = () => {
     dosage?: string;
     frequency?: string;
     duration?: string;
+    // Inventory document id (MongoDB ObjectId as string)
+    inventoryId?: string;
+    // Optional inventory metadata
+    inventoryCode?: string;
+    inventoryCategory?: string;
+    inventoryManufacturer?: string;
+    inventoryStock?: number;
+    inventoryStatus?: "Available" | "Low Stock" | "Out of Stock" | "Expired";
+    inventoryUnit?: string;
+    inventoryUnitPrice?: number;
   }>>([]);
 
   const [complaints, setComplaints] = useState<Array<{
@@ -86,6 +96,15 @@ const OnlineConsultations = () => {
         dosage: med.dosage,
         frequency: med.frequency,
         duration: med.duration,
+        inventoryId: med.inventoryId,
+        // Include inventory metadata
+        inventoryCode: med.inventoryCode,
+        inventoryCategory: med.inventoryCategory,
+        inventoryManufacturer: med.inventoryManufacturer,
+        inventoryStock: med.inventoryStock,
+        inventoryStatus: med.inventoryStatus,
+        inventoryUnit: med.inventoryUnit,
+        inventoryUnitPrice: med.inventoryUnitPrice,
       })),
     [medications]
   );
@@ -99,6 +118,14 @@ const OnlineConsultations = () => {
       dosageM?: string;
       frequency?: string;
       duration?: string;
+      inventoryId?: string;
+      inventoryCode?: string;
+      inventoryCategory?: string;
+      inventoryManufacturer?: string;
+      inventoryStock?: number;
+      inventoryStatus?: "Available" | "Low Stock" | "Out of Stock" | "Expired";
+      inventoryUnit?: string;
+      inventoryUnitPrice?: number;
     }>) => {
       setMedications(
         meds.map((med) => ({
@@ -106,6 +133,15 @@ const OnlineConsultations = () => {
           dosage: med.dosage || med.dosageMg || med.dosageM || "",
           frequency: med.frequency || "",
           duration: med.duration || "",
+          inventoryId: med.inventoryId,
+          // Preserve inventory metadata
+          inventoryCode: med.inventoryCode,
+          inventoryCategory: med.inventoryCategory,
+          inventoryManufacturer: med.inventoryManufacturer,
+          inventoryStock: med.inventoryStock,
+          inventoryStatus: med.inventoryStatus,
+          inventoryUnit: med.inventoryUnit,
+          inventoryUnitPrice: med.inventoryUnitPrice,
         }))
       );
     },
@@ -241,6 +277,9 @@ const OnlineConsultations = () => {
       setSaving(true);
       
       // Format medications for API
+      // Note: Backend only stores basic medication info (medicine, dosage, frequency, duration)
+      // Inventory metadata (code, category, stock status) is stored client-side for display
+      // but not sent to backend to maintain schema compatibility
       const formattedMedications = medications
         .filter((med) => med.medicine && med.medicine.trim() !== "")
         .map((med) => ({
@@ -248,6 +287,7 @@ const OnlineConsultations = () => {
           dosage: (med.dosage || "").trim(),
           frequency: (med.frequency || "").trim(),
           duration: (med.duration || "").trim(),
+          inventoryId: med.inventoryId,
         }));
 
       // Format complaints for API
@@ -709,7 +749,7 @@ const OnlineConsultations = () => {
             {/* end card header */}
             <div className="card-body pb-0">
               <MedicalForm
-                value={medicalFormValue}
+                value={medicalFormValue.length > 0 ? medicalFormValue : undefined}
                 onChange={handleMedicalFormChange}
               />
             </div>

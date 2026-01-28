@@ -16,13 +16,18 @@ export interface PrescriptionRequest {
   Dosage?: string;
   Frequency?: string;
   Duration?: string;
-  Appointment_ID?: string;
+  Appointment_ID?: string; // ObjectId string
+  inventoryId?: string; // ObjectId string (optional)
   [key: string]: any;
 }
 
 const formatPrescriptionResponse = (presc: any) => {
   if (!presc) return presc;
   const obj = typeof presc.toObject === "function" ? presc.toObject() : presc;
+  const appointmentIdStr =
+    obj.Appointment_ID && typeof obj.Appointment_ID === "object" && typeof obj.Appointment_ID.toString === "function"
+      ? obj.Appointment_ID.toString()
+      : (obj.Appointment_ID || obj.appointmentId || "");
   
   // Return only relevant fields for list view
   return {
@@ -39,8 +44,9 @@ const formatPrescriptionResponse = (presc: any) => {
     Dosage: obj.Dosage || "",
     Frequency: obj.Frequency || "",
     Duration: obj.Duration || "",
-    Appointment_ID: obj.Appointment_ID || obj.appointmentId || "",
-    appointmentId: obj.appointmentId || obj.Appointment_ID || "",
+    Appointment_ID: appointmentIdStr,
+    appointmentId: appointmentIdStr,
+    inventoryId: obj.inventoryId?.toString?.() || obj.inventoryId,
     Amount: obj.Amount,
     createdAt: obj.createdAt,
     updatedAt: obj.updatedAt,
@@ -461,8 +467,24 @@ export const createPrescription: RequestHandler = async (req, res, next) => {
     }
 
     const accessFilter = buildAccessFilter(req.user);
+
+    // Enforce Appointment_ID to be a valid ObjectId
+    const appointmentIdStr = String(cleanPrescData.Appointment_ID || "").trim();
+    if (!appointmentIdStr || !mongoose.Types.ObjectId.isValid(appointmentIdStr)) {
+      return res.status(400).json({ message: "Appointment_ID must be a valid MongoDB ObjectId" });
+    }
+
+    // Optional inventoryId
+    const inventoryIdStr = String((cleanPrescData as any).inventoryId || "").trim();
+    const inventoryId =
+      inventoryIdStr && mongoose.Types.ObjectId.isValid(inventoryIdStr)
+        ? new mongoose.Types.ObjectId(inventoryIdStr)
+        : undefined;
+
     const created = await Prescription.create({
       ...cleanPrescData,
+      Appointment_ID: new mongoose.Types.ObjectId(appointmentIdStr),
+      ...(inventoryId ? { inventoryId } : {}),
       ...accessFilter,
     });
     res.status(201).json(formatPrescriptionResponse(created));

@@ -19,6 +19,7 @@ export interface ConsultationData {
     dosage?: string;
     frequency?: string;
     duration?: string;
+    inventoryId?: string;
   }>;
   advice?: Array<{ advice: string }>;
   investigations?: Array<{

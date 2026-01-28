@@ -25,10 +25,6 @@ export const getAllHospitals: RequestHandler = async (req, res, next) => {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    const accessFilter = buildAccessFilter(req.user);
-    
-    // For super_admin, show all hospitals
-    // For hospital_admin, show only their hospital
     let query: any = {};
     
     if (req.user.role === "SUPER_ADMIN") {
@@ -37,6 +33,10 @@ export const getAllHospitals: RequestHandler = async (req, res, next) => {
     } else if (req.user.role === "HOSPITAL_ADMIN" && req.user.hospitalId) {
       // Hospital admin sees only their hospital
       query = { _id: new mongoose.Types.ObjectId(req.user.hospitalId) };
+    } else if (req.user.role === "USER") {
+      // Doctors/staff: allow fetching hospital list for selecting locations, but only Active ones.
+      // This is read-only and does not expose admin assignment capabilities.
+      query = { status: "Active" };
     } else {
       // Other roles don't have access
       return res.status(403).json({ message: "Access denied" });

@@ -31,6 +31,7 @@ export interface User {
   specialization?: string;
   avatar?: string;
   role: UserRole;
+  hospitalId?: string;
 }
 
 // Keep Doctor interface for backward compatibility

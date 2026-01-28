@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 
 export interface ComplaintItem {
@@ -16,6 +16,11 @@ const ComplaintForm: React.FC<ComplaintFormProps> = ({ value, onChange }) => {
     { id: Date.now(), value: '' },
   ]);
 
+  const onChangeRef = useRef(onChange);
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
   // Sync with external value prop
   useEffect(() => {
     if (value && Array.isArray(value) && value.length > 0) {
@@ -31,19 +36,13 @@ const ComplaintForm: React.FC<ComplaintFormProps> = ({ value, onChange }) => {
 
 
   const handleChange = (id: number, value: string) => {
-    setComplaints((prev) => {
-      const updated = prev.map((item) =>
-        item.id === id ? { ...item, value } : item
-      );
-      // Notify parent component
-      if (onChange) {
-        const formatted = updated
-          .filter((item) => item.value && item.value.trim() !== "")
-          .map((item) => ({ complaint: item.value.trim() }));
-        onChange(formatted);
-      }
-      return updated;
-    });
+    const updated = complaints.map((item) => (item.id === id ? { ...item, value } : item));
+    setComplaints(updated);
+    // Notify parent component (avoid calling parent setState inside our setState updater)
+    const formatted = updated
+      .filter((item) => item.value && item.value.trim() !== "")
+      .map((item) => ({ complaint: item.value.trim() }));
+    onChangeRef.current?.(formatted);
   };
 
   const handleAddAboveLast = () => {
@@ -51,32 +50,22 @@ const ComplaintForm: React.FC<ComplaintFormProps> = ({ value, onChange }) => {
       id: Date.now() + Math.random(),
       value: "",
     };
-    setComplaints((prev) => {
-      const last = prev[prev.length - 1];
-      const updated = [...prev.slice(0, -1), newComplaint, last];
-      // Notify parent component
-      if (onChange) {
-        const formatted = updated
-          .filter((item) => item.value && item.value.trim() !== "")
-          .map((item) => ({ complaint: item.value.trim() }));
-        onChange(formatted);
-      }
-      return updated;
-    });
+    const last = complaints[complaints.length - 1];
+    const updated = [...complaints.slice(0, -1), newComplaint, last];
+    setComplaints(updated);
+    const formatted = updated
+      .filter((item) => item.value && item.value.trim() !== "")
+      .map((item) => ({ complaint: item.value.trim() }));
+    onChangeRef.current?.(formatted);
   };
 
   const handleRemove = (id: number) => {
-    setComplaints((prev) => {
-      const updated = prev.filter((item) => item.id !== id);
-      // Notify parent component
-      if (onChange) {
-        const formatted = updated
-          .filter((item) => item.value && item.value.trim() !== "")
-          .map((item) => ({ complaint: item.value.trim() }));
-        onChange(formatted);
-      }
-      return updated;
-    });
+    const updated = complaints.filter((item) => item.id !== id);
+    setComplaints(updated);
+    const formatted = updated
+      .filter((item) => item.value && item.value.trim() !== "")
+      .map((item) => ({ complaint: item.value.trim() }));
+    onChangeRef.current?.(formatted);
   };
 
   return (

@@ -541,3 +541,70 @@
     color: var(--pr-gray-900) !important;
 }
 }
+
+/* ============================
+   Medications (Pro UX styles)
+   ============================ */
+.medication-searchbar {
+  padding: 12px;
+  border: 1px solid var(--pr-border-color);
+  border-radius: 10px;
+  background: var(--pr-secondary-bg);
+  margin-bottom: 14px;
+
+  &__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+
+  &__control {
+    .medication-searchbar__select {
+      width: 100%;
+    }
+  }
+
+  /* react-select look like input */
+  .react-select__control {
+    min-height: 40px;
+    border-radius: 8px;
+    border-color: var(--pr-border-color);
+    box-shadow: none;
+  }
+
+  .react-select__value-container {
+    padding: 2px 10px;
+  }
+
+  .react-select__placeholder {
+    color: var(--pr-gray-600);
+  }
+
+  .react-select__menu {
+    z-index: 999999;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+  }
+}
+
+.medication-list {
+  .medication-list-item {
+    padding-top: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed rgba(0, 0, 0, 0.08);
+  }
+}
+
+/* Medicine meta chips under select */
+.medicine-meta {
+  &__chips {
+    line-height: 1.35;
+  }
+
+  &__expiry {
+    font-weight: 600;
+  }
+}

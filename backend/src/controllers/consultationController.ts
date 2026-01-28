@@ -29,6 +29,7 @@ export interface ConsultationData {
     dosage?: string;
     frequency?: string;
     duration?: string;
+    inventoryId?: string;
   }>;
   advice?: Array<{ advice: string }>;
   investigations?: Array<{
@@ -131,15 +132,24 @@ export const getAppointmentForConsultation: RequestHandler = async (req, res, ne
     }
 
     let consultation = null;
-    const consultationId = appointmentObj.Consultation_ID;
-    if (consultationId) {
-      const consultationFilter = buildAccessFilter(req.user);
-      consultationFilter.$or = [
-        { Consultation_ID: consultationId },
-        { Appointment_ID: appointmentObj._id?.toString() },
-      ];
+    const consultationFilter = buildAccessFilter(req.user);
+    const appointmentObjectId = appointmentObj._id ? new mongoose.Types.ObjectId(String(appointmentObj._id)) : null;
+
+    // Prefer lookup by Appointment_ID (ObjectId)
+    if (appointmentObjectId) {
+      consultationFilter.Appointment_ID = appointmentObjectId;
       consultation = await Consultation.findOne(consultationFilter)
-        .select("_id Consultation_ID Appointment_ID Patient Patient_Image Doctor Doctor_Image Vitals Complaints Diagnosis Medications Advice Investigations FollowUp Invoice Status Consultation_Date Completed_At createdAt updatedAt")
+        .select("_id Appointment_ID Patient Patient_Image Doctor Doctor_Image Vitals Complaints Diagnosis Medications Advice Investigations FollowUp Invoice Status Consultation_Date Completed_At createdAt updatedAt")
+        .lean()
+        .exec();
+    }
+
+    // Backward-compat: if appointment stores a consultation id string, try it as _id
+    if (!consultation && appointmentObj.Consultation_ID && mongoose.Types.ObjectId.isValid(String(appointmentObj.Consultation_ID))) {
+      const byIdFilter = buildAccessFilter(req.user);
+      byIdFilter._id = new mongoose.Types.ObjectId(String(appointmentObj.Consultation_ID));
+      consultation = await Consultation.findOne(byIdFilter)
+        .select("_id Appointment_ID Patient Patient_Image Doctor Doctor_Image Vitals Complaints Diagnosis Medications Advice Investigations FollowUp Invoice Status Consultation_Date Completed_At createdAt updatedAt")
         .lean()
         .exec();
     }
@@ -301,15 +311,11 @@ export const saveConsultation: RequestHandler = async (req, res, next) => {
       return res.status(404).json({ message: "Appointment not found" });
     }
 
-    const appointmentIdValue = appointment._id?.toString() || appointmentId;
-    
-    // Generate Consultation ID
-    const consultationId = `CONS${Date.now().toString().slice(-8)}`;
+    const appointmentObjectId = new mongoose.Types.ObjectId(String(appointment._id));
 
     // Prepare consultation document data
     const consultationDocument: any = {
-      Consultation_ID: consultationId,
-      Appointment_ID: appointmentIdValue,
+      Appointment_ID: appointmentObjectId,
       Patient: appointment.Patient || "",
       Patient_Image: appointment.Patient_Image || "",
       Doctor: appointment.Doctor || "",
@@ -329,7 +335,21 @@ export const saveConsultation: RequestHandler = async (req, res, next) => {
       consultationDocument.Diagnosis = consultationData.diagnosis;
     }
     if (consultationData?.medications && Array.isArray(consultationData.medications) && consultationData.medications.length > 0) {
-      consultationDocument.Medications = consultationData.medications;
+      // Normalize and preserve optional inventoryId for each medication
+      consultationDocument.Medications = consultationData.medications.map((m: any) => {
+        const inventoryIdStr = String(m.inventoryId || "").trim();
+        const inventoryId =
+          inventoryIdStr && mongoose.Types.ObjectId.isValid(inventoryIdStr)
+            ? new mongoose.Types.ObjectId(inventoryIdStr)
+            : undefined;
+        return {
+          medicine: String(m.medicine || "").trim(),
+          dosage: String(m.dosage || "").trim(),
+          frequency: String(m.frequency || "").trim(),
+          duration: String(m.duration || "").trim(),
+          ...(inventoryId ? { inventoryId } : {}),
+        };
+      });
     }
     if (consultationData?.advice && Array.isArray(consultationData.advice) && consultationData.advice.length > 0) {
       consultationDocument.Advice = consultationData.advice;
@@ -349,7 +369,7 @@ export const saveConsultation: RequestHandler = async (req, res, next) => {
     }
 
     const consultationFilter = buildAccessFilter(req.user);
-    consultationFilter.Appointment_ID = appointmentIdValue;
+    consultationFilter.Appointment_ID = appointmentObjectId;
 
     let consultation = await Consultation.findOne(consultationFilter).exec();
 
@@ -365,7 +385,7 @@ export const saveConsultation: RequestHandler = async (req, res, next) => {
     }
 
     // Update appointment with consultation ID reference
-    appointment.Consultation_ID = consultation.Consultation_ID || consultation._id?.toString();
+    appointment.Consultation_ID = consultation._id?.toString();
 
     // If completing appointment, update status
     if (completeAppointment) {
@@ -469,7 +489,7 @@ export const saveConsultation: RequestHandler = async (req, res, next) => {
             continue;
           }
 
-          const appointmentIdValue = appointment._id?.toString() || appointmentId;
+          const appointmentObjectId = new mongoose.Types.ObjectId(String(appointment._id));
           
           const prescriptionData = {
             Prescription_ID: prescriptionId,
@@ -483,9 +503,10 @@ export const saveConsultation: RequestHandler = async (req, res, next) => {
             Dosage: medication.dosage || medication.Dosage || "",
             Frequency: medication.frequency || medication.Frequency || "",
             Duration: medication.duration || medication.Duration || "",
-            Appointment_ID: appointmentIdValue,
-            Consultation_ID: consultation?.Consultation_ID || "",
-            appointmentId: appointmentIdValue,
+            Appointment_ID: appointmentObjectId,
+            ...(medication.inventoryId && mongoose.Types.ObjectId.isValid(String(medication.inventoryId))
+              ? { inventoryId: new mongoose.Types.ObjectId(String(medication.inventoryId)) }
+              : {}),
           };
 
           const existingPrescription = await Prescription.findOne({
@@ -493,7 +514,6 @@ export const saveConsultation: RequestHandler = async (req, res, next) => {
               {
                 $or: [
                   { Appointment_ID: prescriptionData.Appointment_ID },
-                  { appointmentId: appointmentIdValue }
                 ]
               },
               { Medicine: prescriptionData.Medicine },

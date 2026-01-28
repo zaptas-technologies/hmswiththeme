@@ -16,7 +16,7 @@ const pctChange = (current, prev) => {
 };
 const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const buildDashboardPayload = async (doctorId) => {
+const buildDashboardPayload = async (doctorId, hospitalId) => {
     const now = new Date();
     const sevenDaysAgo = new Date(now);
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -38,7 +38,18 @@ const buildDashboardPayload = async (doctorId) => {
             doctorName = doctor.Name_Designation || "";
         }
     }
+    // Build filter: filter by doctor name AND hospital if hospitalId is provided
     const doctorFilter = doctorName ? { Doctor: doctorName } : {};
+    // Add hospital filter if hospitalId is provided
+    if (hospitalId) {
+        try {
+            doctorFilter.hospital = new mongoose_1.default.Types.ObjectId(hospitalId);
+        }
+        catch (error) {
+            // eslint-disable-next-line no-console
+            console.error("Invalid hospitalId format:", hospitalId);
+        }
+    }
     const [availabilityDocs, allAppointments] = await Promise.all([
         dashboardAvailabilityModel_1.DashboardAvailability.find({ doctorId }).sort({ day: 1 }).lean(),
         appointmentModel_1.Appointment.find(doctorFilter).lean(),

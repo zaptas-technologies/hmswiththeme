@@ -14,7 +14,7 @@ exports.AppointmentSchema = new mongoose_1.Schema({
     Status: { type: String, required: true },
     Consultation_ID: { type: String, index: true }, // Reference to consultation document
     Fees: { type: mongoose_1.Schema.Types.Mixed },
-    doctorId: { type: String },
+    doctorId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Doctor", index: true },
     hospital: { type: mongoose_1.Schema.Types.ObjectId, ref: "Hospital", index: true },
     user: { type: mongoose_1.Schema.Types.ObjectId, ref: "User", index: true },
 }, { timestamps: true, strict: false });
@@ -64,12 +64,25 @@ exports.PatientAppointmentSchema = new mongoose_1.Schema({
     Status: { type: String, required: true },
 }, { timestamps: true, strict: false });
 exports.DoctorPrescriptionSchema = new mongoose_1.Schema({
+    // Business identifier (human readable)
+    Prescription_ID: { type: String, index: true },
     Date: { type: String, required: true },
+    Prescribed_On: { type: String },
     Patient: { type: String, required: true },
     Patient_Image: { type: String },
     Doctor: { type: String, required: true },
     Medicine: { type: String, required: true },
     Status: { type: String, required: true },
+    Dosage: { type: String },
+    Frequency: { type: String },
+    Duration: { type: String },
+    // Must be a real MongoDB ObjectId
+    Appointment_ID: { type: mongoose_1.Schema.Types.ObjectId, ref: "Appointment", required: true, index: true },
+    // If medicine is selected from inventory, store the inventory document _id
+    inventoryId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Inventory", index: true },
+    // Role-based access
+    user: { type: mongoose_1.Schema.Types.ObjectId, ref: "User", index: true },
+    hospital: { type: mongoose_1.Schema.Types.ObjectId, ref: "Hospital", index: true },
 }, { timestamps: true, strict: false });
 exports.PatientPrescriptionSchema = new mongoose_1.Schema({
     Date: { type: String, required: true },
@@ -100,8 +113,9 @@ exports.DoctorLeaveSchema = new mongoose_1.Schema({
     Designation: { type: String },
 }, { timestamps: true, strict: false });
 exports.ConsultationSchema = new mongoose_1.Schema({
-    Consultation_ID: { type: String, required: true, unique: true },
-    Appointment_ID: { type: String, required: true }, // Reference to appointment
+    // Use MongoDB _id as the primary consultation identifier.
+    // Appointment link MUST be stored as ObjectId.
+    Appointment_ID: { type: mongoose_1.Schema.Types.ObjectId, ref: "Appointment", required: true, index: true },
     Patient: { type: String, required: true },
     Patient_Image: { type: String },
     Doctor: { type: String, required: true },
@@ -133,6 +147,8 @@ exports.ConsultationSchema = new mongoose_1.Schema({
             dosage: { type: String },
             frequency: { type: String },
             duration: { type: String },
+            // Optional link to inventory item when medicine comes from inventory
+            inventoryId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Inventory", index: true },
         }],
     // Advice
     Advice: [{

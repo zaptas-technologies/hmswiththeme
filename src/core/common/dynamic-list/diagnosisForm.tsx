@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { Diagnosis_Type } from "../selectOption";
 import CommonSelect from "../common-select/commonSelect";
@@ -23,6 +23,11 @@ const DiagnosisForm: React.FC<DiagnosisFormProps> = ({ value, onChange }) => {
     },
   ]);
 
+  const onChangeRef = useRef(onChange);
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
   // Sync with external value prop
   useEffect(() => {
     if (value && Array.isArray(value) && value.length > 0) {
@@ -44,76 +49,52 @@ const DiagnosisForm: React.FC<DiagnosisFormProps> = ({ value, onChange }) => {
       type: Diagnosis_Type[0]?.value || "",
     };
 
-    setDiagnoses((prev) => {
-      const last = prev[prev.length - 1];
-      const updated = [...prev.slice(0, -1), newDiagnosis, last];
-      // Notify parent component
-      if (onChange) {
-        const formatted = updated
-          .filter((item) => item.complaintText && item.complaintText.trim() !== "")
-          .map((item) => ({
-            diagnosis: item.complaintText.trim(),
-            type: item.type || "",
-          }));
-        onChange(formatted);
-      }
-      return updated;
-    });
+    const last = diagnoses[diagnoses.length - 1];
+    const updated = [...diagnoses.slice(0, -1), newDiagnosis, last];
+    setDiagnoses(updated);
+    const formatted = updated
+      .filter((item) => item.complaintText && item.complaintText.trim() !== "")
+      .map((item) => ({
+        diagnosis: item.complaintText.trim(),
+        type: item.type || "",
+      }));
+    onChangeRef.current?.(formatted);
   };
 
   const handleRemove = (id: number) => {
-    setDiagnoses((prev) => {
-      const updated = prev.filter((item) => item.id !== id);
-      // Notify parent component
-      if (onChange) {
-        const formatted = updated
-          .filter((item) => item.complaintText && item.complaintText.trim() !== "")
-          .map((item) => ({
-            diagnosis: item.complaintText.trim(),
-            type: item.type || "",
-          }));
-        onChange(formatted);
-      }
-      return updated;
-    });
+    const updated = diagnoses.filter((item) => item.id !== id);
+    setDiagnoses(updated);
+    const formatted = updated
+      .filter((item) => item.complaintText && item.complaintText.trim() !== "")
+      .map((item) => ({
+        diagnosis: item.complaintText.trim(),
+        type: item.type || "",
+      }));
+    onChangeRef.current?.(formatted);
   };
 
   const handleComplaintTextChange = (id: number, value: string) => {
-    setDiagnoses((prev) => {
-      const updated = prev.map((item) =>
-        item.id === id ? { ...item, complaintText: value } : item
-      );
-      // Notify parent component
-      if (onChange) {
-        const formatted = updated
-          .filter((item) => item.complaintText && item.complaintText.trim() !== "")
-          .map((item) => ({
-            diagnosis: item.complaintText.trim(),
-            type: item.type || "",
-          }));
-        onChange(formatted);
-      }
-      return updated;
-    });
+    const updated = diagnoses.map((item) => (item.id === id ? { ...item, complaintText: value } : item));
+    setDiagnoses(updated);
+    const formatted = updated
+      .filter((item) => item.complaintText && item.complaintText.trim() !== "")
+      .map((item) => ({
+        diagnosis: item.complaintText.trim(),
+        type: item.type || "",
+      }));
+    onChangeRef.current?.(formatted);
   };
 
   const handleTypeChange = (id: number, value: string) => {
-    setDiagnoses((prev) => {
-      const updated = prev.map((item) =>
-        item.id === id ? { ...item, type: value } : item
-      );
-      // Notify parent component
-      if (onChange) {
-        const formatted = updated
-          .filter((item) => item.complaintText && item.complaintText.trim() !== "")
-          .map((item) => ({
-            diagnosis: item.complaintText.trim(),
-            type: item.type || "",
-          }));
-        onChange(formatted);
-      }
-      return updated;
-    });
+    const updated = diagnoses.map((item) => (item.id === id ? { ...item, type: value } : item));
+    setDiagnoses(updated);
+    const formatted = updated
+      .filter((item) => item.complaintText && item.complaintText.trim() !== "")
+      .map((item) => ({
+        diagnosis: item.complaintText.trim(),
+        type: item.type || "",
+      }));
+    onChangeRef.current?.(formatted);
   };
 
   return (

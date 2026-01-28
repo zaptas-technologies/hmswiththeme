@@ -9,7 +9,7 @@ import {
 import CommonSelect from "../../../../../core/common/common-select/commonSelect";
 import { useAuth } from "../../../../../core/context/AuthContext";
 import { fetchSchedule, saveSchedule, type DaySchedule, type TimeSlot } from "../../../../../api/schedule";
-import { fetchLocations } from "../../../../../api/locations";
+import { fetchHospitals } from "../../../../../api/hospitals";
 
 interface ScheduleRow {
   id: number;
@@ -68,16 +68,21 @@ const DoctorSchedules = () => {
   useEffect(() => {
     const loadLocations = async () => {
       try {
-        const data = await fetchLocations();
-        // Convert locations to select options format
+        const data = await fetchHospitals();
+        // Convert hospitals to select options format (Location dropdown shows all hospitals)
         const locationOptions: LocationOption[] = [
           { value: "Select", label: "Select" },
           ...data
-            .filter((loc) => loc.Status === "Active") // Only show active locations
-            .map((loc) => ({
-              value: loc.Location || loc.Clinic_Name || loc.id,
-              label: loc.Location || loc.Clinic_Name || "Unknown Location",
-            })),
+            .filter((h) => h.status === "Active")
+            .map((h) => {
+              const hospitalName = h.name || "Unknown Hospital";
+              const cityState = [h.city, h.state].filter(Boolean).join(", ");
+              const label = cityState ? `${hospitalName} (${cityState})` : hospitalName;
+              return {
+                value: label, // store readable location string in schedule
+                label,
+              };
+            }),
         ];
         setLocations(locationOptions);
       } catch (err: any) {

@@ -2,8 +2,7 @@ import mongoose, { Schema, Document } from "mongoose";
 import { ConsultationSchema } from "./schemas/clinical";
 
 export interface ConsultationDoc extends Document {
-  Consultation_ID: string;
-  Appointment_ID: string;
+  Appointment_ID: mongoose.Types.ObjectId;
   Patient: string;
   Patient_Image?: string;
   Doctor: string;
@@ -25,6 +24,7 @@ export interface ConsultationDoc extends Document {
     dosage?: string;
     frequency?: string;
     duration?: string;
+    inventoryId?: mongoose.Types.ObjectId;
   }>;
   Advice?: Array<{ advice: string }>;
   Investigations?: Array<{ investigation: string; notes?: string }>;
