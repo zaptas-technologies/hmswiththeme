@@ -108,9 +108,11 @@ const DoctorSchedules = () => {
         // Fetch schedule filtered by selected hospital if location is set
         const data = await fetchSchedule(token, selectedHospitalId);
 
-        // Set form fields (only update location if it's different to avoid loops)
+        // Set form fields
+        // Only let backend update "location" when the UI is still on the default "Select"
+        // so that changing the dropdown doesn't immediately get overridden.
         const loadedLocation = data.location || "Select";
-        if (loadedLocation !== location) {
+        if (location === "Select" && loadedLocation !== "Select") {
           setLocation(loadedLocation);
         }
         
