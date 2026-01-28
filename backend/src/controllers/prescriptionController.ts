@@ -17,6 +17,9 @@ export interface PrescriptionRequest {
   Frequency?: string;
   Duration?: string;
   Appointment_ID?: string; // ObjectId string
+  patientId?: string; // ObjectId string (optional)
+  doctorId?: string; // ObjectId string (optional)
+  consultationId?: string; // ObjectId string (optional, replaces Consultation_ID)
   inventoryId?: string; // ObjectId string (optional)
   [key: string]: any;
 }
@@ -28,6 +31,13 @@ const formatPrescriptionResponse = (presc: any) => {
     obj.Appointment_ID && typeof obj.Appointment_ID === "object" && typeof obj.Appointment_ID.toString === "function"
       ? obj.Appointment_ID.toString()
       : (obj.Appointment_ID || obj.appointmentId || "");
+  
+  // Helper to convert ObjectId to string
+  const toIdStr = (id: any) => {
+    if (!id) return undefined;
+    if (typeof id === "object" && typeof id.toString === "function") return id.toString();
+    return String(id);
+  };
   
   // Return only relevant fields for list view
   return {
@@ -46,7 +56,10 @@ const formatPrescriptionResponse = (presc: any) => {
     Duration: obj.Duration || "",
     Appointment_ID: appointmentIdStr,
     appointmentId: appointmentIdStr,
-    inventoryId: obj.inventoryId?.toString?.() || obj.inventoryId,
+    patientId: toIdStr(obj.patientId),
+    doctorId: toIdStr(obj.doctorId),
+    consultationId: toIdStr(obj.consultationId), // Replaces Consultation_ID
+    inventoryId: toIdStr(obj.inventoryId),
     Amount: obj.Amount,
     createdAt: obj.createdAt,
     updatedAt: obj.updatedAt,
@@ -474,11 +487,29 @@ export const createPrescription: RequestHandler = async (req, res, next) => {
       return res.status(400).json({ message: "Appointment_ID must be a valid MongoDB ObjectId" });
     }
 
-    // Optional inventoryId
+    // Optional ObjectId fields
     const inventoryIdStr = String((cleanPrescData as any).inventoryId || "").trim();
     const inventoryId =
       inventoryIdStr && mongoose.Types.ObjectId.isValid(inventoryIdStr)
         ? new mongoose.Types.ObjectId(inventoryIdStr)
+        : undefined;
+
+    const patientIdStr = String((cleanPrescData as any).patientId || "").trim();
+    const patientId =
+      patientIdStr && mongoose.Types.ObjectId.isValid(patientIdStr)
+        ? new mongoose.Types.ObjectId(patientIdStr)
+        : undefined;
+
+    const doctorIdStr = String((cleanPrescData as any).doctorId || "").trim();
+    const doctorId =
+      doctorIdStr && mongoose.Types.ObjectId.isValid(doctorIdStr)
+        ? new mongoose.Types.ObjectId(doctorIdStr)
+        : undefined;
+
+    const consultationIdStr = String((cleanPrescData as any).consultationId || "").trim();
+    const consultationId =
+      consultationIdStr && mongoose.Types.ObjectId.isValid(consultationIdStr)
+        ? new mongoose.Types.ObjectId(consultationIdStr)
         : undefined;
 
     // Convert user and hospital strings to ObjectIds for proper MongoDB storage
@@ -494,6 +525,9 @@ export const createPrescription: RequestHandler = async (req, res, next) => {
       ...cleanPrescData,
       Appointment_ID: new mongoose.Types.ObjectId(appointmentIdStr),
       ...(inventoryId ? { inventoryId } : {}),
+      ...(patientId ? { patientId } : {}),
+      ...(doctorId ? { doctorId } : {}),
+      ...(consultationId ? { consultationId } : {}),
       ...normalizedAccessFilter,
     });
     res.status(201).json(formatPrescriptionResponse(created));

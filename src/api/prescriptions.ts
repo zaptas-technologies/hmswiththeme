@@ -13,6 +13,15 @@ export interface Prescription {
   Doctor?: string;
   Medicine?: string;
   Status?: string;
+  Dosage?: string;
+  Frequency?: string;
+  Duration?: string;
+  Appointment_ID?: string;
+  appointmentId?: string;
+  patientId?: string; // ObjectId reference to Patient
+  doctorId?: string; // ObjectId reference to Doctor
+  consultationId?: string; // ObjectId reference to Consultation (replaces Consultation_ID string)
+  inventoryId?: string; // ObjectId reference to Inventory
   Amount?: string | number;
   [key: string]: any;
 }
