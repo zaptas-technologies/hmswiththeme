@@ -203,7 +203,7 @@ const AddDoctor = () => {
     setSubmitting(true);
     try {
       const doctorData: Partial<Doctor> = {
-        id: Date.now().toString(),
+        // Do NOT send any custom 'id' – backend uses MongoDB _id
         Name_Designation: `${name}${designation ? ` - ${designation}` : ""}`,
         Email: email,
         Phone: phone,
