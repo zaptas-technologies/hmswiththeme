@@ -338,29 +338,83 @@ const DoctorsPrescriptions = () => {
     setPage(1);
   };
 
-  // Transform prescriptions for table
+  // Transform prescriptions for table - expand Medications array into separate rows
   const tableData = useMemo(() => {
-    return prescriptions.map((presc) => ({
-      ...presc,
-      key: presc._id || presc.id,
-      img: presc.Patient_Image || presc.img || "user-01.jpg",
-      phone_number: presc.phone_number || "",
-    }));
+    const expandedRows: any[] = [];
+    
+    prescriptions.forEach((presc) => {
+      const baseData = {
+        ...presc,
+        img: presc.Patient_Image || presc.img || "user-01.jpg",
+        phone_number: presc.phone_number || "",
+      };
+      
+      // If Medications array exists and has items, create a row for each medicine
+      if (presc.Medications && Array.isArray(presc.Medications) && presc.Medications.length > 0) {
+        presc.Medications.forEach((med: any, medIndex: number) => {
+          expandedRows.push({
+            ...baseData,
+            // Unique key: prescription ID + medicine index
+            key: `${presc._id || presc.id}-${medIndex}`,
+            // Medicine-specific fields from Medications array
+            Medicine: med.medicine || med.Medicine || "",
+            Dosage: med.dosage || med.Dosage || "",
+            Frequency: med.frequency || med.Frequency || "",
+            Duration: med.duration || med.Duration || "",
+            // Keep original prescription fields for reference
+            _originalPrescriptionId: presc._id || presc.id,
+            _medicineIndex: medIndex,
+            _totalMedicines: presc.Medications.length,
+            // Inventory ID if available
+            inventoryId: med.inventoryId || med.inventory_id || undefined,
+          });
+        });
+      } else {
+        // Fallback: if no Medications array, use the single Medicine field (backward compatibility)
+        expandedRows.push({
+          ...baseData,
+          key: presc._id || presc.id,
+          Medicine: presc.Medicine || "",
+          Dosage: presc.Dosage || "",
+          Frequency: presc.Frequency || "",
+          Duration: presc.Duration || "",
+          _originalPrescriptionId: presc._id || presc.id,
+          _medicineIndex: 0,
+          _totalMedicines: 1,
+        });
+      }
+    });
+    
+    return expandedRows;
   }, [prescriptions]);
 
   const columns = [
     {
       title: "Prescription ID",
       dataIndex: "Prescription_ID",
-      width: 150,
-      render: (text: string, record: Prescription) => (
-        <Link 
-          to={`${all_routes.doctorsprescriptiondetails}?id=${record._id || record.id}`}
-          className="fw-semibold"
-        >
-          {text || record.id || "N/A"}
-        </Link>
-      ),
+      width: 180,
+      render: (text: string, record: any) => {
+        const prescriptionId = text || record.id || "N/A";
+        const totalMedicines = record._totalMedicines || 1;
+        const medicineIndex = record._medicineIndex !== undefined ? record._medicineIndex : 0;
+        const isMultipleMedicines = totalMedicines > 1;
+        
+        return (
+          <div className="d-flex align-items-center gap-2">
+            <Link 
+              to={`${all_routes.doctorsprescriptiondetails}?id=${record._originalPrescriptionId || record._id || record.id}`}
+              className="fw-semibold"
+            >
+              {prescriptionId}
+            </Link>
+            {isMultipleMedicines && (
+              <span className="badge badge-sm bg-info text-white" title={`Medicine ${medicineIndex + 1} of ${totalMedicines}`}>
+                {medicineIndex + 1}/{totalMedicines}
+              </span>
+            )}
+          </div>
+        );
+      },
       sorter: (a: any, b: any) => {
         const idA = (a.Prescription_ID || a.id || "").toString();
         const idB = (b.Prescription_ID || b.id || "").toString();
@@ -398,10 +452,26 @@ const DoctorsPrescriptions = () => {
     {
       title: "Medicine",
       dataIndex: "Medicine",
-      width: 200,
-      render: (text: string) => (
-        <span className="fw-medium">{text || "N/A"}</span>
-      ),
+      width: 220,
+      render: (text: string, record: any) => {
+        const medicineName = text || "N/A";
+        const hasInventoryId = record.inventoryId;
+        
+        return (
+          <div className="d-flex align-items-center gap-2">
+            <span className="fw-medium">{medicineName}</span>
+            {hasInventoryId && (
+              <span 
+                className="badge badge-sm bg-success text-white" 
+                title="Available in inventory"
+              >
+                <i className="ti ti-check fs-10 me-1" />
+                Stock
+              </span>
+            )}
+          </div>
+        );
+      },
       sorter: (a: any, b: any) => (a.Medicine || "").localeCompare(b.Medicine || ""),
     },
     {
@@ -465,47 +535,57 @@ const DoctorsPrescriptions = () => {
     {
       title: "Actions",
       width: 100,
-      render: (_: any, record: Prescription) => (
-        <div className="action-item d-flex align-items-center gap-2">
-          <div className="dropdown">
-            <Link
-              to="#"
-              className="btn btn-sm btn-outline-secondary"
-              data-bs-toggle="dropdown"
-              title="More options"
-            >
-              <i className="ti ti-dots-vertical" />
-            </Link>
-            <ul className="dropdown-menu dropdown-menu-end p-2">
-              <li>
-                <Link
-                  to={`${all_routes.doctorsprescriptiondetails}?id=${record._id || record.id}`}
-                  className="dropdown-item d-flex align-items-center"
-                >
-                  <i className="ti ti-eye me-2" />
-                  View Details
-                </Link>
-              </li>
-              <li>
-                <hr className="dropdown-divider" />
-              </li>
-              <li>
-                <Link
-                  to="#"
-                  className="dropdown-item d-flex align-items-center text-danger"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    handleDelete(record);
-                  }}
-                >
-                  <i className="ti ti-trash me-2" />
-                  Delete
-                </Link>
-              </li>
-            </ul>
+      render: (_: any, record: any) => {
+        // Use original prescription ID for actions (works for both expanded and non-expanded rows)
+        const prescriptionId = record._originalPrescriptionId || record._id || record.id;
+        const prescriptionRecord = {
+          ...record,
+          _id: prescriptionId,
+          id: prescriptionId,
+        };
+        
+        return (
+          <div className="action-item d-flex align-items-center gap-2">
+            <div className="dropdown">
+              <Link
+                to="#"
+                className="btn btn-sm btn-outline-secondary"
+                data-bs-toggle="dropdown"
+                title="More options"
+              >
+                <i className="ti ti-dots-vertical" />
+              </Link>
+              <ul className="dropdown-menu dropdown-menu-end p-2">
+                <li>
+                  <Link
+                    to={`${all_routes.doctorsprescriptiondetails}?id=${prescriptionId}`}
+                    className="dropdown-item d-flex align-items-center"
+                  >
+                    <i className="ti ti-eye me-2" />
+                    View Details
+                  </Link>
+                </li>
+                <li>
+                  <hr className="dropdown-divider" />
+                </li>
+                <li>
+                  <Link
+                    to="#"
+                    className="dropdown-item d-flex align-items-center text-danger"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleDelete(prescriptionRecord);
+                    }}
+                  >
+                    <i className="ti ti-trash me-2" />
+                    Delete Prescription
+                  </Link>
+                </li>
+              </ul>
+            </div>
           </div>
-        </div>
-      ),
+        );
+      },
     },
   ];
 
@@ -843,7 +923,7 @@ const DoctorsPrescriptions = () => {
                 <p className="text-muted fs-13 mb-3">
                   {searchText || selectedStatuses.length > 0 || selectedDoctors.length > 0 || selectedDate
                     ? "Try adjusting your filters"
-                    : "Prescriptions will appear here after completing consultations with medications."}
+                    : "Prescriptions with medications will appear here after completing consultations."}
                 </p>
               </div>
             </div>
@@ -860,7 +940,10 @@ const DoctorsPrescriptions = () => {
               {total > 0 && (
                 <div className="d-flex justify-content-between align-items-center mt-3 pt-3 border-top">
                   <div className="text-muted fs-13">
-                    Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, total)} of {total} prescriptions
+                    Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, tableData.length)} of {tableData.length} medicines
+                    {prescriptions.length !== tableData.length && (
+                      <span className="ms-2 text-muted">({prescriptions.length} prescriptions)</span>
+                    )}
                   </div>
                   <div className="d-flex align-items-center gap-2">
                     <button
@@ -876,7 +959,9 @@ const DoctorsPrescriptions = () => {
                     {/* Page numbers */}
                     <div className="d-flex gap-1">
                       {(() => {
-                        const totalPages = Math.ceil(total / pageSize);
+                        // Use expanded medicine count for pagination
+                        const medicineCount = tableData.length;
+                        const totalPages = Math.ceil(medicineCount / pageSize);
                         const maxVisiblePages = 5;
                         const pages: (number | string)[] = [];
                         
@@ -951,7 +1036,7 @@ const DoctorsPrescriptions = () => {
                     
                     <button
                       className="btn btn-sm btn-outline-primary"
-                      disabled={page * pageSize >= total || loading}
+                      disabled={page * pageSize >= tableData.length || loading}
                       onClick={() => setPage(page + 1)}
                       title="Next page"
                     >

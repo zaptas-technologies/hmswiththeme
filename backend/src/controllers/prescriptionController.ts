@@ -31,6 +31,16 @@ const formatPrescriptionResponse = (presc: any) => {
     obj.Appointment_ID && typeof obj.Appointment_ID === "object" && typeof obj.Appointment_ID.toString === "function"
       ? obj.Appointment_ID.toString()
       : (obj.Appointment_ID || obj.appointmentId || "");
+  const medications =
+    Array.isArray(obj.Medications) && obj.Medications.length > 0
+      ? obj.Medications.map((m: any) => ({
+          medicine: m?.medicine,
+          dosage: m?.dosage,
+          frequency: m?.frequency,
+          duration: m?.duration,
+          inventoryId: m?.inventoryId?.toString?.() || m?.inventoryId,
+        }))
+      : undefined;
   
   // Return only relevant fields for list view
   return {
@@ -47,6 +57,7 @@ const formatPrescriptionResponse = (presc: any) => {
     Dosage: obj.Dosage || "",
     Frequency: obj.Frequency || "",
     Duration: obj.Duration || "",
+    Medications: medications,
     Appointment_ID: appointmentIdStr,
     appointmentId: appointmentIdStr,
     consultationId: obj.consultationId?.toString?.() || obj.consultationId,

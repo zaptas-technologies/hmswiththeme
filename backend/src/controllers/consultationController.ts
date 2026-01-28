@@ -373,19 +373,24 @@ export const saveConsultation: RequestHandler = async (req, res, next) => {
 
     let consultation = await Consultation.findOne(consultationFilter).exec();
 
+    // Always persist access fields as real ObjectIds
+    const accessFilter = buildAccessFilter(req.user);
+    const normalizedAccessFilter: any = {};
+    if (accessFilter.user && typeof accessFilter.user === "string" && mongoose.Types.ObjectId.isValid(accessFilter.user)) {
+      normalizedAccessFilter.user = new mongoose.Types.ObjectId(accessFilter.user);
+    }
+    if (
+      accessFilter.hospital &&
+      typeof accessFilter.hospital === "string" &&
+      mongoose.Types.ObjectId.isValid(accessFilter.hospital)
+    ) {
+      normalizedAccessFilter.hospital = new mongoose.Types.ObjectId(accessFilter.hospital);
+    }
+
     if (consultation) {
-      Object.assign(consultation, consultationDocument);
+      Object.assign(consultation, consultationDocument, normalizedAccessFilter);
       await consultation.save();
     } else {
-      const accessFilter = buildAccessFilter(req.user);
-      // Convert user and hospital strings to ObjectIds for proper MongoDB storage
-      const normalizedAccessFilter: any = {};
-      if (accessFilter.user && typeof accessFilter.user === "string") {
-        normalizedAccessFilter.user = new mongoose.Types.ObjectId(accessFilter.user);
-      }
-      if (accessFilter.hospital && typeof accessFilter.hospital === "string") {
-        normalizedAccessFilter.hospital = new mongoose.Types.ObjectId(accessFilter.hospital);
-      }
       consultation = await Consultation.create({
         ...consultationDocument,
         ...normalizedAccessFilter,

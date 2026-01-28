@@ -608,3 +608,96 @@
     font-weight: 600;
   }
 }
+
+/* Print styles - Hide navigation elements when printing */
+@media print {
+  /* Hide all navigation, header, sidebar elements */
+  .navbar-header,
+  .navbar,
+  .header,
+  .sidebar,
+  .sidebar-wrapper,
+  .sidebar-logo,
+  .sidebar-menu,
+  .sidebar-inner,
+  .sidebar-footer,
+  .topbar,
+  .topbar-menu,
+  .page-header,
+  .page-title,
+  nav,
+  header:not(.print-keep),
+  aside,
+  .btn:not(.print-keep),
+  .modal,
+  footer,
+  /* Hide back navigation links */
+  .d-flex.align-items-sm-center.flex-sm-row.flex-column.mb-4,
+  /* Hide all buttons during print (except if marked with print-keep class) */
+  button:not(.print-keep),
+  .btn:not(.print-keep),
+  a.btn:not(.print-keep) {
+    display: none !important;
+    visibility: hidden !important;
+  }
+  
+  /* Reset body margins for print */
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  
+  /* Ensure page-wrapper takes full width and starts at top */
+  .page-wrapper {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    position: relative !important;
+    top: 0 !important;
+    left: 0 !important;
+  }
+  
+  /* Content should be full width */
+  .content {
+    margin: 0 !important;
+    padding: 20px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  
+  /* Card should be full width and no shadows */
+  .card {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-shadow: none !important;
+    border: 1px solid #ddd !important;
+    margin: 0 !important;
+    page-break-inside: avoid;
+  }
+  
+  .card-body {
+    padding: 20px !important;
+  }
+  
+  /* Ensure table prints properly */
+  .table-responsive {
+    overflow: visible !important;
+    page-break-inside: avoid;
+  }
+  
+  table {
+    page-break-inside: avoid;
+  }
+  
+  /* Prevent page breaks inside important sections */
+  .card-body > div {
+    page-break-inside: avoid;
+  }
+  
+  /* Ensure images print */
+  img {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+}
