@@ -31,11 +31,52 @@ const ComplaintForm: React.FC<ComplaintFormProps> = ({ value, onChange }) => {
 
 
   const handleChange = (id: number, value: string) => {
-    setComplaints((prev) =>
-      prev.map((item) =>
+    setComplaints((prev) => {
+      const updated = prev.map((item) =>
         item.id === id ? { ...item, value } : item
-      )
-    );
+      );
+      // Notify parent component
+      if (onChange) {
+        const formatted = updated
+          .filter((item) => item.value && item.value.trim() !== "")
+          .map((item) => ({ complaint: item.value.trim() }));
+        onChange(formatted);
+      }
+      return updated;
+    });
+  };
+
+  const handleAddAboveLast = () => {
+    const newComplaint: ComplaintItem = {
+      id: Date.now() + Math.random(),
+      value: "",
+    };
+    setComplaints((prev) => {
+      const last = prev[prev.length - 1];
+      const updated = [...prev.slice(0, -1), newComplaint, last];
+      // Notify parent component
+      if (onChange) {
+        const formatted = updated
+          .filter((item) => item.value && item.value.trim() !== "")
+          .map((item) => ({ complaint: item.value.trim() }));
+        onChange(formatted);
+      }
+      return updated;
+    });
+  };
+
+  const handleRemove = (id: number) => {
+    setComplaints((prev) => {
+      const updated = prev.filter((item) => item.id !== id);
+      // Notify parent component
+      if (onChange) {
+        const formatted = updated
+          .filter((item) => item.value && item.value.trim() !== "")
+          .map((item) => ({ complaint: item.value.trim() }));
+        onChange(formatted);
+      }
+      return updated;
+    });
   };
 
   return (

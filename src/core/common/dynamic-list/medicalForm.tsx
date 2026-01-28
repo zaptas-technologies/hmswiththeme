@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Frequency, Timing } from "../selectOption";
 import CommonSelect from "../common-select/commonSelect";
@@ -32,20 +32,21 @@ const MedicalForm: React.FC<MedicalFormProps> = ({ value, onChange }) => {
       },
     ]
   );
+  const onChangeRef = useRef(onChange);
+  const prevValueRef = useRef(value);
 
-  // Sync with external value prop
+  // Keep onChange ref updated
   useEffect(() => {
-    if (value) {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
+  // Sync with external value prop (only if changed externally, not from our own updates)
+  useEffect(() => {
+    if (value && value !== prevValueRef.current) {
       setMedications(value);
+      prevValueRef.current = value;
     }
   }, [value]);
-
-  // Notify parent of changes
-  useEffect(() => {
-    if (onChange) {
-      onChange(medications);
-    }
-  }, [medications, onChange]);
 
   // Add a new medication row above last
   const handleAddAboveLast = () => {
@@ -58,46 +59,73 @@ const MedicalForm: React.FC<MedicalFormProps> = ({ value, onChange }) => {
 
     setMedications((prev) => {
       const last = prev[prev.length - 1];
-      return [...prev.slice(0, -1), newMedication, last];
+      const updated = [...prev.slice(0, -1), newMedication, last];
+      // Notify parent immediately
+      if (onChangeRef.current) {
+        onChangeRef.current(updated);
+      }
+      return updated;
     });
   };
 
   // Remove medication row by id
   const handleRemove = (id: number) => {
-    setMedications((prev) => prev.filter((item) => item.id !== id));
+    setMedications((prev) => {
+      const updated = prev.filter((item) => item.id !== id);
+      // Notify parent immediately
+      if (onChangeRef.current) {
+        onChangeRef.current(updated);
+      }
+      return updated;
+    });
   };
 
   // Handlers for controlled inputs
   const handleDosageMgChange = (id: number, value: string) => {
-    setMedications((prev) =>
-      prev.map((item) => {
+    setMedications((prev) => {
+      const updated = prev.map((item) => {
         if (item.id === id) {
           const dosage = value ? `${value}mg` : (item.dosageM ? `${item.dosageM}m` : "");
           return { ...item, dosageMg: value, dosage };
         }
         return item;
-      })
-    );
+      });
+      // Notify parent immediately
+      if (onChangeRef.current) {
+        onChangeRef.current(updated);
+      }
+      return updated;
+    });
   };
 
   const handleDosageMChange = (id: number, value: string) => {
-    setMedications((prev) =>
-      prev.map((item) => {
+    setMedications((prev) => {
+      const updated = prev.map((item) => {
         if (item.id === id) {
           const dosage = value ? `${value}m` : (item.dosageMg ? `${item.dosageMg}mg` : "");
           return { ...item, dosageM: value, dosage };
         }
         return item;
-      })
-    );
+      });
+      // Notify parent immediately
+      if (onChangeRef.current) {
+        onChangeRef.current(updated);
+      }
+      return updated;
+    });
   };
 
   const handleInstructionChange = (id: number, value: string) => {
-    setMedications((prev) =>
-      prev.map((item) =>
+    setMedications((prev) => {
+      const updated = prev.map((item) =>
         item.id === id ? { ...item, instruction: value } : item
-      )
-    );
+      );
+      // Notify parent immediately
+      if (onChangeRef.current) {
+        onChangeRef.current(updated);
+      }
+      return updated;
+    });
   };
 
   return (
@@ -119,11 +147,16 @@ const MedicalForm: React.FC<MedicalFormProps> = ({ value, onChange }) => {
                     <MedicineAutocomplete
                       value={item.medicine}
                       onChange={(value) => {
-                        setMedications((prev) =>
-                          prev.map((med) =>
+                        setMedications((prev) => {
+                          const updated = prev.map((med) =>
                             med.id === item.id ? { ...med, medicine: value } : med
-                          )
-                        );
+                          );
+                          // Notify parent immediately
+                          if (onChangeRef.current) {
+                            onChangeRef.current(updated);
+                          }
+                          return updated;
+                        });
                       }}
                       placeholder="Search medicine..."
                       className="select"
@@ -186,11 +219,16 @@ const MedicalForm: React.FC<MedicalFormProps> = ({ value, onChange }) => {
                       className="select"
                       value={item.frequency || Frequency[0]?.value}
                       onChange={(value) => {
-                        setMedications((prev) =>
-                          prev.map((med) =>
+                        setMedications((prev) => {
+                          const updated = prev.map((med) =>
                             med.id === item.id ? { ...med, frequency: value } : med
-                          )
-                        );
+                          );
+                          // Notify parent immediately
+                          if (onChangeRef.current) {
+                            onChangeRef.current(updated);
+                          }
+                          return updated;
+                        });
                       }}
                     />
                   </div>
@@ -207,11 +245,16 @@ const MedicalForm: React.FC<MedicalFormProps> = ({ value, onChange }) => {
                       className="select"
                       value={item.timing || Timing[0]?.value}
                       onChange={(value) => {
-                        setMedications((prev) =>
-                          prev.map((med) =>
+                        setMedications((prev) => {
+                          const updated = prev.map((med) =>
                             med.id === item.id ? { ...med, timing: value } : med
-                          )
-                        );
+                          );
+                          // Notify parent immediately
+                          if (onChangeRef.current) {
+                            onChangeRef.current(updated);
+                          }
+                          return updated;
+                        });
                       }}
                     />
                   </div>
