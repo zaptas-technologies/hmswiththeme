@@ -26,6 +26,11 @@ const DoctorsPrescriptions = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [doctorName, setDoctorName] = useState<string>("");
+
+  // Medicine details drawer
+  const [isMedicineDrawerOpen, setIsMedicineDrawerOpen] = useState(false);
+  const [selectedPrescription, setSelectedPrescription] = useState<Prescription | null>(null);
+  const [selectedMedicine, setSelectedMedicine] = useState<any | null>(null);
   
   // Filter states
   const [searchText, setSearchText] = useState<string>("");
@@ -338,54 +343,44 @@ const DoctorsPrescriptions = () => {
     setPage(1);
   };
 
-  // Transform prescriptions for table - expand Medications array into separate rows
+  const closeMedicineDrawer = () => {
+    setIsMedicineDrawerOpen(false);
+    setSelectedPrescription(null);
+    setSelectedMedicine(null);
+  };
+
+  const openMedicineDrawer = (prescription: Prescription, medicine: any) => {
+    setSelectedPrescription(prescription);
+    setSelectedMedicine(medicine);
+    setIsMedicineDrawerOpen(true);
+  };
+
+  // Transform prescriptions for table - ONE row per prescription
   const tableData = useMemo(() => {
-    const expandedRows: any[] = [];
-    
-    prescriptions.forEach((presc) => {
-      const baseData = {
+    return prescriptions.map((presc) => {
+      const meds =
+        (presc as any).Medications && Array.isArray((presc as any).Medications)
+          ? (presc as any).Medications
+          : (presc as any).Medicine
+          ? [
+              {
+                medicine: (presc as any).Medicine,
+                dosage: (presc as any).Dosage,
+                frequency: (presc as any).Frequency,
+                duration: (presc as any).Duration,
+              },
+            ]
+          : [];
+
+      return {
         ...presc,
-        img: presc.Patient_Image || presc.img || "user-01.jpg",
-        phone_number: presc.phone_number || "",
+        key: presc._id || presc.id,
+        img: (presc as any).Patient_Image || (presc as any).img || "user-01.jpg",
+        phone_number: (presc as any).phone_number || "",
+        _medications: meds,
+        _medicationsCount: meds.length,
       };
-      
-      // If Medications array exists and has items, create a row for each medicine
-      if (presc.Medications && Array.isArray(presc.Medications) && presc.Medications.length > 0) {
-        presc.Medications.forEach((med: any, medIndex: number) => {
-          expandedRows.push({
-            ...baseData,
-            // Unique key: prescription ID + medicine index
-            key: `${presc._id || presc.id}-${medIndex}`,
-            // Medicine-specific fields from Medications array
-            Medicine: med.medicine || med.Medicine || "",
-            Dosage: med.dosage || med.Dosage || "",
-            Frequency: med.frequency || med.Frequency || "",
-            Duration: med.duration || med.Duration || "",
-            // Keep original prescription fields for reference
-            _originalPrescriptionId: presc._id || presc.id,
-            _medicineIndex: medIndex,
-            _totalMedicines: presc.Medications.length,
-            // Inventory ID if available
-            inventoryId: med.inventoryId || med.inventory_id || undefined,
-          });
-        });
-      } else {
-        // Fallback: if no Medications array, use the single Medicine field (backward compatibility)
-        expandedRows.push({
-          ...baseData,
-          key: presc._id || presc.id,
-          Medicine: presc.Medicine || "",
-          Dosage: presc.Dosage || "",
-          Frequency: presc.Frequency || "",
-          Duration: presc.Duration || "",
-          _originalPrescriptionId: presc._id || presc.id,
-          _medicineIndex: 0,
-          _totalMedicines: 1,
-        });
-      }
     });
-    
-    return expandedRows;
   }, [prescriptions]);
 
   const columns = [
@@ -395,23 +390,23 @@ const DoctorsPrescriptions = () => {
       width: 180,
       render: (text: string, record: any) => {
         const prescriptionId = text || record.id || "N/A";
-        const totalMedicines = record._totalMedicines || 1;
-        const medicineIndex = record._medicineIndex !== undefined ? record._medicineIndex : 0;
-        const isMultipleMedicines = totalMedicines > 1;
         
         return (
-          <div className="d-flex align-items-center gap-2">
+          <div className="d-flex flex-column">
             <Link 
-              to={`${all_routes.doctorsprescriptiondetails}?id=${record._originalPrescriptionId || record._id || record.id}`}
-              className="fw-semibold"
+              to={`${all_routes.doctorsprescriptiondetails}?id=${record._id || record.id}`}
+              className="fw-semibold d-inline-flex align-items-center gap-2"
             >
               {prescriptionId}
+              {record._medicationsCount > 0 && (
+                <span className="badge badge-sm bg-light text-dark border">
+                  {record._medicationsCount} meds
+                </span>
+              )}
             </Link>
-            {isMultipleMedicines && (
-              <span className="badge badge-sm bg-info text-white" title={`Medicine ${medicineIndex + 1} of ${totalMedicines}`}>
-                {medicineIndex + 1}/{totalMedicines}
-              </span>
-            )}
+            <span className="text-muted fs-12">
+              {formatDate(record.Prescribed_On || record.Date || "")}
+            </span>
           </div>
         );
       },
@@ -450,72 +445,69 @@ const DoctorsPrescriptions = () => {
       sorter: (a: any, b: any) => (a.Patient || "").localeCompare(b.Patient || ""),
     },
     {
-      title: "Medicine",
-      dataIndex: "Medicine",
-      width: 220,
-      render: (text: string, record: any) => {
-        const medicineName = text || "N/A";
-        const hasInventoryId = record.inventoryId;
-        
+      title: "Doctor",
+      dataIndex: "Doctor",
+      width: 200,
+      render: (text: string) => <span className="text-body fw-medium">{text || "N/A"}</span>,
+      sorter: (a: any, b: any) => (a.Doctor || "").localeCompare(b.Doctor || ""),
+    },
+    {
+      title: "Medicines",
+      dataIndex: "_medications",
+      width: 320,
+      render: (_: any, record: any) => {
+        const meds: any[] = record._medications || [];
+        if (!meds.length) return <span className="text-muted">No medicines</span>;
+
+        const preview = meds.slice(0, 3);
+        const remaining = meds.length - preview.length;
+
         return (
-          <div className="d-flex align-items-center gap-2">
-            <span className="fw-medium">{medicineName}</span>
-            {hasInventoryId && (
-              <span 
-                className="badge badge-sm bg-success text-white" 
-                title="Available in inventory"
+          <div className="d-flex flex-wrap gap-2">
+            {preview.map((m, idx) => {
+              const name = m.medicine || m.Medicine || "Medicine";
+              const inventoryId = m.inventoryId || m.inventory_id;
+              return (
+                <button
+                  key={`${record._id || record.id}-${idx}`}
+                  type="button"
+                  className="btn btn-sm btn-outline-primary rounded-pill d-inline-flex align-items-center gap-2"
+                  onClick={() => openMedicineDrawer(record, m)}
+                  title="Click to view medicine details"
+                >
+                  <span className="text-truncate" style={{ maxWidth: 160 }}>
+                    {name}
+                  </span>
+                  {inventoryId && (
+                    <span className="badge bg-success text-white">Stock</span>
+                  )}
+                </button>
+              );
+            })}
+
+            {remaining > 0 && (
+              <button
+                type="button"
+                className="btn btn-sm btn-light border rounded-pill"
+                onClick={() => openMedicineDrawer(record, meds[0])}
+                title="Open prescription medicines"
               >
-                <i className="ti ti-check fs-10 me-1" />
-                Stock
-              </span>
+                +{remaining} more
+              </button>
             )}
           </div>
         );
       },
-      sorter: (a: any, b: any) => (a.Medicine || "").localeCompare(b.Medicine || ""),
-    },
-    {
-      title: "Dosage",
-      dataIndex: "Dosage",
-      width: 120,
-      render: (text: string) => (
-        <span className="text-body">{text || "N/A"}</span>
-      ),
-    },
-    {
-      title: "Frequency",
-      dataIndex: "Frequency",
-      width: 120,
-      render: (text: string) => (
-        <span className="text-body">{text || "N/A"}</span>
-      ),
-    },
-    {
-      title: "Duration",
-      dataIndex: "Duration",
-      width: 120,
-      render: (text: string) => (
-        <span className="text-body">{text || "N/A"}</span>
-      ),
-    },
-    {
-      title: "Prescribed On",
-      dataIndex: "Prescribed_On",
-      width: 150,
-      render: (text: string, record: any) => {
-        const dateStr = text || record.Date || "";
-        return dateStr ? formatDate(dateStr) : "N/A";
-      },
       sorter: (a: any, b: any) => {
-        const dateA = new Date(a.Prescribed_On || a.Date || 0).getTime();
-        const dateB = new Date(b.Prescribed_On || b.Date || 0).getTime();
-        return dateA - dateB;
+        const aFirst = (a._medications?.[0]?.medicine || a.Medicine || "").toString();
+        const bFirst = (b._medications?.[0]?.medicine || b.Medicine || "").toString();
+        return aFirst.localeCompare(bFirst);
       },
     },
     {
       title: "Status",
       dataIndex: "Status",
-      width: 120,
+      width: 130,
       render: (text: string) => {
         const getStatusClass = (status: string) => {
           if (status === "Active") return "badge-soft-success text-success";
@@ -536,13 +528,7 @@ const DoctorsPrescriptions = () => {
       title: "Actions",
       width: 100,
       render: (_: any, record: any) => {
-        // Use original prescription ID for actions (works for both expanded and non-expanded rows)
-        const prescriptionId = record._originalPrescriptionId || record._id || record.id;
-        const prescriptionRecord = {
-          ...record,
-          _id: prescriptionId,
-          id: prescriptionId,
-        };
+        const prescriptionId = record._id || record.id;
         
         return (
           <div className="action-item d-flex align-items-center gap-2">
@@ -574,11 +560,11 @@ const DoctorsPrescriptions = () => {
                     className="dropdown-item d-flex align-items-center text-danger"
                     onClick={(e) => {
                       e.preventDefault();
-                      handleDelete(prescriptionRecord);
+                      handleDelete(record);
                     }}
                   >
                     <i className="ti ti-trash me-2" />
-                    Delete Prescription
+                    Delete
                   </Link>
                 </li>
               </ul>
@@ -940,10 +926,7 @@ const DoctorsPrescriptions = () => {
               {total > 0 && (
                 <div className="d-flex justify-content-between align-items-center mt-3 pt-3 border-top">
                   <div className="text-muted fs-13">
-                    Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, tableData.length)} of {tableData.length} medicines
-                    {prescriptions.length !== tableData.length && (
-                      <span className="ms-2 text-muted">({prescriptions.length} prescriptions)</span>
-                    )}
+                    Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, total)} of {total} prescriptions
                   </div>
                   <div className="d-flex align-items-center gap-2">
                     <button
@@ -959,9 +942,7 @@ const DoctorsPrescriptions = () => {
                     {/* Page numbers */}
                     <div className="d-flex gap-1">
                       {(() => {
-                        // Use expanded medicine count for pagination
-                        const medicineCount = tableData.length;
-                        const totalPages = Math.ceil(medicineCount / pageSize);
+                        const totalPages = Math.ceil(total / pageSize);
                         const maxVisiblePages = 5;
                         const pages: (number | string)[] = [];
                         
@@ -1036,7 +1017,7 @@ const DoctorsPrescriptions = () => {
                     
                     <button
                       className="btn btn-sm btn-outline-primary"
-                      disabled={page * pageSize >= tableData.length || loading}
+                      disabled={page * pageSize >= total || loading}
                       onClick={() => setPage(page + 1)}
                       title="Next page"
                     >
@@ -1065,6 +1046,126 @@ const DoctorsPrescriptions = () => {
       {/* ========================
 			End Page Content
 		========================= */}
+
+      {/* Medicine Details Drawer */}
+      {isMedicineDrawerOpen && (
+        <>
+          <div
+            className="position-fixed top-0 start-0 w-100 h-100"
+            style={{ background: "rgba(0,0,0,0.4)", zIndex: 1050 }}
+            onClick={closeMedicineDrawer}
+          />
+          <div
+            className="position-fixed top-0 end-0 h-100 bg-white shadow-lg"
+            style={{ width: "420px", maxWidth: "95vw", zIndex: 1060 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="d-flex align-items-center justify-content-between p-3 border-bottom">
+              <div>
+                <div className="fw-bold">Medicine Details</div>
+                <div className="text-muted fs-13">
+                  {selectedPrescription?.Prescription_ID || selectedPrescription?.id || ""}
+                </div>
+              </div>
+              <button type="button" className="btn btn-sm btn-light border" onClick={closeMedicineDrawer}>
+                <i className="ti ti-x" />
+              </button>
+            </div>
+
+            <div className="p-3">
+              {selectedPrescription && (
+                <div className="mb-3 p-3 bg-light rounded">
+                  <div className="d-flex justify-content-between align-items-start gap-2">
+                    <div>
+                      <div className="fw-semibold text-dark">{selectedPrescription.Patient || "N/A"}</div>
+                      <div className="text-muted fs-13">{selectedPrescription.Doctor || "N/A"}</div>
+                      <div className="text-muted fs-13">
+                        {formatDate((selectedPrescription as any).Prescribed_On || (selectedPrescription as any).Date || "")}
+                      </div>
+                    </div>
+                    <span className="badge badge-soft-primary text-primary rounded fw-medium fs-13">
+                      {(selectedPrescription as any).Status || "N/A"}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Medicines list (switchable) */}
+              {selectedPrescription && (selectedPrescription as any)._medications?.length > 0 && (
+                <div className="mb-3">
+                  <div className="fw-semibold mb-2">Medicines</div>
+                  <div className="d-flex flex-wrap gap-2">
+                    {(selectedPrescription as any)._medications.map((m: any, idx: number) => {
+                      const name = m.medicine || m.Medicine || `Medicine ${idx + 1}`;
+                      const active = selectedMedicine === m;
+                      return (
+                        <button
+                          key={`drawer-med-${idx}`}
+                          type="button"
+                          className={`btn btn-sm rounded-pill ${active ? "btn-primary" : "btn-outline-primary"}`}
+                          onClick={() => setSelectedMedicine(m)}
+                        >
+                          {name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Selected medicine details */}
+              <div className="border rounded p-3">
+                <div className="fw-semibold mb-2">Selected medicine</div>
+                {selectedMedicine ? (
+                  <div className="d-grid gap-2">
+                    <div className="d-flex justify-content-between">
+                      <span className="text-muted">Name</span>
+                      <span className="fw-medium text-end">{selectedMedicine.medicine || selectedMedicine.Medicine || "N/A"}</span>
+                    </div>
+                    <div className="d-flex justify-content-between">
+                      <span className="text-muted">Dosage</span>
+                      <span className="fw-medium text-end">{selectedMedicine.dosage || selectedMedicine.Dosage || "N/A"}</span>
+                    </div>
+                    <div className="d-flex justify-content-between">
+                      <span className="text-muted">Frequency</span>
+                      <span className="fw-medium text-end">{selectedMedicine.frequency || selectedMedicine.Frequency || "N/A"}</span>
+                    </div>
+                    <div className="d-flex justify-content-between">
+                      <span className="text-muted">Duration</span>
+                      <span className="fw-medium text-end">{selectedMedicine.duration || selectedMedicine.Duration || "N/A"}</span>
+                    </div>
+                    {(selectedMedicine.inventoryId || selectedMedicine.inventory_id) && (
+                      <div className="d-flex justify-content-between">
+                        <span className="text-muted">Inventory</span>
+                        <span className="fw-medium text-end">
+                          <span className="badge bg-success text-white">Stock</span>
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-muted">Select a medicine to view details.</div>
+                )}
+              </div>
+
+              {selectedPrescription && (
+                <div className="mt-3 d-flex gap-2">
+                  <Link
+                    to={`${all_routes.doctorsprescriptiondetails}?id=${selectedPrescription._id || selectedPrescription.id}`}
+                    className="btn btn-primary flex-grow-1"
+                    onClick={closeMedicineDrawer}
+                  >
+                    View Prescription
+                  </Link>
+                  <button type="button" className="btn btn-light border" onClick={closeMedicineDrawer}>
+                    Close
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </>
   );
 };
