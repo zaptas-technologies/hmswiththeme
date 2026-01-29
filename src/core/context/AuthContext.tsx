@@ -35,9 +35,10 @@ const getDashboardRouteByRole = (role: UserRole): string => {
       return all_routes.dashboard || "/";
     case "hospital_admin":
       return all_routes.dashboard || "/";
+    case "pharmacist":
+      return all_routes.pharmacyDashboard || "/";
     case "receptionist":
     case "nurse":
-    case "pharmacist":
     case "lab_technician":
     case "accountant":
     default:

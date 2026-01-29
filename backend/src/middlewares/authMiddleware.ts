@@ -1,7 +1,7 @@
 import { RequestHandler } from "express";
 import { User } from "../models/userModel";
 
-export type UserRole = "USER" | "HOSPITAL_ADMIN" | "SUPER_ADMIN";
+export type UserRole = "USER" | "HOSPITAL_ADMIN" | "SUPER_ADMIN" | "PHARMACIST";
 
 export interface AuthenticatedUser {
   userId: string;
@@ -57,6 +57,8 @@ export const authMiddleware: RequestHandler = async (req, res, next) => {
       role = "SUPER_ADMIN";
     } else if (user.role === "hospital_admin") {
       role = "HOSPITAL_ADMIN";
+    } else if (user.role === "pharmacist") {
+      role = "PHARMACIST";
     } else {
       role = "USER";
     }
@@ -99,9 +101,9 @@ export const buildAccessFilter = (user: AuthenticatedUser): Record<string, any> 
     return {}; // Can access all records
   }
 
-  if (user.role === "HOSPITAL_ADMIN") {
+  if (user.role === "HOSPITAL_ADMIN" || user.role === "PHARMACIST") {
     if (!user.hospitalId) {
-      throw new Error("HOSPITAL_ADMIN must have hospitalId");
+      throw new Error(`${user.role} must have hospitalId`);
     }
     return { hospital: user.hospitalId };
   }

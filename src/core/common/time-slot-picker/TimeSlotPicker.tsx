@@ -97,7 +97,7 @@ const TimeSlotPicker: React.FC<TimeSlotPickerProps> = ({
     return null;
   }
 
-  const { availableSlots, bookedSlots = [], slots = [], suggestions, message, slotDurationMinutes } = slotsData;
+  const { availableSlots, bookedSlots = [], slots = [], suggestions, message, slotDurationMinutes = 15 } = slotsData;
 
   // Prefer the full slots timeline (includes booked + available) when present
   const gridSlots =

@@ -5,6 +5,7 @@ import {
   createPrescription,
   updatePrescription,
   deletePrescription,
+  fulfillPrescription,
 } from "../controllers/prescriptionController";
 import { authMiddleware } from "../middlewares/authMiddleware";
 
@@ -35,6 +36,7 @@ export const buildPrescriptionRouter = () => {
   router.get("/", authMiddleware, getAllPrescriptions);
   router.get("/:id", authMiddleware, getPrescriptionById);
   router.post("/", authMiddleware, createPrescription);
+  router.post("/:id/fulfill", authMiddleware, fulfillPrescription);
   router.patch("/:id", authMiddleware, updatePrescription);
   router.delete("/:id", authMiddleware, deletePrescription);
 

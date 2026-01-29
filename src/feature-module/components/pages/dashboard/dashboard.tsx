@@ -1,7 +1,7 @@
 import { Link } from "react-router";
 import ImageWithBasePath from "../../../../core/imageWithBasePath";
 import { all_routes } from "../../../routes/all_routes";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Chart from "react-apexcharts";
 import SCol2Chart from "./chats/scol2";
 import SCol3Chart from "./chats/scol3";
@@ -10,15 +10,63 @@ import SCol19Chart from "./chats/scol19";
 import CircleChart from "./chats/circleChart";
 import { Calendar, type CalendarProps } from "antd";
 import type { Dayjs } from "dayjs";
-import { fetchAdminDashboard, type AdminDashboardResponse } from "../../../../api/dashboard";
+import {
+  fetchAdminDashboard,
+  fetchAdminDashboardSection,
+  type AdminDashboardResponse,
+  type AdminDashboardFilters,
+  type DashboardPeriod,
+  type LeavePeriod,
+  type AppointmentTypeFilter,
+  type DashboardSectionName,
+} from "../../../../api/dashboard";
 import { useAuth } from "../../../../core/context/AuthContext";
 import dayjs from "dayjs";
+import {
+  DashboardModal,
+  StatsModalContent,
+  AppointmentStatisticsModalContent,
+  PopularDoctorsModalContent,
+  RecentAppointmentsModalContent,
+  TopDepartmentsModalContent,
+  ScheduleModalContent,
+  IncomeByTreatmentModalContent,
+  TopPatientsModalContent,
+  RecentTransactionsModalContent,
+  LeaveRequestsModalContent,
+  AppointmentTrendModalContent,
+} from "./modals/DashboardModals";
+
+type SectionFilterState = {
+  appointmentStatistics: DashboardPeriod;
+  popularDoctors: DashboardPeriod;
+  topDepartments: DashboardPeriod;
+  incomeByTreatment: DashboardPeriod;
+  recentTransactions: DashboardPeriod;
+  leaveRequests: LeavePeriod;
+  appointmentsType: AppointmentTypeFilter;
+};
+
+const DEFAULT_SECTION_FILTERS: SectionFilterState = {
+  appointmentStatistics: "monthly",
+  popularDoctors: "weekly",
+  topDepartments: "weekly",
+  incomeByTreatment: "weekly",
+  recentTransactions: "weekly",
+  leaveRequests: "week",
+  appointmentsType: "all",
+};
 
 const Dashboard = () => {
   const { user } = useAuth();
   const [dashboardData, setDashboardData] = useState<AdminDashboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sectionFilters, setSectionFilters] = useState<SectionFilterState>(DEFAULT_SECTION_FILTERS);
+  const [sectionLoading, setSectionLoading] = useState<DashboardSectionName | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalSection, setModalSection] = useState<DashboardSectionName | null>(null);
+  const [modalData, setModalData] = useState<Record<string, unknown> | null>(null);
   const [sColChart] = useState<any>({
     chart: {
       width: 80,
@@ -64,7 +112,7 @@ const Dashboard = () => {
     const loadDashboard = async () => {
       try {
         setLoading(true);
-        const data = await fetchAdminDashboard();
+        const data = await fetchAdminDashboard({ period: "monthly" });
         setDashboardData(data);
       } catch (err: any) {
         setError(err?.response?.data?.message || err?.message || "Failed to load dashboard");
@@ -76,6 +124,69 @@ const Dashboard = () => {
     };
     loadDashboard();
   }, []);
+
+  const applySectionFilter = useCallback(
+    async (section: DashboardSectionName, filters: AdminDashboardFilters) => {
+      if (!dashboardData) return;
+      setSectionLoading(section);
+      try {
+        const res = await fetchAdminDashboardSection(section, filters);
+        if (section === "scheduleStats" || section === "scheduledDoctors") {
+          setDashboardData((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  scheduleStats: (res as any).scheduleStats ?? prev.scheduleStats,
+                  scheduledDoctors: (res as any).scheduledDoctors ?? prev.scheduledDoctors,
+                }
+              : prev
+          );
+        } else {
+          const key = section === "allAppointments" ? "recentAppointments" : section;
+          const value = (res as any)[section] ?? (res as any).allAppointments;
+          if (value !== undefined) {
+            setDashboardData((prev) => (prev ? { ...prev, [key]: value } : prev));
+          }
+        }
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error(`Failed to load section ${section}:`, err);
+      } finally {
+        setSectionLoading(null);
+      }
+    },
+    [dashboardData]
+  );
+
+  const openCardModal = useCallback(
+    async (section: DashboardSectionName) => {
+      setModalSection(section);
+      setModalOpen(true);
+      setModalData(null);
+      try {
+        const limit = ["recentAppointments", "allAppointments", "popularDoctors", "topPatients", "recentTransactions", "leaveRequests"].includes(section)
+          ? 50
+          : undefined;
+        const filters: AdminDashboardFilters = { limit };
+        if (section === "appointmentStatistics") filters.period = sectionFilters.appointmentStatistics;
+        if (section === "popularDoctors") filters.period = sectionFilters.popularDoctors;
+        if (section === "recentAppointments" || section === "allAppointments") filters.type = sectionFilters.appointmentsType;
+        if (section === "topDepartments") filters.period = sectionFilters.topDepartments;
+        if (section === "incomeByTreatment") filters.period = sectionFilters.incomeByTreatment;
+        if (section === "recentTransactions") filters.period = sectionFilters.recentTransactions;
+        if (section === "leaveRequests") filters.leavePeriod = sectionFilters.leaveRequests;
+        const res = await fetchAdminDashboardSection(section, filters);
+        if (section === "scheduleStats" || section === "scheduledDoctors") {
+          setModalData({ scheduleStats: (res as any).scheduleStats, scheduledDoctors: (res as any).scheduledDoctors });
+        } else {
+          setModalData(res as Record<string, unknown>);
+        }
+      } catch (err) {
+        setModalData({ error: "Failed to load data" });
+      }
+    },
+    [sectionFilters]
+  );
 
   const onPanelChange = (value: Dayjs, mode: CalendarProps<Dayjs>["mode"]) => {
     console.log(value.format("YYYY-MM-DD"), mode);
@@ -127,7 +238,7 @@ const Dashboard = () => {
     );
   }
 
-  const { hospital, stats, appointmentStatistics, popularDoctors, recentAppointments, topDepartments, scheduleStats, scheduledDoctors, incomeByTreatment, topPatients, recentTransactions, leaveRequests } = dashboardData;
+  const { hospital, stats, appointmentStatistics, popularDoctors, recentAppointments, topDepartments, scheduleStats, scheduledDoctors, incomeByTreatment, topPatients, recentTransactions, leaveRequests, appointmentTrend } = dashboardData;
 
   return (
     <>
@@ -177,7 +288,14 @@ const Dashboard = () => {
           {/* start row */}
           <div className="row">
             <div className="col-xl-3 col-md-6">
-              <div className="position-relative border card rounded-2 shadow-sm">
+              <div
+                className="position-relative border card rounded-2 shadow-sm cursor-pointer"
+                style={{ cursor: "pointer" }}
+                role="button"
+                tabIndex={0}
+                onClick={() => openCardModal("stats")}
+                onKeyDown={(e) => e.key === "Enter" && openCardModal("stats")}
+              >
                 <ImageWithBasePath
                   src="./assets/img/bg/bg-01.svg"
                   alt="img"
@@ -217,7 +335,14 @@ const Dashboard = () => {
             </div>
             {/* end col */}
             <div className="col-xl-3 col-md-6">
-              <div className="position-relative border card rounded-2 shadow-sm">
+              <div
+                className="position-relative border card rounded-2 shadow-sm"
+                style={{ cursor: "pointer" }}
+                role="button"
+                tabIndex={0}
+                onClick={() => openCardModal("stats")}
+                onKeyDown={(e) => e.key === "Enter" && openCardModal("stats")}
+              >
                 <ImageWithBasePath
                   src="./assets/img/bg/bg-02.svg"
                   alt="img"
@@ -251,7 +376,14 @@ const Dashboard = () => {
             </div>
             {/* end col */}
             <div className="col-xl-3 col-md-6">
-              <div className="position-relative border card rounded-2 shadow-sm">
+              <div
+                className="position-relative border card rounded-2 shadow-sm"
+                style={{ cursor: "pointer" }}
+                role="button"
+                tabIndex={0}
+                onClick={() => openCardModal("stats")}
+                onKeyDown={(e) => e.key === "Enter" && openCardModal("stats")}
+              >
                 <ImageWithBasePath
                   src="./assets/img/bg/bg-03.svg"
                   alt="img"
@@ -285,7 +417,14 @@ const Dashboard = () => {
             </div>
             {/* end col */}
             <div className="col-xl-3 col-md-6">
-              <div className="position-relative border card rounded-2 shadow-sm">
+              <div
+                className="position-relative border card rounded-2 shadow-sm"
+                style={{ cursor: "pointer" }}
+                role="button"
+                tabIndex={0}
+                onClick={() => openCardModal("stats")}
+                onKeyDown={(e) => e.key === "Enter" && openCardModal("stats")}
+              >
                 <ImageWithBasePath
                   src="./assets/img/bg/bg-04.svg"
                   alt="img"
@@ -325,33 +464,44 @@ const Dashboard = () => {
             {/* col start */}
             <div className="col-xl-8">
               {/* card start */}
-              <div className="card shadow-sm flex-fill w-100">
-                <div className="card-header d-flex align-items-center justify-content-between">
+              <div
+                className="card shadow-sm flex-fill w-100 cursor-pointer"
+                style={{ cursor: "pointer" }}
+                role="button"
+                tabIndex={0}
+                onClick={() => openCardModal("appointmentStatistics")}
+                onKeyDown={(e) => e.key === "Enter" && openCardModal("appointmentStatistics")}
+              >
+                <div className="card-header d-flex align-items-center justify-content-between" onClick={(e) => e.stopPropagation()}>
                   <h5 className="fw-bold mb-0">Appointment Statistics</h5>
                   <div className="dropdown">
-                    <Link
-                      to="#"
+                    <button
+                      type="button"
                       className="btn btn-sm px-2 border shadow-sm btn-outline-white d-inline-flex align-items-center"
                       data-bs-toggle="dropdown"
+                      disabled={!!sectionLoading}
                     >
-                      Monthly <i className="ti ti-chevron-down ms-1" />
-                    </Link>
+                      {sectionLoading === "appointmentStatistics" ? (
+                        <span className="spinner-border spinner-border-sm me-1" />
+                      ) : null}
+                      {sectionFilters.appointmentStatistics.charAt(0).toUpperCase() + sectionFilters.appointmentStatistics.slice(1)}{" "}
+                      <i className="ti ti-chevron-down ms-1" />
+                    </button>
                     <ul className="dropdown-menu">
-                      <li>
-                        <Link className="dropdown-item" to="#">
-                          Monthly
-                        </Link>
-                      </li>
-                      <li>
-                        <Link className="dropdown-item" to="#">
-                          Weekly
-                        </Link>
-                      </li>
-                      <li>
-                        <Link className="dropdown-item" to="#">
-                          Yearly
-                        </Link>
-                      </li>
+                      {(["monthly", "weekly", "yearly"] as const).map((p) => (
+                        <li key={p}>
+                          <button
+                            type="button"
+                            className="dropdown-item"
+                            onClick={() => {
+                              setSectionFilters((f) => ({ ...f, appointmentStatistics: p }));
+                              applySectionFilter("appointmentStatistics", { period: p });
+                            }}
+                          >
+                            {p.charAt(0).toUpperCase() + p.slice(1)}
+                          </button>
+                        </li>
+                      ))}
                     </ul>
                   </div>
                 </div>
@@ -395,39 +545,47 @@ const Dashboard = () => {
                     </div>
                   </div>
                   <div className="chart-set" id="s-col-19">
-                    <SCol19Chart />
+                    <SCol19Chart appointmentTrend={appointmentTrend} />
                   </div>
                 </div>
               </div>
               {/* card end */}
               {/* card start */}
-              <div className="card shadow-sm flex-fill w-100">
-                <div className="card-header d-flex align-items-center justify-content-between">
+              <div
+                className="card shadow-sm flex-fill w-100"
+                style={{ cursor: "pointer" }}
+                role="button"
+                tabIndex={0}
+                onClick={() => openCardModal("popularDoctors")}
+                onKeyDown={(e) => e.key === "Enter" && openCardModal("popularDoctors")}
+              >
+                <div className="card-header d-flex align-items-center justify-content-between" onClick={(e) => e.stopPropagation()}>
                   <h5 className="fw-bold mb-0">Popular Doctors</h5>
                   <div className="dropdown">
-                    <Link
-                      to="#"
+                    <button
+                      type="button"
                       className="btn btn-sm px-2 border shadow-sm btn-outline-white d-inline-flex align-items-center"
                       data-bs-toggle="dropdown"
+                      disabled={!!sectionLoading}
                     >
-                      Weekly <i className="ti ti-chevron-down ms-1" />
-                    </Link>
+                      {sectionFilters.popularDoctors.charAt(0).toUpperCase() + sectionFilters.popularDoctors.slice(1)}{" "}
+                      <i className="ti ti-chevron-down ms-1" />
+                    </button>
                     <ul className="dropdown-menu">
-                      <li>
-                        <Link className="dropdown-item" to="#">
-                          Monthly
-                        </Link>
-                      </li>
-                      <li>
-                        <Link className="dropdown-item" to="#">
-                          Weekly
-                        </Link>
-                      </li>
-                      <li>
-                        <Link className="dropdown-item" to="#">
-                          Yearly
-                        </Link>
-                      </li>
+                      {(["weekly", "monthly", "yearly"] as const).map((p) => (
+                        <li key={p}>
+                          <button
+                            type="button"
+                            className="dropdown-item"
+                            onClick={() => {
+                              setSectionFilters((f) => ({ ...f, popularDoctors: p }));
+                              applySectionFilter("popularDoctors", { period: p });
+                            }}
+                          >
+                            {p.charAt(0).toUpperCase() + p.slice(1)}
+                          </button>
+                        </li>
+                      ))}
                     </ul>
                   </div>
                 </div>
@@ -477,33 +635,46 @@ const Dashboard = () => {
             {/* col end */}
             {/* col start */}
             <div className="col-xl-4">
-              <div className="card shadow-sm">
-                <div className="card-header d-flex align-items-center justify-content-between">
+              <div
+                className="card shadow-sm"
+                style={{ cursor: "pointer" }}
+                role="button"
+                tabIndex={0}
+                onClick={() => openCardModal("recentAppointments")}
+                onKeyDown={(e) => e.key === "Enter" && openCardModal("recentAppointments")}
+              >
+                <div className="card-header d-flex align-items-center justify-content-between" onClick={(e) => e.stopPropagation()}>
                   <h5 className="fw-bold mb-0 text-truncate">Appointments</h5>
                   <div className="dropdown">
-                    <Link
-                      to="#"
+                    <button
+                      type="button"
                       className="btn btn-sm px-2 border shadow-sm btn-outline-white d-inline-flex align-items-center"
                       data-bs-toggle="dropdown"
+                      disabled={!!sectionLoading}
                     >
-                      All Type <i className="ti ti-chevron-down ms-1" />
-                    </Link>
+                      {sectionFilters.appointmentsType === "all" ? "All Type" : sectionFilters.appointmentsType === "in-person" ? "In Person" : "Online"}{" "}
+                      <i className="ti ti-chevron-down ms-1" />
+                    </button>
                     <ul className="dropdown-menu">
-                      <li>
-                        <Link className="dropdown-item" to="#">
-                          In Person
-                        </Link>
-                      </li>
-                      <li>
-                        <Link className="dropdown-item" to="#">
-                          Online
-                        </Link>
-                      </li>
+                      {(["all", "in-person", "online"] as const).map((t) => (
+                        <li key={t}>
+                          <button
+                            type="button"
+                            className="dropdown-item"
+                            onClick={() => {
+                              setSectionFilters((f) => ({ ...f, appointmentsType: t }));
+                              applySectionFilter("recentAppointments", { type: t });
+                            }}
+                          >
+                            {t === "all" ? "All Type" : t === "in-person" ? "In Person" : "Online"}
+                          </button>
+                        </li>
+                      ))}
                     </ul>
                   </div>
                 </div>
                 <div className="card-body">
-                  <div className="datepic appointment-calender mb-1">
+                  <div className="datepic appointment-calender mb-1" onClick={(e) => e.stopPropagation()}>
                     <Calendar
                       fullscreen={false}
                       onPanelChange={onPanelChange}
@@ -555,33 +726,41 @@ const Dashboard = () => {
           <div className="row">
             {/* col start */}
             <div className="col-xl-4 d-flex">
-              <div className="card shadow-sm flex-fill w-100">
-                <div className="card-header d-flex align-items-center justify-content-between">
+              <div
+                className="card shadow-sm flex-fill w-100"
+                style={{ cursor: "pointer" }}
+                role="button"
+                tabIndex={0}
+                onClick={() => openCardModal("topDepartments")}
+                onKeyDown={(e) => e.key === "Enter" && openCardModal("topDepartments")}
+              >
+                <div className="card-header d-flex align-items-center justify-content-between" onClick={(e) => e.stopPropagation()}>
                   <h5 className="fw-bold mb-0">Top 3 Departments</h5>
                   <div className="dropdown">
-                    <Link
-                      to="#"
+                    <button
+                      type="button"
                       className="btn btn-sm px-2 border shadow-sm btn-outline-white d-inline-flex align-items-center"
                       data-bs-toggle="dropdown"
+                      disabled={!!sectionLoading}
                     >
-                      Weekly <i className="ti ti-chevron-down ms-1" />
-                    </Link>
+                      {sectionFilters.topDepartments.charAt(0).toUpperCase() + sectionFilters.topDepartments.slice(1)}{" "}
+                      <i className="ti ti-chevron-down ms-1" />
+                    </button>
                     <ul className="dropdown-menu">
-                      <li>
-                        <Link className="dropdown-item" to="#">
-                          Monthly
-                        </Link>
-                      </li>
-                      <li>
-                        <Link className="dropdown-item" to="#">
-                          Weekly
-                        </Link>
-                      </li>
-                      <li>
-                        <Link className="dropdown-item" to="#">
-                          Yearly
-                        </Link>
-                      </li>
+                      {(["weekly", "monthly", "yearly"] as const).map((p) => (
+                        <li key={p}>
+                          <button
+                            type="button"
+                            className="dropdown-item"
+                            onClick={() => {
+                              setSectionFilters((f) => ({ ...f, topDepartments: p }));
+                              applySectionFilter("topDepartments", { period: p });
+                            }}
+                          >
+                            {p.charAt(0).toUpperCase() + p.slice(1)}
+                          </button>
+                        </li>
+                      ))}
                     </ul>
                   </div>
                 </div>
@@ -607,12 +786,20 @@ const Dashboard = () => {
             {/* col end */}
             {/* col start */}
             <div className="col-xl-4 col-lg-6 d-flex">
-              <div className="card shadow-sm flex-fill w-100">
-                <div className="card-header d-flex align-items-center justify-content-between">
+              <div
+                className="card shadow-sm flex-fill w-100"
+                style={{ cursor: "pointer" }}
+                role="button"
+                tabIndex={0}
+                onClick={() => openCardModal("scheduleStats")}
+                onKeyDown={(e) => e.key === "Enter" && openCardModal("scheduleStats")}
+              >
+                <div className="card-header d-flex align-items-center justify-content-between" onClick={(e) => e.stopPropagation()}>
                   <h5 className="fw-bold mb-0">Doctors Schedule</h5>
                   <Link
                     to={all_routes.doctorschedule}
                     className="btn fw-normal btn-outline-white"
+                    onClick={(e) => e.stopPropagation()}
                   >
                     View All
                   </Link>
@@ -686,33 +873,41 @@ const Dashboard = () => {
             {/* col end */}
             {/* col start */}
             <div className="col-xl-4 col-lg-6 d-flex">
-              <div className="card shadow-sm flex-fill w-100">
-                <div className="card-header d-flex align-items-center justify-content-between">
+              <div
+                className="card shadow-sm flex-fill w-100"
+                style={{ cursor: "pointer" }}
+                role="button"
+                tabIndex={0}
+                onClick={() => openCardModal("incomeByTreatment")}
+                onKeyDown={(e) => e.key === "Enter" && openCardModal("incomeByTreatment")}
+              >
+                <div className="card-header d-flex align-items-center justify-content-between" onClick={(e) => e.stopPropagation()}>
                   <h5 className="fw-bold mb-0">Income By Treatment</h5>
                   <div className="dropdown">
-                    <Link
-                      to="#"
+                    <button
+                      type="button"
                       className="btn btn-sm px-2 border shadow-sm btn-outline-white d-inline-flex align-items-center"
                       data-bs-toggle="dropdown"
+                      disabled={!!sectionLoading}
                     >
-                      Weekly <i className="ti ti-chevron-down ms-1" />
-                    </Link>
+                      {sectionFilters.incomeByTreatment.charAt(0).toUpperCase() + sectionFilters.incomeByTreatment.slice(1)}{" "}
+                      <i className="ti ti-chevron-down ms-1" />
+                    </button>
                     <ul className="dropdown-menu">
-                      <li>
-                        <Link className="dropdown-item" to="#">
-                          Monthly
-                        </Link>
-                      </li>
-                      <li>
-                        <Link className="dropdown-item" to="#">
-                          Weekly
-                        </Link>
-                      </li>
-                      <li>
-                        <Link className="dropdown-item" to="#">
-                          Yearly
-                        </Link>
-                      </li>
+                      {(["weekly", "monthly", "yearly"] as const).map((p) => (
+                        <li key={p}>
+                          <button
+                            type="button"
+                            className="dropdown-item"
+                            onClick={() => {
+                              setSectionFilters((f) => ({ ...f, incomeByTreatment: p }));
+                              applySectionFilter("incomeByTreatment", { period: p });
+                            }}
+                          >
+                            {p.charAt(0).toUpperCase() + p.slice(1)}
+                          </button>
+                        </li>
+                      ))}
                     </ul>
                   </div>
                 </div>
@@ -735,12 +930,20 @@ const Dashboard = () => {
           {/* row start */}
           <div className="row">
             <div className="col-12 d-flex">
-              <div className="card shadow-sm flex-fill w-100">
-                <div className="card-header d-flex align-items-center justify-content-between">
+              <div
+                className="card shadow-sm flex-fill w-100"
+                style={{ cursor: "pointer" }}
+                role="button"
+                tabIndex={0}
+                onClick={() => openCardModal("allAppointments")}
+                onKeyDown={(e) => e.key === "Enter" && openCardModal("allAppointments")}
+              >
+                <div className="card-header d-flex align-items-center justify-content-between" onClick={(e) => e.stopPropagation()}>
                   <h5 className="fw-bold mb-0">All Appointments</h5>
                   <Link
                     to={all_routes.appointments}
                     className="btn fw-normal btn-outline-white"
+                    onClick={(e) => e.stopPropagation()}
                   >
                     View All
                   </Link>
@@ -847,12 +1050,20 @@ const Dashboard = () => {
           <div className="row">
             {/* col start */}
             <div className="col-xl-4 d-flex">
-              <div className="card shadow-sm flex-fill w-100">
-                <div className="card-header d-flex align-items-center justify-content-between">
+              <div
+                className="card shadow-sm flex-fill w-100"
+                style={{ cursor: "pointer" }}
+                role="button"
+                tabIndex={0}
+                onClick={() => openCardModal("topPatients")}
+                onKeyDown={(e) => e.key === "Enter" && openCardModal("topPatients")}
+              >
+                <div className="card-header d-flex align-items-center justify-content-between" onClick={(e) => e.stopPropagation()}>
                   <h5 className="fw-bold mb-0">Top 5 Patients</h5>
                   <Link
                     to={all_routes.patients}
                     className="btn fw-normal btn-outline-white"
+                    onClick={(e) => e.stopPropagation()}
                   >
                     View All
                   </Link>
@@ -896,33 +1107,41 @@ const Dashboard = () => {
             {/* col end */}
             {/* col start */}
             <div className="col-xl-4 col-lg-6 d-flex">
-              <div className="card shadow-sm flex-fill w-100">
-                <div className="card-header d-flex align-items-center justify-content-between">
+              <div
+                className="card shadow-sm flex-fill w-100"
+                style={{ cursor: "pointer" }}
+                role="button"
+                tabIndex={0}
+                onClick={() => openCardModal("recentTransactions")}
+                onKeyDown={(e) => e.key === "Enter" && openCardModal("recentTransactions")}
+              >
+                <div className="card-header d-flex align-items-center justify-content-between" onClick={(e) => e.stopPropagation()}>
                   <h5 className="fw-bold mb-0">Recent Transactions</h5>
                   <div className="dropdown">
-                    <Link
-                      to="#"
+                    <button
+                      type="button"
                       className="btn btn-sm px-2 border shadow-sm btn-outline-white d-inline-flex align-items-center"
                       data-bs-toggle="dropdown"
+                      disabled={!!sectionLoading}
                     >
-                      Weekly <i className="ti ti-chevron-down ms-1" />
-                    </Link>
+                      {sectionFilters.recentTransactions.charAt(0).toUpperCase() + sectionFilters.recentTransactions.slice(1)}{" "}
+                      <i className="ti ti-chevron-down ms-1" />
+                    </button>
                     <ul className="dropdown-menu">
-                      <li>
-                        <Link className="dropdown-item" to="#">
-                          Monthly
-                        </Link>
-                      </li>
-                      <li>
-                        <Link className="dropdown-item" to="#">
-                          Weekly
-                        </Link>
-                      </li>
-                      <li>
-                        <Link className="dropdown-item" to="#">
-                          Yearly
-                        </Link>
-                      </li>
+                      {(["weekly", "monthly", "yearly"] as const).map((p) => (
+                        <li key={p}>
+                          <button
+                            type="button"
+                            className="dropdown-item"
+                            onClick={() => {
+                              setSectionFilters((f) => ({ ...f, recentTransactions: p }));
+                              applySectionFilter("recentTransactions", { period: p });
+                            }}
+                          >
+                            {p.charAt(0).toUpperCase() + p.slice(1)}
+                          </button>
+                        </li>
+                      ))}
                     </ul>
                   </div>
                 </div>
@@ -961,33 +1180,41 @@ const Dashboard = () => {
             {/* col end */}
             {/* col start */}
             <div className="col-xl-4 col-lg-6 d-flex">
-              <div className="card shadow-sm flex-fill w-100">
-                <div className="card-header d-flex align-items-center justify-content-between">
+              <div
+                className="card shadow-sm flex-fill w-100"
+                style={{ cursor: "pointer" }}
+                role="button"
+                tabIndex={0}
+                onClick={() => openCardModal("leaveRequests")}
+                onKeyDown={(e) => e.key === "Enter" && openCardModal("leaveRequests")}
+              >
+                <div className="card-header d-flex align-items-center justify-content-between" onClick={(e) => e.stopPropagation()}>
                   <h5 className="fw-bold mb-0">Leave Requests</h5>
                   <div className="dropdown">
-                    <Link
-                      to="#"
+                    <button
+                      type="button"
                       className="btn btn-sm px-2 border shadow-sm btn-outline-white d-inline-flex align-items-center"
                       data-bs-toggle="dropdown"
+                      disabled={!!sectionLoading}
                     >
-                      Today <i className="ti ti-chevron-down ms-1" />
-                    </Link>
+                      {sectionFilters.leaveRequests === "today" ? "Today" : sectionFilters.leaveRequests === "week" ? "This Week" : "This Month"}{" "}
+                      <i className="ti ti-chevron-down ms-1" />
+                    </button>
                     <ul className="dropdown-menu">
-                      <li>
-                        <Link className="dropdown-item" to="#">
-                          Today
-                        </Link>
-                      </li>
-                      <li>
-                        <Link className="dropdown-item" to="#">
-                          This Week
-                        </Link>
-                      </li>
-                      <li>
-                        <Link className="dropdown-item" to="#">
-                          This Month
-                        </Link>
-                      </li>
+                      {(["today", "week", "month"] as const).map((p) => (
+                        <li key={p}>
+                          <button
+                            type="button"
+                            className="dropdown-item"
+                            onClick={() => {
+                              setSectionFilters((f) => ({ ...f, leaveRequests: p }));
+                              applySectionFilter("leaveRequests", { leavePeriod: p });
+                            }}
+                          >
+                            {p === "today" ? "Today" : p === "week" ? "This Week" : "This Month"}
+                          </button>
+                        </li>
+                      ))}
                     </ul>
                   </div>
                 </div>
@@ -1054,6 +1281,64 @@ const Dashboard = () => {
         </div>
         {/* Footer End */}
       </div>
+      {/* Dashboard section modals */}
+      <DashboardModal
+        show={modalOpen}
+        onClose={() => { setModalOpen(false); setModalSection(null); setModalData(null); }}
+        title={
+          modalSection
+            ? (
+                {
+                  stats: "Stats",
+                  appointmentStatistics: "Appointment Statistics",
+                  popularDoctors: "Popular Doctors",
+                  recentAppointments: "Appointments",
+                  allAppointments: "All Appointments",
+                  topDepartments: "Top Departments",
+                  scheduleStats: "Doctors Schedule",
+                  scheduledDoctors: "Doctors Schedule",
+                  incomeByTreatment: "Income By Treatment",
+                  topPatients: "Top Patients",
+                  recentTransactions: "Recent Transactions",
+                  leaveRequests: "Leave Requests",
+                  appointmentTrend: "Appointment Trend",
+                } as Record<string, string>
+              )[modalSection] ?? modalSection.replace(/([A-Z])/g, " $1").replace(/^./, (s) => s.toUpperCase())
+            : ""
+        }
+      >
+        {modalData?.error ? (
+          <p className="text-danger mb-0">{String(modalData.error)}</p>
+        ) : modalSection === "stats" && modalData?.stats ? (
+          <StatsModalContent data={modalData.stats as any} />
+        ) : modalSection === "appointmentStatistics" && modalData?.appointmentStatistics ? (
+          <AppointmentStatisticsModalContent data={modalData.appointmentStatistics as any} />
+        ) : modalSection === "popularDoctors" && modalData?.popularDoctors ? (
+          <PopularDoctorsModalContent data={modalData.popularDoctors as any} />
+        ) : modalSection === "recentAppointments" && modalData?.recentAppointments ? (
+          <RecentAppointmentsModalContent data={modalData.recentAppointments as any} />
+        ) : modalSection === "allAppointments" && modalData?.allAppointments ? (
+          <RecentAppointmentsModalContent data={modalData.allAppointments as any} />
+        ) : modalSection === "topDepartments" && modalData?.topDepartments ? (
+          <TopDepartmentsModalContent data={modalData.topDepartments as any} />
+        ) : (modalSection === "scheduleStats" || modalSection === "scheduledDoctors") && modalData?.scheduleStats != null ? (
+          <ScheduleModalContent scheduleStats={modalData.scheduleStats as any} scheduledDoctors={(modalData.scheduledDoctors ?? []) as any} />
+        ) : modalSection === "incomeByTreatment" && modalData?.incomeByTreatment ? (
+          <IncomeByTreatmentModalContent data={modalData.incomeByTreatment as any} />
+        ) : modalSection === "topPatients" && modalData?.topPatients ? (
+          <TopPatientsModalContent data={modalData.topPatients as any} />
+        ) : modalSection === "recentTransactions" && modalData?.recentTransactions ? (
+          <RecentTransactionsModalContent data={modalData.recentTransactions as any} />
+        ) : modalSection === "leaveRequests" && modalData?.leaveRequests ? (
+          <LeaveRequestsModalContent data={modalData.leaveRequests as any} />
+        ) : modalSection === "appointmentTrend" && modalData?.appointmentTrend ? (
+          <AppointmentTrendModalContent data={modalData.appointmentTrend as any} />
+        ) : !modalData ? (
+          <div className="text-center py-4"><div className="spinner-border text-primary" /><p className="mt-2 mb-0">Loading...</p></div>
+        ) : (
+          <p className="text-muted mb-0">No data available for this section.</p>
+        )}
+      </DashboardModal>
       {/* ========================
 			End Page Content
 		========================= */}

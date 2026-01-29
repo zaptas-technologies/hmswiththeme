@@ -1,7 +1,9 @@
 import { RequestHandler } from "express";
 import mongoose from "mongoose";
 import { User } from "../models/userModel";
-import { buildAccessFilter } from "../middlewares/authMiddleware";
+import { Prescription } from "../models/prescriptionModel";
+import { Consultation } from "../models/consultationModel";
+import { Hospital } from "../models/hospitalModel";
 
 export interface PharmacyRequest {
   name: string;
@@ -325,6 +327,88 @@ export const deletePharmacy: RequestHandler = async (req, res, next) => {
     res.json({ 
       success: true,
       message: "Pharmacy user deleted successfully" 
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/** Pharmacy dashboard: prescriptions (pending) and consultations for the pharmacist's hospital */
+export const getPharmacyDashboard: RequestHandler = async (req, res, next) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    if (req.user.role !== "PHARMACIST" && req.user.role !== "HOSPITAL_ADMIN") {
+      return res.status(403).json({ message: "Forbidden. Pharmacy dashboard is for pharmacist or hospital admin." });
+    }
+    const hospitalId = req.user.hospitalId;
+    if (!hospitalId) {
+      return res.status(400).json({ message: "Pharmacy user must be associated with a hospital." });
+    }
+
+    const hospitalObjectId = new mongoose.Types.ObjectId(hospitalId);
+    const hospitalFilter = { hospital: hospitalObjectId };
+
+    // Pending prescriptions (not yet dispensed) – statuses that mean "to be dispensed"
+    const pendingPrescriptionFilter = {
+      ...hospitalFilter,
+      Status: { $nin: ["Dispensed", "Completed", "Cancelled"] },
+    };
+    const [prescriptions, consultations, hospitalDoc] = await Promise.all([
+      Prescription.find(pendingPrescriptionFilter)
+        .sort({ createdAt: -1 })
+        .limit(100)
+        .lean()
+        .exec(),
+      Consultation.find({ ...hospitalFilter, Status: "Completed" })
+        .sort({ Completed_At: -1, createdAt: -1 })
+        .limit(50)
+        .lean()
+        .exec(),
+      Hospital.findById(hospitalId).select("name city state").lean().exec(),
+    ]);
+
+    const formatPrescription = (p: any) => ({
+      id: p._id?.toString(),
+      _id: p._id?.toString(),
+      Prescription_ID: p.Prescription_ID,
+      Date: p.Date,
+      Prescribed_On: p.Prescribed_On,
+      Patient: p.Patient,
+      Patient_Image: p.Patient_Image,
+      Doctor: p.Doctor,
+      Medicine: p.Medicine,
+      Status: p.Status,
+      Dosage: p.Dosage,
+      Frequency: p.Frequency,
+      Duration: p.Duration,
+      Medications: p.Medications || [],
+      Appointment_ID: p.Appointment_ID?.toString?.(),
+      consultationId: p.consultationId?.toString?.(),
+      Amount: p.Amount,
+      createdAt: p.createdAt,
+    });
+
+    const formatConsultation = (c: any) => ({
+      id: c._id?.toString(),
+      _id: c._id?.toString(),
+      Appointment_ID: c.Appointment_ID?.toString?.(),
+      Patient: c.Patient,
+      Doctor: c.Doctor,
+      Status: c.Status,
+      Medications: c.Medications || [],
+      Consultation_Date: c.Consultation_Date,
+      Completed_At: c.Completed_At,
+      createdAt: c.createdAt,
+    });
+
+    return res.json({
+      hospital: hospitalDoc
+        ? { id: hospitalId, name: (hospitalDoc as any).name, city: (hospitalDoc as any).city, state: (hospitalDoc as any).state }
+        : null,
+      prescriptions: prescriptions.map(formatPrescription),
+      consultations: consultations.map(formatConsultation),
     });
   } catch (err) {
     next(err);

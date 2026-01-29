@@ -535,30 +535,32 @@ export const getAvailableSlots: RequestHandler = async (req, res, next) => {
     // Get timeSlotMinutes (default 15 minutes)
     const slotDurationMinutes = (doctor as { timeSlotMinutes?: number }).timeSlotMinutes || 15;
 
-    // Get existing appointments for this doctor on this date
-    const startOfDay = new Date(selectedDate);
-    startOfDay.setUTCHours(0, 0, 0, 0);
-    const endOfDay = new Date(selectedDate);
-    endOfDay.setUTCHours(23, 59, 59, 999);
+    // Get existing appointments for this doctor on this date.
+    // Date_Time is stored as "DD MMM YYYY, hh:mm A" (e.g. "29 Jan 2026, 06:00 AM").
+    const dateForPrefix = new Date(selectedDate + "T12:00:00.000Z");
+    const day = String(dateForPrefix.getUTCDate()).padStart(2, "0");
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const month = monthNames[dateForPrefix.getUTCMonth()];
+    const year = dateForPrefix.getUTCFullYear();
+    const datePrefix = `${day} ${month} ${year},`;
+    const datePrefixEscaped = datePrefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const dateRegex = new RegExp("^" + datePrefixEscaped);
 
-    const existingAppointments = await Appointment.find({
+    const existingAppointments = (await Appointment.find({
       doctorId: new mongoose.Types.ObjectId(doctorId),
-      Date_Time: {
-        $gte: startOfDay.toISOString(),
-        $lte: endOfDay.toISOString(),
-      },
+      Date_Time: { $regex: dateRegex },
       Status: { $nin: ["Cancelled"] }, // Exclude cancelled appointments
     })
       .select("Date_Time")
-      .lean();
+      .lean()) as unknown as Array<{ Date_Time: string }>;
 
-    // Parse booked times
+    // Parse booked times from "DD MMM YYYY, hh:mm A" (use local hours/minutes to match schedule)
     const bookedTimes = existingAppointments.map((apt) => {
       try {
         const aptDate = new Date(apt.Date_Time);
         return {
-          hour: aptDate.getUTCHours(),
-          minute: aptDate.getUTCMinutes(),
+          hour: aptDate.getHours(),
+          minute: aptDate.getMinutes(),
         };
       } catch {
         return null;

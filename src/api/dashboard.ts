@@ -200,9 +200,65 @@ export type AdminDashboardResponse = {
   appointmentTrend: AppointmentTrend;
 };
 
-export const fetchAdminDashboard = async (): Promise<AdminDashboardResponse> => {
-  const { data } = await api.get<AdminDashboardResponse>("/dashboard/admin");
+export type DashboardPeriod = "weekly" | "monthly" | "yearly";
+export type LeavePeriod = "today" | "week" | "month";
+export type AppointmentTypeFilter = "all" | "in-person" | "online";
+
+export type AdminDashboardFilters = {
+  period?: DashboardPeriod;
+  dateFrom?: string;
+  dateTo?: string;
+  leavePeriod?: LeavePeriod;
+  limit?: number;
+  type?: AppointmentTypeFilter;
+};
+
+export type DashboardSectionName =
+  | "stats"
+  | "appointmentStatistics"
+  | "popularDoctors"
+  | "recentAppointments"
+  | "topDepartments"
+  | "scheduleStats"
+  | "scheduledDoctors"
+  | "incomeByTreatment"
+  | "topPatients"
+  | "recentTransactions"
+  | "leaveRequests"
+  | "appointmentTrend"
+  | "allAppointments";
+
+export const fetchAdminDashboard = async (
+  filters?: AdminDashboardFilters
+): Promise<AdminDashboardResponse> => {
+  const params = new URLSearchParams();
+  if (filters?.period) params.set("period", filters.period);
+  if (filters?.dateFrom) params.set("dateFrom", filters.dateFrom);
+  if (filters?.dateTo) params.set("dateTo", filters.dateTo);
+  if (filters?.leavePeriod) params.set("leavePeriod", filters.leavePeriod);
+  if (filters?.limit != null) params.set("limit", String(filters.limit));
+  if (filters?.type) params.set("type", filters.type);
+  const qs = params.toString();
+  const url = qs ? `/dashboard/admin?${qs}` : "/dashboard/admin";
+  const { data } = await api.get<AdminDashboardResponse>(url);
   return data;
+};
+
+/** Fetch only one section; updates only that part of the dashboard. */
+export const fetchAdminDashboardSection = async <K extends DashboardSectionName>(
+  section: K,
+  filters?: AdminDashboardFilters
+): Promise<Record<K, K extends "allAppointments" ? RecentAppointmentItem[] : AdminDashboardResponse[K extends keyof AdminDashboardResponse ? K : never]>> => {
+  const params = new URLSearchParams();
+  params.set("section", section);
+  if (filters?.period) params.set("period", filters.period);
+  if (filters?.dateFrom) params.set("dateFrom", filters.dateFrom);
+  if (filters?.dateTo) params.set("dateTo", filters.dateTo);
+  if (filters?.leavePeriod) params.set("leavePeriod", filters.leavePeriod);
+  if (filters?.limit != null) params.set("limit", String(filters.limit));
+  if (filters?.type) params.set("type", filters.type);
+  const { data } = await api.get(`/dashboard/admin?${params.toString()}`);
+  return data as any;
 };
 
 // Super Admin Dashboard Types

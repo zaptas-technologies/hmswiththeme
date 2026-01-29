@@ -1,5 +1,45 @@
 import { RequestHandler } from "express";
-import { buildAdminDashboardPayload } from "../services/adminDashboardService";
+import {
+  buildAdminDashboardPayload,
+  buildAdminDashboardSection,
+  type DashboardFilters,
+  type DashboardSectionName,
+} from "../services/adminDashboardService";
+
+const SECTION_NAMES: DashboardSectionName[] = [
+  "stats",
+  "appointmentStatistics",
+  "popularDoctors",
+  "recentAppointments",
+  "topDepartments",
+  "scheduleStats",
+  "scheduledDoctors",
+  "incomeByTreatment",
+  "topPatients",
+  "recentTransactions",
+  "leaveRequests",
+  "appointmentTrend",
+  "allAppointments",
+];
+
+function parseFilters(query: Record<string, any>): DashboardFilters {
+  const period = query.period as string | undefined;
+  const leavePeriod = query.leavePeriod as string | undefined;
+  const limit = query.limit != null ? parseInt(String(query.limit), 10) : undefined;
+  const type = query.type as string | undefined;
+  return {
+    period:
+      period === "weekly" || period === "monthly" || period === "yearly" ? period : undefined,
+    dateFrom: query.dateFrom as string | undefined,
+    dateTo: query.dateTo as string | undefined,
+    leavePeriod:
+      leavePeriod === "today" || leavePeriod === "week" || leavePeriod === "month"
+        ? leavePeriod
+        : undefined,
+    limit: Number.isFinite(limit) ? limit : undefined,
+    type: type === "all" || type === "in-person" || type === "online" ? type : undefined,
+  };
+}
 
 export const getAdminDashboard: RequestHandler = async (req, res, next) => {
   try {
@@ -7,31 +47,33 @@ export const getAdminDashboard: RequestHandler = async (req, res, next) => {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    // For hospital_admin, filter by their hospitalId - STRICTLY enforce hospital filtering
-    // For super_admin or admin, show all data (hospitalId = undefined)
     let hospitalId: string | undefined = undefined;
-    
     if (req.user.role === "HOSPITAL_ADMIN") {
       hospitalId = req.user.hospitalId;
-      
-      // Validate hospitalId for hospital_admin - REQUIRED
       if (!hospitalId) {
-        return res.status(400).json({ 
-          message: "Hospital Admin must be associated with a hospital. Please contact administrator." 
+        return res.status(400).json({
+          message:
+            "Hospital Admin must be associated with a hospital. Please contact administrator.",
         });
       }
     }
-    
-    // Ensure hospital_admin can ONLY see their hospital's data
-    // Pass hospitalId to service which will filter all queries by this hospital
-    // If hospitalId is provided, ALL data will be filtered to that hospital only
-    const payload = await buildAdminDashboardPayload(hospitalId);
-    
-    // Add hospitalId to response for debugging (can be removed in production)
+
+    const filters = parseFilters(req.query);
+    const section = req.query.section as string | undefined;
+
+    if (section && SECTION_NAMES.includes(section as DashboardSectionName)) {
+      const payload = await buildAdminDashboardSection(
+        hospitalId,
+        section as DashboardSectionName,
+        Object.keys(filters).length ? filters : undefined
+      );
+      return res.json(payload);
+    }
+
+    const payload = await buildAdminDashboardPayload(hospitalId, Object.keys(filters).length ? filters : undefined);
     if (hospitalId) {
       (payload as any).filteredByHospitalId = hospitalId;
     }
-    
     return res.json(payload);
   } catch (err) {
     return next(err);

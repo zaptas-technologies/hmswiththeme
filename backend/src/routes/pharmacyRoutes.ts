@@ -6,6 +6,7 @@ import {
   updatePharmacy,
   deletePharmacy,
   impersonatePharmacy,
+  getPharmacyDashboard,
 } from "../controllers/pharmacyController";
 import { authMiddleware } from "../middlewares/authMiddleware";
 
@@ -44,6 +45,7 @@ export const buildPharmacyRouter = () => {
   });
 
   router.get("/", authMiddleware, getAllPharmacies);
+  router.get("/dashboard", authMiddleware, getPharmacyDashboard);
   router.get("/:id", authMiddleware, getPharmacyById);
   router.post("/", authMiddleware, createPharmacy);
   router.patch("/:id", authMiddleware, updatePharmacy);

@@ -2,6 +2,7 @@ import { RequestHandler } from "express";
 import mongoose from "mongoose";
 import { Prescription } from "../models/prescriptionModel";
 import { Consultation } from "../models/consultationModel";
+import { Inventory, InventoryDoc } from "../models/inventoryModel";
 import { buildAccessFilter } from "../middlewares/authMiddleware";
 
 export interface PrescriptionRequest {
@@ -608,6 +609,81 @@ export const deletePrescription: RequestHandler = async (req, res, next) => {
       return res.status(404).json({ message: "Prescription not found" });
     }
     res.status(204).send();
+  } catch (err: any) {
+    if (err?.name === "CastError") {
+      return res.status(400).json({ message: "Invalid prescription id" });
+    }
+    next(err);
+  }
+};
+
+/** Fulfill prescription: deduct inventory, record cash, mark as Dispensed. Allowed for PHARMACIST or HOSPITAL_ADMIN (same hospital). */
+export const fulfillPrescription: RequestHandler = async (req, res, next) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    if (req.user.role !== "PHARMACIST" && req.user.role !== "HOSPITAL_ADMIN") {
+      return res.status(403).json({ message: "Forbidden. Only pharmacy can fulfill prescriptions." });
+    }
+    const hospitalId = req.user.hospitalId;
+    if (!hospitalId) {
+      return res.status(400).json({ message: "User must be associated with a hospital." });
+    }
+
+    const { id } = req.params;
+    const { amountPaid = 0, paymentMode = "Cash" } = req.body || {};
+    const filter = buildAccessFilter(req.user);
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      filter._id = new mongoose.Types.ObjectId(id);
+    } else {
+      filter.Prescription_ID = id;
+    }
+
+    const prescription = await Prescription.findOne(filter).exec();
+    if (!prescription) {
+      return res.status(404).json({ message: "Prescription not found" });
+    }
+    if (prescription.Status === "Dispensed" || prescription.Status === "Completed") {
+      return res.status(400).json({ message: "Prescription already dispensed." });
+    }
+
+    const medications = prescription.Medications && prescription.Medications.length > 0
+      ? prescription.Medications
+      : [];
+    const hospitalObjectId = new mongoose.Types.ObjectId(hospitalId);
+
+    for (const med of medications) {
+      const invId = (med as any).inventoryId;
+      if (!invId) continue;
+      const invObjId = invId instanceof mongoose.Types.ObjectId ? invId : new mongoose.Types.ObjectId(String(invId));
+      const quantityToDeduct = 1;
+      const updated = await Inventory.findOneAndUpdate(
+        { _id: invObjId, hospital: hospitalObjectId, Quantity: { $gte: quantityToDeduct } },
+        { $inc: { Quantity: -quantityToDeduct } },
+        { new: true }
+      ).exec();
+      if (!updated) {
+        const item = await Inventory.findById(invObjId).select("Item_Name").lean().exec();
+        const name = (item as any)?.Item_Name || invObjId.toString();
+        return res.status(400).json({
+          message: `Insufficient stock or item not found for: ${name}. Cannot fulfill prescription.`,
+        });
+      }
+      const invDoc = updated as InventoryDoc;
+      if (invDoc.Quantity <= 0) invDoc.Status = "Out of Stock";
+      else if (invDoc.Quantity < 10) invDoc.Status = "Low Stock";
+      if (invDoc.Unit_Price && invDoc.Quantity !== undefined) {
+        invDoc.Total_Value = invDoc.Unit_Price * invDoc.Quantity;
+      }
+      await invDoc.save();
+    }
+
+    prescription.Status = "Dispensed";
+    (prescription as any).Amount = Number(amountPaid) || 0;
+    await prescription.save();
+
+    res.json(formatPrescriptionResponse(prescription));
   } catch (err: any) {
     if (err?.name === "CastError") {
       return res.status(400).json({ message: "Invalid prescription id" });

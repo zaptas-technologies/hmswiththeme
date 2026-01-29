@@ -4,6 +4,7 @@ import { Patient } from "../models/patientModel";
 import { Appointment } from "../models/appointmentModel";
 import { DoctorLeave } from "../models/doctorLeaveModel";
 import { Hospital } from "../models/hospitalModel";
+import { getDateRange, getLeaveDateRange, appointmentDateFilterForRange, type Period, type LeavePeriod } from "../utils/dateRange";
 
 const pctChange = (current: number, prev: number) => {
   if (prev <= 0) return current > 0 ? 100 : 0;
@@ -12,8 +13,19 @@ const pctChange = (current: number, prev: number) => {
 
 const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 
-export const buildAdminDashboardPayload = async (hospitalId?: string) => {
+export type DashboardFilters = {
+  period?: Period;
+  dateFrom?: string;
+  dateTo?: string;
+  leavePeriod?: LeavePeriod;
+  limit?: number;
+  type?: "all" | "in-person" | "online";
+};
+
+export const buildAdminDashboardPayload = async (hospitalId?: string, filters?: DashboardFilters) => {
   const now = new Date();
+  const period = filters?.period ?? "monthly";
+  const dateRange = getDateRange(period, filters?.dateFrom, filters?.dateTo);
   const sevenDaysAgo = new Date(now);
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   const fourteenDaysAgo = new Date(now);
@@ -31,14 +43,17 @@ export const buildAdminDashboardPayload = async (hospitalId?: string) => {
     }
   }
 
+  const appointmentDateFilter = appointmentDateFilterForRange(dateRange);
+  const last7DaysRange = { start: sevenDaysAgo, end: now };
+  const prev7DaysRange = { start: fourteenDaysAgo, end: sevenDaysAgo };
+  const last7AppointmentDateFilter = appointmentDateFilterForRange(last7DaysRange);
+  const prev7AppointmentDateFilter = appointmentDateFilterForRange(prev7DaysRange);
+
   const [doctorsCount, patientsCount, appointmentsCount] = await Promise.all([
     Doctor.countDocuments(hospitalFilter),
     Patient.countDocuments(hospitalFilter),
-    Appointment.countDocuments(hospitalFilter),
+    Appointment.countDocuments({ ...hospitalFilter, ...appointmentDateFilter }),
   ]);
-  console.log(doctorsCount,hospitalId,'DIDUD') 
-
-
 
   const [last7Doctors, prev7Doctors] = await Promise.all([
     Doctor.countDocuments({ ...hospitalFilter, createdAt: { $gte: sevenDaysAgo, $lt: now } }),
@@ -51,18 +66,18 @@ export const buildAdminDashboardPayload = async (hospitalId?: string) => {
   ]);
 
   const [last7Appointments, prev7Appointments] = await Promise.all([
-    Appointment.countDocuments({ ...hospitalFilter, Date_Time: { $gte: sevenDaysAgo.toISOString(), $lt: now.toISOString() } }),
-    Appointment.countDocuments({ ...hospitalFilter, Date_Time: { $gte: fourteenDaysAgo.toISOString(), $lt: sevenDaysAgo.toISOString() } }),
+    Appointment.countDocuments({ ...hospitalFilter, ...last7AppointmentDateFilter }),
+    Appointment.countDocuments({ ...hospitalFilter, ...prev7AppointmentDateFilter }),
   ]);
 
   const revenueAgg = await Appointment.aggregate([
-    { $match: { ...hospitalFilter, Status: { $in: ["Confirmed", "Checked Out", "Completed"] } } },
+    { $match: { ...hospitalFilter, ...appointmentDateFilter, Status: { $in: ["Confirmed", "Checked Out", "Completed"] } } },
     { $group: { _id: null, total: { $sum: { $ifNull: [{ $toDouble: "$Fees" }, 0] } } } },
   ]);
   const revenue = revenueAgg[0]?.total || 0;
 
   const appointmentStats = await Appointment.aggregate([
-    { $match: hospitalFilter },
+    { $match: { ...hospitalFilter, ...appointmentDateFilter } },
     {
       $group: {
         _id: "$Status",
@@ -76,7 +91,7 @@ export const buildAdminDashboardPayload = async (hospitalId?: string) => {
     statsMap.set(stat._id || "Unknown", stat.count);
   });
 
-  const allAppointments = appointmentsCount;
+  const allAppointments = appointmentStats.reduce((sum: number, s: any) => sum + (s.count || 0), 0);
   const cancelled = statsMap.get("Cancelled") || 0;
   const reschedule = statsMap.get("Reschedule") || 0;
   const completed = statsMap.get("Checked Out") || statsMap.get("Completed") || statsMap.get("Confirmed") || 0;
@@ -88,7 +103,7 @@ export const buildAdminDashboardPayload = async (hospitalId?: string) => {
   }
 
   const popularDoctors = await Appointment.aggregate([
-    { $match: hospitalFilter },
+    { $match: { ...hospitalFilter, ...appointmentDateFilter } },
     { $group: { _id: "$Doctor", count: { $sum: 1 } } },
     { $sort: { count: -1 } },
     { $limit: 3 },
@@ -122,13 +137,21 @@ export const buildAdminDashboardPayload = async (hospitalId?: string) => {
     },
   ]);
 
-  const recentAppointments = await Appointment.find(hospitalFilter)
-    .sort({ Date_Time: 1 })
-    .limit(10)
+  const appointmentTypeFilter =
+    filters?.type && filters.type !== "all"
+      ? { Mode: filters.type === "in-person" ? "In-Person" : filters.type === "online" ? "Online" : filters.type }
+      : {};
+  const recentAppointments = await Appointment.find({
+    ...hospitalFilter,
+    ...appointmentDateFilter,
+    ...appointmentTypeFilter,
+  })
+    .sort({ Date_Time: -1 })
+    .limit(filters?.limit ?? 10)
     .lean();
 
   const topDepartments = await Appointment.aggregate([
-    { $match: { ...hospitalFilter, Department: { $exists: true, $ne: "" } } },
+    { $match: { ...hospitalFilter, ...appointmentDateFilter, Department: { $exists: true, $ne: "" } } },
     { $group: { _id: "$Department", count: { $sum: 1 } } },
     { $sort: { count: -1 } },
     { $limit: 3 },
@@ -149,6 +172,8 @@ export const buildAdminDashboardPayload = async (hospitalId?: string) => {
 
   // For leave requests, filter by hospital if provided
   const leaveHospitalFilter = hospitalId ? { hospital: new mongoose.Types.ObjectId(hospitalId) } : {};
+  const leavePeriod = filters?.leavePeriod ?? "week";
+  const leaveRange = getLeaveDateRange(leavePeriod);
   const leaveCountFilter: any = {
     ...leaveHospitalFilter,
     $or: [
@@ -168,7 +193,7 @@ export const buildAdminDashboardPayload = async (hospitalId?: string) => {
     .lean();
 
   const incomeByTreatment = await Appointment.aggregate([
-    { $match: { ...hospitalFilter, Department: { $exists: true, $ne: "" }, Status: { $in: ["Confirmed", "Checked Out", "Completed"] } } },
+    { $match: { ...hospitalFilter, ...appointmentDateFilter, Department: { $exists: true, $ne: "" }, Status: { $in: ["Confirmed", "Checked Out", "Completed"] } } },
     {
       $group: {
         _id: "$Department",
@@ -181,7 +206,7 @@ export const buildAdminDashboardPayload = async (hospitalId?: string) => {
   ]);
 
   const topPatients = await Appointment.aggregate([
-    { $match: hospitalFilter },
+    { $match: { ...hospitalFilter, ...appointmentDateFilter } },
     { $group: { _id: "$Patient", count: { $sum: 1 }, totalPaid: { $sum: { $ifNull: [{ $toDouble: "$Fees" }, 0] } } } },
     { $sort: { count: -1 } },
     { $limit: 5 },
@@ -218,18 +243,22 @@ export const buildAdminDashboardPayload = async (hospitalId?: string) => {
 
   const recentTransactions = await Appointment.find({
     ...hospitalFilter,
+    ...appointmentDateFilter,
     Fees: { $exists: true, $ne: null },
     Status: { $in: ["Confirmed", "Checked Out", "Completed"] },
   })
     .sort({ Date_Time: -1 })
-    .limit(5)
+    .limit(filters?.limit ?? 5)
     .lean();
 
-  const leaveRequestsFilter = {
+  const leaveRequestsFilter: any = {
     ...leaveHospitalFilter,
     Status: { $in: ["Applied", "Pending", "Requested"] },
   };
-  
+  if (leaveRange && leaveRange.start) {
+    leaveRequestsFilter.From_Date = { $gte: leaveRange.start, $lte: leaveRange.end };
+  }
+
   const leaveRequests = await DoctorLeave.find(leaveRequestsFilter)
     .sort({ createdAt: -1 })
     .limit(5)
@@ -400,9 +429,9 @@ export const buildAdminDashboardPayload = async (hospitalId?: string) => {
     recentAppointments: recentAppointments.map((apt: any) => ({
       id: String(apt._id),
       doctor: apt.Doctor || "Unknown",
-      doctorImg: "assets/img/doctors/doctor-01.jpg",
+      doctorImg: apt.Doctor_Image || "assets/img/doctors/doctor-01.jpg",
       patient: apt.Patient || "Unknown",
-      patientImg: "assets/img/profiles/avatar-02.jpg",
+      patientImg: apt.Patient_Image || "assets/img/profiles/avatar-02.jpg",
       dateTime: apt.Date_Time || "",
       mode: apt.Mode || "In-Person",
       status: apt.Status || "Schedule",
@@ -450,3 +479,41 @@ export const buildAdminDashboardPayload = async (hospitalId?: string) => {
     },
   };
 };
+
+export type DashboardSectionName =
+  | "stats"
+  | "appointmentStatistics"
+  | "popularDoctors"
+  | "recentAppointments"
+  | "topDepartments"
+  | "scheduleStats"
+  | "scheduledDoctors"
+  | "incomeByTreatment"
+  | "topPatients"
+  | "recentTransactions"
+  | "leaveRequests"
+  | "appointmentTrend"
+  | "allAppointments";
+
+/** Returns only the requested section(s). For "schedule" returns scheduleStats + scheduledDoctors. */
+export async function buildAdminDashboardSection(
+  hospitalId: string | undefined,
+  section: DashboardSectionName,
+  filters?: DashboardFilters
+): Promise<Record<string, unknown>> {
+  const full = await buildAdminDashboardPayload(hospitalId, filters);
+  if (section === "allAppointments") {
+    return { allAppointments: full.recentAppointments };
+  }
+  if (section === "scheduleStats" || section === "scheduledDoctors") {
+    return {
+      scheduleStats: full.scheduleStats,
+      scheduledDoctors: full.scheduledDoctors,
+    };
+  }
+  const key = section as keyof typeof full;
+  if (key in full) {
+    return { [section]: (full as any)[key] };
+  }
+  throw new Error(`Unknown section: ${section}`);
+}

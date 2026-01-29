@@ -70,3 +70,57 @@ export const impersonatePharmacy = async (id: string): Promise<{ token: string; 
   const { data } = await api.post<{ token: string; user: Pharmacy; impersonated: boolean }>(`/pharmacies/${id}/impersonate`);
   return data;
 };
+
+// Pharmacy Dashboard (for pharmacist role – prescriptions & consultations for hospital)
+export interface PharmacyDashboardPrescription {
+  id: string;
+  _id: string;
+  Prescription_ID?: string;
+  Date?: string;
+  Prescribed_On?: string;
+  Patient: string;
+  Patient_Image?: string;
+  Doctor: string;
+  Medicine?: string;
+  Status: string;
+  Dosage?: string;
+  Frequency?: string;
+  Duration?: string;
+  Medications?: Array<{ medicine: string; dosage?: string; frequency?: string; duration?: string; inventoryId?: string }>;
+  Appointment_ID?: string;
+  consultationId?: string;
+  Amount?: number;
+  createdAt?: string;
+}
+
+export interface PharmacyDashboardConsultation {
+  id: string;
+  _id: string;
+  Appointment_ID?: string;
+  Patient: string;
+  Doctor: string;
+  Status: string;
+  Medications?: Array<{ medicine: string; dosage?: string; frequency?: string; duration?: string; inventoryId?: string }>;
+  Consultation_Date?: string;
+  Completed_At?: string;
+  createdAt?: string;
+}
+
+export interface PharmacyDashboardResponse {
+  hospital: { id: string; name: string; city?: string; state?: string } | null;
+  prescriptions: PharmacyDashboardPrescription[];
+  consultations: PharmacyDashboardConsultation[];
+}
+
+export const fetchPharmacyDashboard = async (): Promise<PharmacyDashboardResponse> => {
+  const { data } = await api.get<PharmacyDashboardResponse>("/pharmacies/dashboard");
+  return data;
+};
+
+export const fulfillPrescription = async (
+  prescriptionId: string,
+  payload: { amountPaid: number; paymentMode?: string }
+): Promise<PharmacyDashboardPrescription> => {
+  const { data } = await api.post<PharmacyDashboardPrescription>(`/prescriptions/${prescriptionId}/fulfill`, payload);
+  return data;
+};

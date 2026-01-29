@@ -1,97 +1,61 @@
-import { useState } from "react";
+import { useMemo } from "react";
 import Chart from "react-apexcharts";
+import type { AppointmentTrend } from "../../../../../api/dashboard";
 
-const SCol19Chart = () => {
-  const [chartOptions] = useState<any>({
-    chart: {
-      type: "bar",
-      height: 250,
-      stacked: true,
-      toolbar: { show: false },
-      sparkline: { enabled: false },
-    },
-    plotOptions: {
-      bar: {
-        horizontal: false,
-        columnWidth: "25%",
-        borderRadius: 3,
-        distributed: false,
+type SCol19ChartProps = {
+  appointmentTrend?: AppointmentTrend | null;
+};
+
+const SCol19Chart = ({ appointmentTrend }: SCol19ChartProps) => {
+  const categories = appointmentTrend?.categories ?? ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const total = appointmentTrend?.total ?? Array(12).fill(0);
+  const completed = appointmentTrend?.completed ?? Array(12).fill(0);
+  const other = useMemo(() => total.map((t, i) => Math.max(0, (t || 0) - (completed[i] || 0))), [total, completed]);
+
+  const chartOptions = useMemo(
+    () => ({
+      chart: {
+        type: "bar" as const,
+        height: 250,
+        stacked: true,
+        toolbar: { show: false },
+        sparkline: { enabled: false },
       },
-    },
-    dataLabels: { enabled: false },
-    stroke: {
-      show: true,
-      width: 0,
-      colors: ["#fff"],
-    },
-    colors: ["#00D1D1", "#1E90FF", "#3B28CC"],
-    xaxis: {
-      categories: [
-        "Jan",
-        "Feb",
-        "Mar",
-        "Apr",
-        "May",
-        "Jun",
-        "Jul",
-        "Aug",
-        "Sep",
-        "Oct",
-        "Nov",
-        "Dec",
-      ],
-      labels: {
-        style: {
-          fontSize: "14px",
+      plotOptions: {
+        bar: {
+          horizontal: false,
+          columnWidth: "25%",
+          borderRadius: 3,
+          distributed: false,
         },
       },
-      axisBorder: {
-        show: false,
+      dataLabels: { enabled: false },
+      stroke: { show: true, width: 0, colors: ["#fff"] },
+      colors: ["#00D1D1", "#1E90FF", "#3B28CC"],
+      xaxis: {
+        categories,
+        labels: { style: { fontSize: "14px" } },
+        axisBorder: { show: false },
+        axisTicks: { show: false },
+        tickPlacement: "between",
       },
-      axisTicks: {
-        show: false,
+      yaxis: {
+        labels: { style: { fontSize: "14px" }, formatter: (val: number) => (val >= 1000 ? `${val / 1000}K` : String(val)), offsetX: -10 },
       },
-      tickPlacement: "between",
-    },
-    yaxis: {
-      labels: {
-        style: {
-          fontSize: "14px",
-        },
-        formatter: (val: number) => `${val / 1000}K`,
-        offsetX: -10,
-      },
-    },
-    legend: {
-      position: "bottom",
-    },
-    grid: {
-      show: true,
-      strokeDashArray: 4,
-      padding: {
-        left: 0,
-        right: -10,
-      },
-    },
-    tooltip: { enabled: true },
-  });
+      legend: { position: "bottom" as const },
+      grid: { show: true, strokeDashArray: 4, padding: { left: 0, right: -10 } },
+      tooltip: { enabled: true },
+    }),
+    [categories]
+  );
 
-  const [series] = useState([
-    {
-      name: "Completed",
-      data: [
-        800, 1000, 1200, 1300, 1500, 700, 900, 1000, 1600, 1500, 1200, 1100,
-      ],
-    },
-    {
-      name: "Ongoing",
-      data: [700, 900, 1100, 1000, 1100, 600, 800, 950, 1300, 1200, 1000, 950],
-    },
-    {
-      name: "Rescheduled",
-      data: [600, 700, 1100, 1100, 1900, 500, 700, 850, 1500, 1600, 900, 850],
-    },
-  ]);
+  const series = useMemo(
+    () => [
+      { name: "Completed", data: completed },
+      { name: "Other", data: other },
+    ],
+    [completed, other]
+  );
 
   return (
     <div id="s-col-19">

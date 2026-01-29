@@ -659,9 +659,18 @@
     }
 
     &.booked {
-      border-color: #f97373;
-      background: #fff5f5;
+      border-color: #dc2626;
+      background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
       color: #b91c1c;
+      cursor: not-allowed;
+      opacity: 1;
+
+      &:hover {
+        border-color: #dc2626;
+        background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+        transform: none;
+        box-shadow: none;
+      }
     }
 
     &__time {
@@ -669,13 +678,32 @@
     }
 
     &__status {
-      font-size: 11px;
+      font-size: 10px;
+      font-weight: 600;
       text-transform: uppercase;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.08em;
       border-radius: 999px;
       padding: 2px 8px;
-      background: rgba(185, 28, 28, 0.1);
+      background: rgba(185, 28, 28, 0.15);
       color: #b91c1c;
+    }
+  }
+
+  .time-slot-legend {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    border: 2px solid;
+
+    &.available {
+      border-color: var(--pr-border-color);
+      background: white;
+    }
+
+    &.booked {
+      border-color: #dc2626;
+      background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
     }
   }
 

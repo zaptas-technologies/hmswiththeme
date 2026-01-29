@@ -10,6 +10,8 @@ export const getSidebarDataByRole = (role?: string) => {
     return HospitalAdminSidebarData;
   } else if (role === "doctor") {
     return DoctorSidebarData;
+  } else if (role === "pharmacist") {
+    return PharmacistSidebarData;
   }
   // Default/Admin sidebar
   return AdminSidebarData;
@@ -559,6 +561,29 @@ const HospitalAdminSidebarData = [
             customSubmenuTwo: false,
           },
         ],
+      },
+    ],
+  },
+];
+
+// Pharmacist Sidebar Data - Pharmacy dashboard for hospital
+const PharmacistSidebarData = [
+  {
+    tittle: "Main Menu",
+    icon: "airplay",
+    showAsTab: true,
+    separateRoute: false,
+    submenuItems: [
+      {
+        label: "Pharmacy Dashboard",
+        link: routes.pharmacyDashboard,
+        submenu: false,
+        showSubRoute: false,
+        icon: "layout-dashboard",
+        base: "dashboard",
+        materialicons: "start",
+        dot: true,
+        submenuItems: [],
       },
     ],
   },
