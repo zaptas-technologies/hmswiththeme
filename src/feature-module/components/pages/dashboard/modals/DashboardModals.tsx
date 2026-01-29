@@ -14,6 +14,8 @@ import type {
   RecentTransaction,
   LeaveRequest,
   AppointmentTrend,
+  DoctorPerformanceItem,
+  PatientPerformanceItem,
 } from "../../../../../api/dashboard";
 
 type ModalProps = {
@@ -269,6 +271,83 @@ export function AppointmentTrendModalContent({ data }: { data: AppointmentTrend 
     <div className="small text-muted">
       <p className="mb-1">Categories: {data.categories.join(", ")}</p>
       <p className="mb-0">Total appointments by month (chart on main dashboard).</p>
+    </div>
+  );
+}
+
+export function DoctorsListModalContent({ data }: { data: DoctorPerformanceItem[] }) {
+  return (
+    <div className="table-responsive">
+      <table className="table table-bordered align-middle">
+        <thead>
+          <tr>
+            <th>Doctor</th>
+            <th>Department</th>
+            <th className="text-end">Bookings</th>
+            <th className="text-end">Revenue</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.map((d) => (
+            <tr key={d.id}>
+              <td>
+                <div className="d-flex align-items-center">
+                  <ImageWithBasePath
+                    src={d.img || "assets/img/doctors/doctor-01.jpg"}
+                    alt=""
+                    className="rounded-circle me-2 flex-shrink-0"
+                    style={{ width: 28, height: 28, objectFit: "cover" }}
+                  />
+                  <div>
+                    <div className="fw-semibold">{d.name}</div>
+                    <div className="text-muted small">{d.role}</div>
+                  </div>
+                </div>
+              </td>
+              <td>{d.department || "-"}</td>
+              <td className="text-end">{d.bookings}</td>
+              <td className="text-end fw-semibold">{formatCurrency(d.revenue)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export function PatientsListModalContent({ data }: { data: PatientPerformanceItem[] }) {
+  return (
+    <div className="table-responsive">
+      <table className="table table-bordered align-middle">
+        <thead>
+          <tr>
+            <th>Patient</th>
+            <th>Phone</th>
+            <th className="text-end">Appointments</th>
+            <th className="text-end">Total Paid</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.map((p) => (
+            <tr key={p.id}>
+              <td>
+                <div className="d-flex align-items-center">
+                  <ImageWithBasePath
+                    src={p.img || "assets/img/profiles/avatar-02.jpg"}
+                    alt=""
+                    className="rounded-circle me-2 flex-shrink-0"
+                    style={{ width: 28, height: 28, objectFit: "cover" }}
+                  />
+                  <div className="fw-semibold">{p.name}</div>
+                </div>
+              </td>
+              <td>{p.phone || "-"}</td>
+              <td className="text-end">{p.appointments}</td>
+              <td className="text-end fw-semibold">{formatCurrency(p.totalPaid)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

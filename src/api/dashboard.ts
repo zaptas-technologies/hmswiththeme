@@ -151,6 +151,25 @@ export type TopPatientItem = {
   totalPaid: number;
 };
 
+export type DoctorPerformanceItem = {
+  id: string;
+  name: string;
+  role: string;
+  img: string;
+  department?: string;
+  bookings: number;
+  revenue: number;
+};
+
+export type PatientPerformanceItem = {
+  id: string;
+  name: string;
+  phone?: string;
+  img?: string;
+  appointments: number;
+  totalPaid: number;
+};
+
 export type RecentTransaction = {
   id: string;
   type: string;
@@ -236,7 +255,9 @@ export type DashboardSectionName =
   | "recentTransactions"
   | "leaveRequests"
   | "appointmentTrend"
-  | "allAppointments";
+  | "allAppointments"
+  | "doctorsList"
+  | "patientsList";
 
 export const fetchAdminDashboard = async (
   filters?: AdminDashboardFilters

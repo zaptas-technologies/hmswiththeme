@@ -20,6 +20,8 @@ const SECTION_NAMES: DashboardSectionName[] = [
   "leaveRequests",
   "appointmentTrend",
   "allAppointments",
+  "doctorsList",
+  "patientsList",
 ];
 
 function parseFilters(query: Record<string, any>): DashboardFilters {

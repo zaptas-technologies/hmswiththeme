@@ -35,6 +35,8 @@ import {
   RecentTransactionsModalContent,
   LeaveRequestsModalContent,
   AppointmentTrendModalContent,
+  DoctorsListModalContent,
+  PatientsListModalContent,
 } from "./modals/DashboardModals";
 
 type SectionFilterState = {
@@ -165,7 +167,7 @@ const Dashboard = () => {
       setModalOpen(true);
       setModalData(null);
       try {
-        const limit = ["recentAppointments", "allAppointments", "popularDoctors", "topPatients", "recentTransactions", "leaveRequests"].includes(section)
+        const limit = ["recentAppointments", "allAppointments", "popularDoctors", "topPatients", "recentTransactions", "leaveRequests", "doctorsList", "patientsList"].includes(section)
           ? 50
           : undefined;
         const filters: AdminDashboardFilters = { limit, period: dashboardPeriod };
@@ -309,8 +311,8 @@ const Dashboard = () => {
                 style={{ cursor: "pointer" }}
                 role="button"
                 tabIndex={0}
-                onClick={() => openCardModal("stats")}
-                onKeyDown={(e) => e.key === "Enter" && openCardModal("stats")}
+                onClick={() => openCardModal("doctorsList")}
+                onKeyDown={(e) => e.key === "Enter" && openCardModal("doctorsList")}
               >
                 <ImageWithBasePath
                   src="./assets/img/bg/bg-01.svg"
@@ -356,8 +358,8 @@ const Dashboard = () => {
                 style={{ cursor: "pointer" }}
                 role="button"
                 tabIndex={0}
-                onClick={() => openCardModal("stats")}
-                onKeyDown={(e) => e.key === "Enter" && openCardModal("stats")}
+                onClick={() => openCardModal("patientsList")}
+                onKeyDown={(e) => e.key === "Enter" && openCardModal("patientsList")}
               >
                 <ImageWithBasePath
                   src="./assets/img/bg/bg-02.svg"
@@ -397,8 +399,8 @@ const Dashboard = () => {
                 style={{ cursor: "pointer" }}
                 role="button"
                 tabIndex={0}
-                onClick={() => openCardModal("stats")}
-                onKeyDown={(e) => e.key === "Enter" && openCardModal("stats")}
+                onClick={() => openCardModal("allAppointments")}
+                onKeyDown={(e) => e.key === "Enter" && openCardModal("allAppointments")}
               >
                 <ImageWithBasePath
                   src="./assets/img/bg/bg-03.svg"
@@ -438,8 +440,8 @@ const Dashboard = () => {
                 style={{ cursor: "pointer" }}
                 role="button"
                 tabIndex={0}
-                onClick={() => openCardModal("stats")}
-                onKeyDown={(e) => e.key === "Enter" && openCardModal("stats")}
+                onClick={() => openCardModal("recentTransactions")}
+                onKeyDown={(e) => e.key === "Enter" && openCardModal("recentTransactions")}
               >
                 <ImageWithBasePath
                   src="./assets/img/bg/bg-04.svg"
@@ -1350,6 +1352,8 @@ const Dashboard = () => {
                   popularDoctors: "Popular Doctors",
                   recentAppointments: "Appointments",
                   allAppointments: "All Appointments",
+                  doctorsList: "Doctors",
+                  patientsList: "Patients",
                   topDepartments: "Top Departments",
                   scheduleStats: "Doctors Schedule",
                   scheduledDoctors: "Doctors Schedule",
@@ -1367,6 +1371,10 @@ const Dashboard = () => {
           <p className="text-danger mb-0">{String(modalData.error)}</p>
         ) : modalSection === "stats" && modalData?.stats ? (
           <StatsModalContent data={modalData.stats as any} />
+        ) : modalSection === "doctorsList" && modalData?.doctorsList ? (
+          <DoctorsListModalContent data={modalData.doctorsList as any} />
+        ) : modalSection === "patientsList" && modalData?.patientsList ? (
+          <PatientsListModalContent data={modalData.patientsList as any} />
         ) : modalSection === "appointmentStatistics" && modalData?.appointmentStatistics ? (
           <AppointmentStatisticsModalContent data={modalData.appointmentStatistics as any} />
         ) : modalSection === "popularDoctors" && modalData?.popularDoctors ? (
