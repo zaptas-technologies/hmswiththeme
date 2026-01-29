@@ -2,6 +2,8 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import morgan from "morgan";
+import fs from "fs";
+import path from "path";
 import { connectDB } from "./config/db";
 import { buildDashboardRouter } from "./routes/dashboardRoutes";
 import { buildAuthRouter } from "./routes/authRoutes";
@@ -46,6 +48,11 @@ const start = async () => {
 
   app.use(express.json({ limit: "1mb" }));
   app.use(morgan("dev"));
+
+  // Static uploads (local disk). e.g. http://localhost:4000/uploads/doctors/<file>
+  const uploadsDir = path.join(process.cwd(), "uploads");
+  fs.mkdirSync(path.join(uploadsDir, "doctors"), { recursive: true });
+  app.use("/uploads", express.static(uploadsDir));
 
   app.use("/api/auth", buildAuthRouter());
   app.use("/api/dashboard", buildDashboardRouter());

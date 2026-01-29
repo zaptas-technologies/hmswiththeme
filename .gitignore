@@ -48,3 +48,6 @@ coverage
 *.tmp
 *.temp
 .cache
+
+# Uploaded files (local dev)
+backend/uploads

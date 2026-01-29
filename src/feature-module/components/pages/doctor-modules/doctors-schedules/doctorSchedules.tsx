@@ -42,6 +42,10 @@ const DoctorSchedules = () => {
   const [fromDate, setFromDate] = useState<Dayjs | null>(null);
   const [toDate, setToDate] = useState<Dayjs | null>(null);
   const [recursEvery, setRecursEvery] = useState(Recures_Every[0]?.value || "");
+  const [applySameScheduleForAll, setApplySameScheduleForAll] = useState(false);
+  const [copyFromDay, setCopyFromDay] = useState<
+    "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday"
+  >("monday");
 
   // Separate state for each day's schedules
   const [mondaySchedules, setMondaySchedules] = useState<ScheduleRow[]>([
@@ -64,6 +68,85 @@ const DoctorSchedules = () => {
   ]);
   const [sundaySchedules, setSundaySchedules] = useState<ScheduleRow[]>([
     { id: Date.now() + 6, session: Session[0]?.value || "", from: null, to: null },
+  ]);
+
+  const dayOptions = [
+    { value: "monday", label: "Monday" },
+    { value: "tuesday", label: "Tuesday" },
+    { value: "wednesday", label: "Wednesday" },
+    { value: "thursday", label: "Thursday" },
+    { value: "friday", label: "Friday" },
+    { value: "saturday", label: "Saturday" },
+    { value: "sunday", label: "Sunday" },
+  ] as const;
+
+  const getSchedulesByDay = (day: typeof copyFromDay) => {
+    switch (day) {
+      case "monday":
+        return mondaySchedules;
+      case "tuesday":
+        return tuesdaySchedules;
+      case "wednesday":
+        return wednesdaySchedules;
+      case "thursday":
+        return thursdaySchedules;
+      case "friday":
+        return fridaySchedules;
+      case "saturday":
+        return saturdaySchedules;
+      case "sunday":
+        return sundaySchedules;
+      default:
+        return mondaySchedules;
+    }
+  };
+
+  const setSchedulesByDay = (day: typeof copyFromDay, schedules: ScheduleRow[]) => {
+    switch (day) {
+      case "monday":
+        setMondaySchedules(schedules);
+        break;
+      case "tuesday":
+        setTuesdaySchedules(schedules);
+        break;
+      case "wednesday":
+        setWednesdaySchedules(schedules);
+        break;
+      case "thursday":
+        setThursdaySchedules(schedules);
+        break;
+      case "friday":
+        setFridaySchedules(schedules);
+        break;
+      case "saturday":
+        setSaturdaySchedules(schedules);
+        break;
+      case "sunday":
+        setSundaySchedules(schedules);
+        break;
+    }
+  };
+
+  // When enabled, mirror the selected day's schedule to all other days (and lock editing on those tabs)
+  useEffect(() => {
+    if (!applySameScheduleForAll) return;
+    const source = getSchedulesByDay(copyFromDay);
+    (["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const).forEach((d) => {
+      if (d !== copyFromDay) {
+        setSchedulesByDay(d, source);
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    applySameScheduleForAll,
+    copyFromDay,
+    mondaySchedules,
+    tuesdaySchedules,
+    wednesdaySchedules,
+    thursdaySchedules,
+    fridaySchedules,
+    saturdaySchedules,
+    sundaySchedules,
   ]);
 
   // Load locations on mount
@@ -347,13 +430,34 @@ const DoctorSchedules = () => {
       };
 
       const schedules: DaySchedule[] = [
-        convertToDaySchedule("Monday", mondaySchedules),
-        convertToDaySchedule("Tuesday", tuesdaySchedules),
-        convertToDaySchedule("Wednesday", wednesdaySchedules),
-        convertToDaySchedule("Thursday", thursdaySchedules),
-        convertToDaySchedule("Friday", fridaySchedules),
-        convertToDaySchedule("Saturday", saturdaySchedules),
-        convertToDaySchedule("Sunday", sundaySchedules),
+        convertToDaySchedule(
+          "Monday",
+          applySameScheduleForAll ? getSchedulesByDay(copyFromDay) : mondaySchedules
+        ),
+        convertToDaySchedule(
+          "Tuesday",
+          applySameScheduleForAll ? getSchedulesByDay(copyFromDay) : tuesdaySchedules
+        ),
+        convertToDaySchedule(
+          "Wednesday",
+          applySameScheduleForAll ? getSchedulesByDay(copyFromDay) : wednesdaySchedules
+        ),
+        convertToDaySchedule(
+          "Thursday",
+          applySameScheduleForAll ? getSchedulesByDay(copyFromDay) : thursdaySchedules
+        ),
+        convertToDaySchedule(
+          "Friday",
+          applySameScheduleForAll ? getSchedulesByDay(copyFromDay) : fridaySchedules
+        ),
+        convertToDaySchedule(
+          "Saturday",
+          applySameScheduleForAll ? getSchedulesByDay(copyFromDay) : saturdaySchedules
+        ),
+        convertToDaySchedule(
+          "Sunday",
+          applySameScheduleForAll ? getSchedulesByDay(copyFromDay) : sundaySchedules
+        ),
       ];
 
       await saveSchedule(token, {
@@ -374,8 +478,9 @@ const DoctorSchedules = () => {
   };
 
   // Helper to render schedule rows for a given day
-  const renderScheduleRows = (schedules: ScheduleRow[], day: string) =>
-    schedules.map((row, idx) => (
+  const renderScheduleRows = (schedules: ScheduleRow[], day: string) => {
+    const isLocked = applySameScheduleForAll && day !== copyFromDay;
+    return schedules.map((row, idx) => (
       <div className="row gx-3" key={row.id}>
         <div className="col-lg-5">
           <div className="mb-3">
@@ -385,6 +490,7 @@ const DoctorSchedules = () => {
               className="select"
               value={row.session}
               onChange={(value) => handleSessionChange(day, row.id, value)}
+              isDisabled={isLocked}
             />
           </div>
         </div>
@@ -402,6 +508,7 @@ const DoctorSchedules = () => {
                         onChange={(time) => handleTimeChange(day, row.id, "from", time)}
                         format="HH:mm"
                         defaultOpenValue={dayjs("00:00", "HH:mm")}
+                        disabled={isLocked}
                       />
                       <span className="input-icon-addon">
                         <i className="ti ti-clock-hour-10" />
@@ -419,6 +526,7 @@ const DoctorSchedules = () => {
                         onChange={(time) => handleTimeChange(day, row.id, "to", time)}
                         format="HH:mm"
                         defaultOpenValue={dayjs("00:00", "HH:mm")}
+                        disabled={isLocked}
                       />
                       <span className="input-icon-addon">
                         <i className="ti ti-clock-hour-10" />
@@ -430,7 +538,7 @@ const DoctorSchedules = () => {
             </div>
             <div className="col-lg-3">
               <div className="mb-3 d-flex gap-2">
-                {idx === 0 ? (
+                {isLocked ? null : idx === 0 ? (
                   <Link
                     to="#"
                     className="add-schedule-btn p-2 bg-light btn-icon text-dark rounded d-flex align-items-center justify-content-center"
@@ -461,6 +569,7 @@ const DoctorSchedules = () => {
         </div>
       </div>
     ));
+  };
 
   if (loading) {
     return (
@@ -600,6 +709,39 @@ const DoctorSchedules = () => {
                               onChange={(value) => setRecursEvery(value)}
                             />
                           </div>
+                        </div>
+                        <div className="col-lg-12">
+                          <div className="mb-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
+                            <label className="form-label mb-0">Apply same schedule for all days</label>
+                            <div className="form-check form-switch m-0">
+                              <input
+                                className="form-check-input"
+                                type="checkbox"
+                                checked={applySameScheduleForAll}
+                                onChange={(e) => setApplySameScheduleForAll(e.target.checked)}
+                              />
+                            </div>
+                          </div>
+                          {applySameScheduleForAll ? (
+                            <div className="row align-items-center g-2 mb-2">
+                              <div className="col-md-4">
+                                <label className="form-label mb-0">Copy from</label>
+                              </div>
+                              <div className="col-md-8">
+                                <CommonSelect
+                                  options={dayOptions as any}
+                                  className="select"
+                                  value={copyFromDay}
+                                  onChange={(value) => setCopyFromDay(value as any)}
+                                />
+                              </div>
+                              <div className="col-12">
+                                <p className="text-muted fs-13 mb-0">
+                                  All other days will be locked and will mirror the selected day.
+                                </p>
+                              </div>
+                            </div>
+                          ) : null}
                         </div>
                       </div>
                     </div>

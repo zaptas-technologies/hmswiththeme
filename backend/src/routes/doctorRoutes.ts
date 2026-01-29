@@ -5,8 +5,10 @@ import {
   createDoctor,
   updateDoctor,
   deleteDoctor,
+  uploadDoctorImage,
 } from "../controllers/doctorController";
 import { authMiddleware } from "../middlewares/authMiddleware";
+import { doctorImageUpload } from "../middlewares/uploadDoctorImage";
 
 export const buildDoctorRouter = () => {
   const router = Router();
@@ -35,6 +37,21 @@ export const buildDoctorRouter = () => {
 
   router.get("/", authMiddleware, getAllDoctors);
   router.get("/:id", authMiddleware, getDoctorById);
+
+  // Upload doctor profile image (multipart/form-data, field: "image")
+  // Must be before "/:id" PATCH/DELETE routes if any path overlap occurs later.
+  router.post(
+    "/upload-image",
+    authMiddleware,
+    (req, res, next) => {
+      doctorImageUpload.single("image")(req, res, (err: any) => {
+        if (err) return res.status(400).json({ message: err.message || "Upload failed" });
+        next();
+      });
+    },
+    uploadDoctorImage
+  );
+
   router.post("/", authMiddleware, createDoctor);
   router.patch("/:id", authMiddleware, updateDoctor);
   router.delete("/:id", authMiddleware, deleteDoctor);

@@ -7,6 +7,8 @@ const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const morgan_1 = __importDefault(require("morgan"));
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
 const db_1 = require("./config/db");
 const dashboardRoutes_1 = require("./routes/dashboardRoutes");
 const authRoutes_1 = require("./routes/authRoutes");
@@ -46,6 +48,10 @@ const start = async () => {
     app.options("*", (0, cors_1.default)(corsOptions));
     app.use(express_1.default.json({ limit: "1mb" }));
     app.use((0, morgan_1.default)("dev"));
+    // Static uploads (local disk). e.g. http://localhost:4000/uploads/doctors/<file>
+    const uploadsDir = path_1.default.join(process.cwd(), "uploads");
+    fs_1.default.mkdirSync(path_1.default.join(uploadsDir, "doctors"), { recursive: true });
+    app.use("/uploads", express_1.default.static(uploadsDir));
     app.use("/api/auth", (0, authRoutes_1.buildAuthRouter)());
     app.use("/api/dashboard", (0, dashboardRoutes_1.buildDashboardRouter)());
     app.use("/api/schedule", (0, scheduleRoutes_1.buildScheduleRouter)());

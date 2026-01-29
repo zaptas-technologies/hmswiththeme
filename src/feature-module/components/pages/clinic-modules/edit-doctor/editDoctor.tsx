@@ -22,7 +22,7 @@ import EducationForms from "../../../../../core/common/duplicate-forms/education
 import RewardsForms from "../../../../../core/common/duplicate-forms/rewardsForm";
 import PhoneInput from "react-phone-number-input";
 import "react-phone-number-input/style.css";
-import { fetchDoctorById, updateDoctor, type Doctor } from "../../../../../api/doctors";
+import { fetchDoctorById, updateDoctor, uploadDoctorImage, type Doctor } from "../../../../../api/doctors";
 
 const EditDoctor = () => {
   const [searchParams] = useSearchParams();
@@ -70,6 +70,7 @@ const EditDoctor = () => {
   const [phone, setPhone] = useState<string | undefined>();
   const [profileImage, setProfileImage] = useState<string>("");
   const [password, setPassword] = useState<string>("");
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   const getModalContainer = () => {
     const modalElement = document.getElementById("modal-datepicker");
@@ -310,17 +311,28 @@ const EditDoctor = () => {
                                 type="file"
                                 className="form-control image-sign"
                                 accept="image/*"
-                                onChange={(e) => {
+                                onChange={async (e) => {
                                   const file = e.target.files?.[0];
-                                  if (file) {
-                                    const reader = new FileReader();
-                                    reader.onloadend = () => {
-                                      setProfileImage(reader.result as string);
-                                    };
-                                    reader.readAsDataURL(file);
+                                  if (!file) return;
+                                  try {
+                                    setUploadingImage(true);
+                                    const res = await uploadDoctorImage(file);
+                                    setProfileImage(res.url);
+                                  } catch (err: any) {
+                                    const msg = err?.response?.data?.message || err?.message || "Unknown error";
+                                    setError(`Failed to upload image: ${msg}`);
+                                    // eslint-disable-next-line no-alert
+                                    alert(`Failed to upload image: ${msg}`);
+                                  } finally {
+                                    setUploadingImage(false);
                                   }
                                 }}
                               />
+                              {uploadingImage && (
+                                <div className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style={{ background: "rgba(0,0,0,0.35)" }}>
+                                  <span className="text-white fw-semibold small">Uploading...</span>
+                                </div>
+                              )}
                               <div className="position-absolute bottom-0 end-0 star-0 w-100 h-25 bg-dark d-flex align-items-center justify-content-center z-n1">
                                 <Link
                                   to="#"

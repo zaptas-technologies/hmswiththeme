@@ -4,6 +4,7 @@ import { Doctor } from "../models/doctorModel";
 import { User } from "../models/userModel";
 import { DoctorSchedule } from "../models/doctorScheduleModel";
 import { buildAccessFilter } from "../middlewares/authMiddleware";
+import { getDoctorUploadPath } from "../middlewares/uploadDoctorImage";
 
 export interface DoctorRequest {
   Name_Designation: string;
@@ -78,6 +79,30 @@ export interface DoctorRequest {
   
   [key: string]: any;
 }
+
+export const uploadDoctorImage: RequestHandler = async (req, res, next) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const file = (req as any).file as Express.Multer.File | undefined;
+    if (!file?.filename) {
+      return res.status(400).json({ message: "No image uploaded" });
+    }
+
+    const relativePath = getDoctorUploadPath(file.filename);
+    const url = `${req.protocol}://${req.get("host")}${relativePath}`;
+
+    return res.status(201).json({
+      url,
+      path: relativePath,
+      filename: file.filename,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
 
 // Helper to format doctor response
 const formatDoctorResponse = (doctor: any) => {

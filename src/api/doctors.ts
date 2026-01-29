@@ -131,3 +131,14 @@ export const updateDoctor = async (id: string, doctorData: Partial<Doctor>): Pro
 export const deleteDoctor = async (id: string): Promise<void> => {
   await api.delete(`/doctors/${id}`);
 };
+
+export const uploadDoctorImage = async (file: File): Promise<{ url: string; path: string; filename: string }> => {
+  const form = new FormData();
+  form.append("image", file);
+  const { data } = await api.post<{ url: string; path: string; filename: string }>(
+    "/doctors/upload-image",
+    form,
+    { headers: { "Content-Type": "multipart/form-data" } }
+  );
+  return data;
+};

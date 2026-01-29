@@ -3,12 +3,35 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteDoctor = exports.updateDoctor = exports.createDoctor = exports.getDoctorById = exports.getAllDoctors = void 0;
+exports.deleteDoctor = exports.updateDoctor = exports.createDoctor = exports.getDoctorById = exports.getAllDoctors = exports.uploadDoctorImage = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const doctorModel_1 = require("../models/doctorModel");
 const userModel_1 = require("../models/userModel");
 const doctorScheduleModel_1 = require("../models/doctorScheduleModel");
 const authMiddleware_1 = require("../middlewares/authMiddleware");
+const uploadDoctorImage_1 = require("../middlewares/uploadDoctorImage");
+const uploadDoctorImage = async (req, res, next) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+        const file = req.file;
+        if (!file?.filename) {
+            return res.status(400).json({ message: "No image uploaded" });
+        }
+        const relativePath = (0, uploadDoctorImage_1.getDoctorUploadPath)(file.filename);
+        const url = `${req.protocol}://${req.get("host")}${relativePath}`;
+        return res.status(201).json({
+            url,
+            path: relativePath,
+            filename: file.filename,
+        });
+    }
+    catch (err) {
+        next(err);
+    }
+};
+exports.uploadDoctorImage = uploadDoctorImage;
 // Helper to format doctor response
 const formatDoctorResponse = (doctor) => {
     const doc = doctor.toObject ? doctor.toObject() : doctor;

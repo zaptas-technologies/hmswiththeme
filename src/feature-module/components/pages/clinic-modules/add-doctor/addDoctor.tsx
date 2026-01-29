@@ -18,7 +18,7 @@ import { useState, useEffect } from "react";
 import { all_routes } from "../../../../routes/all_routes";
 import PhoneInput from "react-phone-number-input";
 import "react-phone-number-input/style.css";
-import { createDoctor } from "../../../../../api/doctors";
+import { createDoctor, uploadDoctorImage } from "../../../../../api/doctors";
 import type { Doctor, DaySchedule, TimeSlot, Education, Award } from "../../../../../api/doctors";
 import type { Option } from "../../../../../core/common/common-select/commonSelect";
 
@@ -66,7 +66,8 @@ const AddDoctor = () => {
   const [gender, setGender] = useState("");
   const [bio, setBio] = useState("About Doctor");
   const [featureOnWebsite, setFeatureOnWebsite] = useState(false);
-  const [, setProfileImage] = useState<File | null>(null);
+  const [profileImageUrl, setProfileImageUrl] = useState<string>("assets/img/doctors/doctor-01.jpg");
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   // Address
   const [address1, setAddress1] = useState("");
@@ -205,6 +206,7 @@ const AddDoctor = () => {
       const doctorData: Partial<Doctor> = {
         // Do NOT send any custom 'id' – backend uses MongoDB _id
         Name_Designation: `${name}${designation ? ` - ${designation}` : ""}`,
+        img: profileImageUrl,
         Email: email,
         Phone: phone,
         password, // Include password for user account creation
@@ -316,8 +318,50 @@ const AddDoctor = () => {
                                 type="file"
                                 className="form-control image-sign"
                                 accept="image/*"
-                                onChange={(e) => setProfileImage(e.target.files?.[0] || null)}
+                                onChange={async (e) => {
+                                  const file = e.target.files?.[0];
+                                  if (!file) return;
+                                  try {
+                                    setUploadingImage(true);
+                                    const res = await uploadDoctorImage(file);
+                                    setProfileImageUrl(res.url);
+                                  } catch (error: any) {
+                                    // eslint-disable-next-line no-console
+                                    console.error("Failed to upload doctor image:", error);
+                                    alert(
+                                      `Failed to upload image: ${
+                                        error?.response?.data?.message || error?.message || "Unknown error"
+                                      }`
+                                    );
+                                  } finally {
+                                    setUploadingImage(false);
+                                  }
+                                }}
                               />
+                              {profileImageUrl && (
+                                <img
+                                  src={profileImageUrl}
+                                  alt="Doctor"
+                                  style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+                                />
+                              )}
+                              {uploadingImage && (
+                                <div
+                                  style={{
+                                    position: "absolute",
+                                    inset: 0,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    background: "rgba(0,0,0,0.35)",
+                                    color: "#fff",
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  Uploading...
+                                </div>
+                              )}
                               <div className="position-absolute bottom-0 end-0 star-0 w-100 h-25 bg-dark d-flex align-items-center justify-content-center z-n1">
                                 <Link
                                   to="#"
