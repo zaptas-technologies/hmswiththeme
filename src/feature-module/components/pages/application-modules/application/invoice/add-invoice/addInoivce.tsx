@@ -527,7 +527,7 @@ const AddInoivce = () => {
                         <h6 className="fs-14 fw-semibold text-dark">$0</h6>
                       </div>
                       <div className="d-flex align-items-center justify-content-between mb-2">
-                        <h6 className="fs-18 fw-bold">Total (USD)</h6>
+                        <h6 className="fs-18 fw-bold">Total (INR)</h6>
                         <h6 className="fs-18 fw-bold">$0</h6>
                       </div>
                     </div>

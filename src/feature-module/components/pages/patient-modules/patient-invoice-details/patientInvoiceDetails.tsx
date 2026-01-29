@@ -123,9 +123,9 @@ const PatientInvoiceDetails = () => {
                                 Complete health screening covering all major
                                 systems
                               </td>
-                              <td> $400 </td>
+                              <td> ₹400 </td>
                               <td> 1 </td>
-                              <td> $400 </td>
+                              <td> ₹400 </td>
                             </tr>
                             <tr>
                               <td>2</td>
@@ -134,9 +134,9 @@ const PatientInvoiceDetails = () => {
                                 Routine blood analysis to assess overall health
                                 status
                               </td>
-                              <td> $250</td>
+                              <td> ₹250</td>
                               <td> 1 </td>
-                              <td> $250 </td>
+                              <td> ₹250 </td>
                             </tr>
                           </tbody>
                         </table>
@@ -173,37 +173,37 @@ const PatientInvoiceDetails = () => {
                         <div className="d-flex align-items-center justify-content-between mb-2">
                           <h6 className="fs-14 fw-medium text-body">Amount</h6>
                           <h6 className="fs-14 fw-semibold text-dark">
-                            $1,793.12
+                            ₹1,793.12
                           </h6>
                         </div>
                         <div className="d-flex align-items-center justify-content-between mb-2">
                           <h6 className="fs-14 fw-medium text-body">
                             CGST (9%)
                           </h6>
-                          <h6 className="fs-14 fw-semibold text-dark">$18</h6>
+                          <h6 className="fs-14 fw-semibold text-dark">₹18</h6>
                         </div>
                         <div className="d-flex align-items-center justify-content-between mb-2">
                           <h6 className="fs-14 fw-medium text-body">
                             SGST (9%)
                           </h6>
-                          <h6 className="fs-14 fw-semibold text-dark">$18</h6>
+                          <h6 className="fs-14 fw-semibold text-dark">₹18</h6>
                         </div>
                         <div className="d-flex align-items-center justify-content-between border-bottom pb-3 mb-3">
                           <h6 className="fs-14 fw-medium text-body">
                             Discount
                           </h6>
-                          <h6 className="fs-14 fw-semibold text-danger">$18</h6>
+                          <h6 className="fs-14 fw-semibold text-danger">₹18</h6>
                         </div>
                         <div className="d-flex align-items-center justify-content-between mb-2">
-                          <h6 className="fs-18 fw-bold">Total (USD)</h6>
-                          <h6 className="fs-18 fw-bold">$1,972.43</h6>
+                          <h6 className="fs-18 fw-bold">Total (INR)</h6>
+                          <h6 className="fs-18 fw-bold">₹1,972.43</h6>
                         </div>
                         <div>
                           <h6 className="fs-14 text-body mb-1">
                             Total in words
                           </h6>
                           <p className="fw-semibold text-dark">
-                            Dollar One thousand nine hundred seventy-two
+                            Rupees One thousand nine hundred seventy-two
                           </p>
                         </div>
                       </div>

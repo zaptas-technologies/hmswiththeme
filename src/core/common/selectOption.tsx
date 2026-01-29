@@ -251,23 +251,22 @@ export const Default_Language = [
   { value: "French", label: "French" },
 ];
 export const Currency = [
-  { value: "USD", label: "USD" },
-  { value: "Dollar", label: "Dollar" },
+  { value: "INR", label: "INR" },
+  { value: "Rupee", label: "Rupee" },
   { value: "Euro", label: "Euro" },
   { value: "Pound", label: "Pound" },
-  { value: "Rupee", label: "Rupee" },
 ];
 export const Currency_Symbol = [
-  { value: "$", label: "$" },
   { value: "₹", label: "₹" },
+  { value: "$", label: "$" },
   { value: "£", label: "£" },
   { value: "€", label: "€" },
 ];
 export const Currency_Position = [
-  { value: "$100", label: "$100" },
-  { value: "100$", label: "100$" },
-  { value: "$ 100", label: "$ 100" },
-  { value: "100 $", label: "100 $" },
+  { value: "₹100", label: "₹100" },
+  { value: "100₹", label: "100₹" },
+  { value: "₹ 100", label: "₹ 100" },
+  { value: "100 ₹", label: "100 ₹" },
 ];
 export const Decimal_Seperator = [
   { value: ".", label: "." },

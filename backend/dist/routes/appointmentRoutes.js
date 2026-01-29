@@ -7,6 +7,7 @@ const authMiddleware_1 = require("../middlewares/authMiddleware");
 const buildAppointmentRouter = () => {
     const router = (0, express_1.Router)();
     router.get("/", authMiddleware_1.authMiddleware, appointmentController_1.getAllAppointments);
+    router.get("/available-slots", authMiddleware_1.authMiddleware, appointmentController_1.getAvailableSlots); // Must be before /:id route
     router.get("/:id", authMiddleware_1.authMiddleware, appointmentController_1.getAppointmentById);
     router.post("/", authMiddleware_1.authMiddleware, appointmentController_1.createAppointment);
     router.patch("/:id", authMiddleware_1.authMiddleware, appointmentController_1.updateAppointment);

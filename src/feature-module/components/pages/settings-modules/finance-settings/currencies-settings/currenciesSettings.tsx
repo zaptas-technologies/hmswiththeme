@@ -55,14 +55,14 @@ const CurrenciesSettings = () => {
                           <tr>
                             <td>
                               <div className="d-flex align-items-center">
-                                <p className="mb-0 me-2">Dollar</p>
+                                <p className="mb-0 me-2">Rupee</p>
                                 <span className="badge badge-soft-primary border border-primary fw-medium">
                                   Default
                                 </span>
                               </div>
                             </td>
-                            <td>USD</td>
-                            <td>$</td>
+                            <td>INR</td>
+                            <td>₹</td>
                             <td>01</td>
                             <td>
                               <span className="badge bg-soft-success fs-13 fw-medium text-success border border-success py-1 px-2">

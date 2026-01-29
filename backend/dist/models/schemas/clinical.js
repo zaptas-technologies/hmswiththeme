@@ -4,6 +4,12 @@ exports.GRNSchema = exports.InventorySchema = exports.ConsultationSchema = expor
 const mongoose_1 = require("mongoose");
 exports.AppointmentSchema = new mongoose_1.Schema({
     Date_Time: { type: String, required: true },
+    // Normalized fields for reliable slot-booking logic (recommended)
+    // appointmentDate: "YYYY-MM-DD", slotTime: "HH:mm"
+    appointmentDate: { type: String, index: true },
+    slotTime: { type: String, index: true },
+    // Optional real Date for range queries/reporting
+    dateTime: { type: Date, index: true },
     Patient: { type: String, required: true },
     Phone: { type: String, required: true },
     Patient_Image: { type: String },

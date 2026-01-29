@@ -47,7 +47,7 @@ const SuperAdminDashboard = () => {
   }, []);
 
   const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(amount || 0);
+    new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(amount || 0);
 
   const openModal = useCallback((type: ModalType, payload?: SuperAdminBranchRow | null) => {
     setModalType(type);

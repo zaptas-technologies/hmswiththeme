@@ -20,6 +20,7 @@ const prescriptionRoutes_1 = require("./routes/prescriptionRoutes");
 const inventoryRoutes_1 = require("./routes/inventoryRoutes");
 const grnRoutes_1 = require("./routes/grnRoutes");
 const hospitalRoutes_1 = require("./routes/hospitalRoutes");
+const pharmacyRoutes_1 = require("./routes/pharmacyRoutes");
 dotenv_1.default.config();
 const start = async () => {
     const app = (0, express_1.default)();
@@ -57,6 +58,7 @@ const start = async () => {
     app.use("/api/inventory", (0, inventoryRoutes_1.buildInventoryRouter)());
     app.use("/api/grn", (0, grnRoutes_1.buildGRNRouter)());
     app.use("/api/hospitals", (0, hospitalRoutes_1.buildHospitalRouter)());
+    app.use("/api/pharmacies", (0, pharmacyRoutes_1.buildPharmacyRouter)());
     app.get("/", (_req, res) => res.json({ message: "HMS API is healthy" }));
     await (0, db_1.connectDB)(process.env.MONGODB_URI || "");
     const port = Number(process.env.PORT || 4000);

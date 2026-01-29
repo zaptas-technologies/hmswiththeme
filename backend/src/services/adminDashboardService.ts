@@ -154,9 +154,43 @@ export const buildAdminDashboardPayload = async (hospitalId?: string, filters?: 
     .limit(filters?.limit ?? 10)
     .lean();
 
+  // Top Departments: many appointments may not have Department stored,
+  // so derive it from linked doctor (doctorId -> doctors.Department).
   const topDepartments = await Appointment.aggregate([
-    { $match: { ...appointmentMatchBase, Department: { $exists: true, $ne: "" } } },
-    { $group: { _id: "$Department", count: { $sum: 1 } } },
+    { $match: appointmentMatchBase },
+    {
+      $lookup: {
+        from: "doctors",
+        let: { doctorId: "$doctorId", doctorName: "$Doctor" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  {
+                    $or: [
+                      { $and: [{ $ne: ["$$doctorId", null] }, { $eq: ["$_id", "$$doctorId"] }] },
+                      { $and: [{ $ne: ["$$doctorName", null] }, { $eq: ["$Name_Designation", "$$doctorName"] }] },
+                    ],
+                  },
+                  ...(hospitalId ? [{ $eq: ["$hospital", new mongoose.Types.ObjectId(hospitalId)] }] : []),
+                ],
+              },
+            },
+          },
+          { $project: { Department: 1 } },
+        ],
+        as: "doctorInfo",
+      },
+    },
+    { $unwind: { path: "$doctorInfo", preserveNullAndEmptyArrays: true } },
+    {
+      $addFields: {
+        _dept: { $ifNull: ["$Department", "$doctorInfo.Department"] },
+      },
+    },
+    { $match: { _dept: { $exists: true, $ne: "" } } },
+    { $group: { _id: "$_dept", count: { $sum: 1 } } },
     { $sort: { count: -1 } },
     { $limit: 3 },
   ]);
@@ -197,10 +231,42 @@ export const buildAdminDashboardPayload = async (hospitalId?: string, filters?: 
     .lean();
 
   const incomeByTreatment = await Appointment.aggregate([
-    { $match: { ...appointmentMatchBase, Department: { $exists: true, $ne: "" }, Status: { $in: ["Confirmed", "Checked Out", "Completed"] } } },
+    { $match: { ...appointmentMatchBase, Status: { $in: ["Confirmed", "Checked Out", "Completed"] } } },
+    {
+      $lookup: {
+        from: "doctors",
+        let: { doctorId: "$doctorId", doctorName: "$Doctor" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  {
+                    $or: [
+                      { $and: [{ $ne: ["$$doctorId", null] }, { $eq: ["$_id", "$$doctorId"] }] },
+                      { $and: [{ $ne: ["$$doctorName", null] }, { $eq: ["$Name_Designation", "$$doctorName"] }] },
+                    ],
+                  },
+                  ...(hospitalId ? [{ $eq: ["$hospital", new mongoose.Types.ObjectId(hospitalId)] }] : []),
+                ],
+              },
+            },
+          },
+          { $project: { Department: 1 } },
+        ],
+        as: "doctorInfo",
+      },
+    },
+    { $unwind: { path: "$doctorInfo", preserveNullAndEmptyArrays: true } },
+    {
+      $addFields: {
+        _dept: { $ifNull: ["$Department", "$doctorInfo.Department"] },
+      },
+    },
+    { $match: { _dept: { $exists: true, $ne: "" } } },
     {
       $group: {
-        _id: "$Department",
+        _id: "$_dept",
         appointments: { $sum: 1 },
         revenue: { $sum: { $ifNull: [{ $toDouble: "$Fees" }, 0] } },
       },

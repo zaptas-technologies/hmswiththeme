@@ -51,6 +51,7 @@ const DayScheduleSchema = new mongoose_1.Schema({
 const DoctorScheduleSchema = new mongoose_1.Schema({
     doctorId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Doctor", required: true, index: true },
     location: { type: String, required: true },
+    hospital: { type: mongoose_1.Schema.Types.ObjectId, ref: "Hospital", index: true },
     fromDate: { type: Date, required: true },
     toDate: { type: Date, required: true },
     recursEvery: { type: String, required: true },
@@ -62,5 +63,6 @@ const DoctorScheduleSchema = new mongoose_1.Schema({
 // Index for efficient queries
 DoctorScheduleSchema.index({ doctorId: 1, fromDate: -1 });
 DoctorScheduleSchema.index({ doctorId: 1, createdAt: -1 });
+DoctorScheduleSchema.index({ doctorId: 1, hospital: 1 }); // For hospital-based filtering
 exports.DoctorSchedule = mongoose_1.default.models.DoctorSchedule ||
     mongoose_1.default.model("DoctorSchedule", DoctorScheduleSchema);

@@ -41,6 +41,7 @@ const formatScheduleResponse = (schedule) => {
         id: schedule._id.toString(),
         doctorId: schedule.doctorId.toString(),
         location: schedule.location,
+        hospitalId: schedule.hospital?.toString(),
         fromDate: schedule.fromDate.toISOString().split("T")[0],
         toDate: schedule.toDate.toISOString().split("T")[0],
         recursEvery: schedule.recursEvery,
@@ -74,8 +75,19 @@ const getSchedule = async (req, res, next) => {
         if (!doctorId) {
             return res.status(403).json({ message: "Doctor profile not found for this user" });
         }
-        // Get the most recent active schedule for this doctor
-        const schedule = await doctorScheduleModel_1.DoctorSchedule.findOne({ doctorId })
+        // Optional hospital filter from query param
+        const hospitalIdParam = req.query.hospitalId;
+        let hospitalId;
+        if (hospitalIdParam && mongoose_1.default.Types.ObjectId.isValid(hospitalIdParam)) {
+            hospitalId = new mongoose_1.default.Types.ObjectId(hospitalIdParam);
+        }
+        // Build filter: doctorId + optional hospital
+        const filter = { doctorId };
+        if (hospitalId) {
+            filter.hospital = hospitalId;
+        }
+        // Get the most recent active schedule for this doctor (optionally filtered by hospital)
+        const schedule = await doctorScheduleModel_1.DoctorSchedule.findOne(filter)
             .sort({ createdAt: -1 })
             .exec();
         if (!schedule) {
@@ -103,15 +115,26 @@ const saveSchedule = async (req, res, next) => {
         if (!location || !fromDate || !toDate || !recursEvery) {
             return res.status(400).json({ message: "Missing required fields" });
         }
+        // Get doctor's hospital ID for saving with schedule
+        const doctor = await doctorModel_1.Doctor.findById(doctorId).select("hospital").lean();
+        const hospitalId = doctor?.hospital ? new mongoose_1.default.Types.ObjectId(doctor.hospital.toString()) : undefined;
         // Debug logging (remove in production)
-        console.log("Saving schedule for doctorId:", doctorId);
+        console.log("Saving schedule for doctorId:", doctorId, "hospitalId:", hospitalId);
         console.log("Schedules data:", JSON.stringify(schedules, null, 2));
         // Parse dates
         const fromDateObj = new Date(fromDate);
         const toDateObj = new Date(toDate);
-        // Find existing schedule for this doctor
-        // We'll update the most recent one or create a new one
-        const existingSchedule = await doctorScheduleModel_1.DoctorSchedule.findOne({ doctorId })
+        // Find existing schedule for this doctor and location/hospital
+        // If hospitalId is provided, filter by it; otherwise match by location string
+        const filter = { doctorId };
+        if (hospitalId) {
+            filter.hospital = hospitalId;
+        }
+        else {
+            // Fallback: match by location string if hospital ID not available
+            filter.location = location.trim();
+        }
+        const existingSchedule = await doctorScheduleModel_1.DoctorSchedule.findOne(filter)
             .sort({ createdAt: -1 })
             .exec();
         // Normalize schedules - ensure all days are present and timeSlots are properly structured
@@ -127,6 +150,7 @@ const saveSchedule = async (req, res, next) => {
             // Update existing schedule - use set() to ensure Mongoose detects changes
             existingSchedule.set({
                 location: location.trim(),
+                hospital: hospitalId, // Update hospital ID if doctor's hospital changed
                 fromDate: fromDateObj,
                 toDate: toDateObj,
                 recursEvery: recursEvery.trim(),
@@ -144,7 +168,7 @@ const saveSchedule = async (req, res, next) => {
             return res.json(formatScheduleResponse(savedSchedule));
         }
         else {
-            // Create new schedule
+            // Create new schedule with hospital ID
             const scheduleData = {
                 doctorId,
                 location: location.trim(),
@@ -153,6 +177,10 @@ const saveSchedule = async (req, res, next) => {
                 recursEvery: recursEvery.trim(),
                 schedules: normalizedSchedules,
             };
+            // Add hospital ID if available
+            if (hospitalId) {
+                scheduleData.hospital = hospitalId;
+            }
             const newSchedule = await doctorScheduleModel_1.DoctorSchedule.create(scheduleData);
             const totalTimeSlots = newSchedule.schedules.reduce((sum, day) => sum + day.timeSlots.length, 0);
             console.log("Created schedule - Total timeSlots:", totalTimeSlots);

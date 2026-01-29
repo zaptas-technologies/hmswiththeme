@@ -111,7 +111,7 @@ const Modals = () => {
               <input
                 type="text"
                 className="form-control"
-                defaultValue="Dollar"
+                defaultValue="Rupee"
               />
             </div>
             <div className="mb-3">
@@ -130,7 +130,7 @@ const Modals = () => {
                   <input
                     type="text"
                     className="form-control"
-                    defaultValue="USD"
+                    defaultValue="INR"
                   />
                 </div>
               </div>
@@ -143,7 +143,7 @@ const Modals = () => {
                   <input
                     type="text"
                     className="form-control"
-                    defaultValue="$"
+                    defaultValue="₹"
                   />
                 </div>
               </div>

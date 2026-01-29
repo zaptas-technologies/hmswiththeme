@@ -8,6 +8,9 @@ import { buildAccessFilter } from "../middlewares/authMiddleware";
 
 export interface AppointmentRequest {
   Date_Time: string;
+  appointmentDate?: string; // YYYY-MM-DD
+  slotTime?: string; // HH:mm
+  dateTime?: string | Date; // ISO string or Date (optional)
   Patient: string;
   Phone: string;
   Patient_Image?: string;
@@ -309,11 +312,78 @@ export const createAppointment: RequestHandler = async (req, res, next) => {
       }
     }
     
+    // Normalize date/time fields for reliable booking logic and uniqueness checks.
+    // Prefer explicit fields if sent from frontend.
+    const normalizeFromDateString = (d: Date) => {
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
+      return `${yyyy}-${mm}-${dd}`;
+    };
+    const normalizeSlotTime = (d: Date) => {
+      const hh = String(d.getHours()).padStart(2, "0");
+      const mi = String(d.getMinutes()).padStart(2, "0");
+      return `${hh}:${mi}`;
+    };
+
+    let appointmentDate =
+      typeof (req.body as any).appointmentDate === "string"
+        ? String((req.body as any).appointmentDate).trim()
+        : undefined;
+    let slotTime =
+      typeof (req.body as any).slotTime === "string"
+        ? String((req.body as any).slotTime).trim()
+        : undefined;
+
+    // Optional ISO datetime (recommended). Falls back to parsing Date_Time.
+    let parsedDateTime: Date | undefined;
+    const rawDateTime =
+      typeof (req.body as any).dateTime === "string"
+        ? (req.body as any).dateTime
+        : typeof (req.body as any).dateTimeIso === "string"
+          ? (req.body as any).dateTimeIso
+          : undefined;
+    if (rawDateTime) {
+      const dt = new Date(rawDateTime);
+      if (!isNaN(dt.getTime())) parsedDateTime = dt;
+    }
+
+    if (!parsedDateTime) {
+      const dt = new Date(apptData.Date_Time);
+      if (!isNaN(dt.getTime())) parsedDateTime = dt;
+    }
+
+    if ((!appointmentDate || !slotTime) && parsedDateTime) {
+      appointmentDate = appointmentDate || normalizeFromDateString(parsedDateTime);
+      slotTime = slotTime || normalizeSlotTime(parsedDateTime);
+    }
+
+    // Hard stop: prevent double-booking (before insert).
+    if (doctorObjectId && appointmentDate && slotTime) {
+      const conflictFilter: any = {
+        doctorId: doctorObjectId,
+        appointmentDate,
+        slotTime,
+        Status: { $ne: "Cancelled" },
+      };
+      if (hospitalId) conflictFilter.hospital = hospitalId;
+
+      const conflict = await Appointment.findOne(conflictFilter).select("_id").lean();
+      if (conflict) {
+        return res.status(409).json({
+          message: "This time slot is already booked for the selected doctor.",
+        });
+      }
+    }
+
     const appointmentData: any = {
       ...finalApptData,
       user: userId, // Always include user as ObjectId
       ...(hospitalId && { hospital: hospitalId }), // Include hospital if available
       ...(doctorObjectId && { doctorId: doctorObjectId }),
+      ...(appointmentDate && { appointmentDate }),
+      ...(slotTime && { slotTime }),
+      ...(parsedDateTime && { dateTime: parsedDateTime }),
     };
 
     const created = await Appointment.create(appointmentData);
@@ -536,8 +606,9 @@ export const getAvailableSlots: RequestHandler = async (req, res, next) => {
     const slotDurationMinutes = (doctor as { timeSlotMinutes?: number }).timeSlotMinutes || 15;
 
     // Get existing appointments for this doctor on this date.
-    // Date_Time is stored as "DD MMM YYYY, hh:mm A" (e.g. "29 Jan 2026, 06:00 AM").
-    const dateForPrefix = new Date(selectedDate + "T12:00:00.000Z");
+    // Preferred: appointmentDate + slotTime (normalized fields).
+    // Fallback (legacy): Date_Time string starts with "DD MMM YYYY,".
+    const dateForPrefix = new Date(date + "T12:00:00.000Z");
     const day = String(dateForPrefix.getUTCDate()).padStart(2, "0");
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const month = monthNames[dateForPrefix.getUTCMonth()];
@@ -548,24 +619,27 @@ export const getAvailableSlots: RequestHandler = async (req, res, next) => {
 
     const existingAppointments = (await Appointment.find({
       doctorId: new mongoose.Types.ObjectId(doctorId),
-      Date_Time: { $regex: dateRegex },
       Status: { $nin: ["Cancelled"] }, // Exclude cancelled appointments
+      $or: [{ appointmentDate: date }, { Date_Time: { $regex: dateRegex } }],
     })
-      .select("Date_Time")
-      .lean()) as unknown as Array<{ Date_Time: string }>;
+      .select("Date_Time slotTime appointmentDate")
+      .lean()) as unknown as Array<{ Date_Time?: string; slotTime?: string }>;
 
-    // Parse booked times from "DD MMM YYYY, hh:mm A" (use local hours/minutes to match schedule)
-    const bookedTimes = existingAppointments.map((apt) => {
-      try {
-        const aptDate = new Date(apt.Date_Time);
-        return {
-          hour: aptDate.getHours(),
-          minute: aptDate.getMinutes(),
-        };
-      } catch {
+    const bookedTimes = existingAppointments
+      .map((apt) => {
+        if (apt.slotTime && /^\d{2}:\d{2}$/.test(apt.slotTime)) {
+          const [h, m] = apt.slotTime.split(":").map(Number);
+          if (!Number.isNaN(h) && !Number.isNaN(m)) return { hour: h, minute: m };
+        }
+        if (apt.Date_Time) {
+          const aptDate = new Date(apt.Date_Time);
+          if (!isNaN(aptDate.getTime())) {
+            return { hour: aptDate.getHours(), minute: aptDate.getMinutes() };
+          }
+        }
         return null;
-      }
-    }).filter(Boolean) as Array<{ hour: number; minute: number }>;
+      })
+      .filter(Boolean) as Array<{ hour: number; minute: number }>;
 
     // Generate all slots for each time slot range (marking booked vs available)
     const allSlots: Array<{ time: string; display: string; isBooked: boolean }> = [];

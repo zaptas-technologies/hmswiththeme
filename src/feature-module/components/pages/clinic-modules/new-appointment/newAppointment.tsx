@@ -125,6 +125,10 @@ const NewAppointment = () => {
 
       const appointmentData: Partial<Appointment> = {
         Date_Time: dateTime.format("DD MMM YYYY, hh:mm A"),
+        // Normalized fields for backend conflict prevention + reliable booked-slot display
+        appointmentDate: formData.Date.format("YYYY-MM-DD"),
+        slotTime: selectedSlotTime,
+        dateTimeIso: dateTime.toISOString(),
         Patient: formData.Patient,
         Phone: selectedPatient.Phone || "",
         Doctor: formData.Doctor,

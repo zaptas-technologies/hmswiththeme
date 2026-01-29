@@ -49,7 +49,7 @@ export function DashboardModal({ show, onClose, title, children }: ModalProps) {
 }
 
 const formatCurrency = (amount: number) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0 }).format(amount);
+  new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 0 }).format(amount);
 const formatDate = (dateString: string) => {
   if (!dateString) return "";
   try {
