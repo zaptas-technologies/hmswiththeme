@@ -106,7 +106,9 @@ export const updatePrescription = async (
   id: string,
   prescriptionData: Partial<Prescription>
 ): Promise<Prescription> => {
-  const { data } = await api.patch<Prescription>(`/prescriptions/${id}`, prescriptionData);
+  const { data } = await api.get<Prescription>(`/prescriptions/${id}/update`, {
+    params: { data: JSON.stringify(prescriptionData) },
+  });
   return data;
 };
 

@@ -1,21 +1,22 @@
 import { Link } from "react-router";
 import ImageWithBasePath from "../../../../../core/imageWithBasePath";
 import { all_routes } from "../../../../routes/all_routes";
-import type {
-  AdminStats,
-  AppointmentStatistics,
-  PopularDoctor,
-  RecentAppointmentItem,
-  TopDepartment,
-  ScheduleStats,
-  ScheduledDoctor,
-  IncomeByTreatment,
-  TopPatientItem,
-  RecentTransaction,
-  LeaveRequest,
-  AppointmentTrend,
-  DoctorPerformanceItem,
-  PatientPerformanceItem,
+import {
+  getDoctorImageSrc,
+  type AdminStats,
+  type AppointmentStatistics,
+  type PopularDoctor,
+  type RecentAppointmentItem,
+  type TopDepartment,
+  type ScheduleStats,
+  type ScheduledDoctor,
+  type IncomeByTreatment,
+  type TopPatientItem,
+  type RecentTransaction,
+  type LeaveRequest,
+  type AppointmentTrend,
+  type DoctorPerformanceItem,
+  type PatientPerformanceItem,
 } from "../../../../../api/dashboard";
 
 type ModalProps = {
@@ -120,7 +121,7 @@ export function PopularDoctorsModalContent({ data }: { data: PopularDoctor[] }) 
           <Link to={all_routes.doctordetails} className="text-decoration-none">
             <div className="border rounded-2 p-3 h-100">
               <div className="d-flex align-items-center mb-2">
-                <ImageWithBasePath src={doc.img || "assets/img/doctors/doctor-01.jpg"} alt="" className="rounded-circle me-2" style={{ width: 48, height: 48, objectFit: "cover" }} />
+                <ImageWithBasePath src={getDoctorImageSrc(doc.img)} alt="" className="rounded-circle me-2" style={{ width: 48, height: 48, objectFit: "cover" }} />
                 <div>
                   <p className="fw-semibold mb-0 text-dark">{doc.name}</p>
                   <p className="text-muted small mb-0">{doc.role}</p>
@@ -181,7 +182,7 @@ export function ScheduleModalContent({ scheduleStats, scheduledDoctors }: { sche
         {scheduledDoctors.map((doc) => (
           <div key={doc.id} className="list-group-item d-flex justify-content-between align-items-center">
             <div className="d-flex align-items-center">
-              <ImageWithBasePath src={doc.img || "assets/img/doctors/doctor-01.jpg"} alt="" className="rounded-circle me-2" style={{ width: 40, height: 40, objectFit: "cover" }} />
+              <ImageWithBasePath src={getDoctorImageSrc(doc.img)} alt="" className="rounded-circle me-2" style={{ width: 40, height: 40, objectFit: "cover" }} />
               <div>
                 <Link to={`${all_routes.doctordetails}?id=${doc.id}`} className="fw-semibold">{doc.name}</Link>
                 <p className="text-muted small mb-0">{doc.role || doc.department}</p>
@@ -254,7 +255,7 @@ export function LeaveRequestsModalContent({ data }: { data: LeaveRequest[] }) {
       {data.map((leave) => (
         <div key={leave.id} className="list-group-item d-flex justify-content-between align-items-center">
           <div className="d-flex align-items-center">
-            <ImageWithBasePath src={leave.doctorImg || "assets/img/profiles/avatar-16.jpg"} alt="" className="rounded-circle me-2" style={{ width: 40, height: 40, objectFit: "cover" }} />
+            <ImageWithBasePath src={getDoctorImageSrc(leave.doctorImg, "assets/img/profiles/avatar-16.jpg")} alt="" className="rounded-circle me-2" style={{ width: 40, height: 40, objectFit: "cover" }} />
             <div>
               <Link to={all_routes.doctordetails} className="fw-semibold">{leave.doctorName}</Link>
               <p className="text-muted small mb-0">{leave.days} {leave.days === 1 ? "Day" : "Days"} - {leave.reason}</p>

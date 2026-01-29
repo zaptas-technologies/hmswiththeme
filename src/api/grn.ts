@@ -88,7 +88,9 @@ export const updateGRN = async (
   id: string,
   grnData: Partial<GRN>
 ): Promise<GRN> => {
-  const { data } = await api.patch<GRN>(`/grn/${id}`, grnData);
+  const { data } = await api.get<GRN>(`/grn/${id}/update`, {
+    params: { data: JSON.stringify(grnData) },
+  });
   return data;
 };
 

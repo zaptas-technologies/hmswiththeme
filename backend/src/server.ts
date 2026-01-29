@@ -23,29 +23,8 @@ dotenv.config();
 
 const start = async () => {
   const app = express();
-  
-  const corsOptions = {
-    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-      callback(null, true);
-    },
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: [
-      "Content-Type",
-      "Authorization",
-      "X-Requested-With",
-      "Accept",
-      "Origin",
-    ],
-    exposedHeaders: ["Content-Type", "Authorization"],
-    preflightContinue: false,
-    optionsSuccessStatus: 204,
-    maxAge: 86400,
-  };
-  
-  app.use(cors(corsOptions));
-  app.options("*", cors(corsOptions));
 
+  app.use(cors({ origin: true, credentials: true }));
   app.use(express.json({ limit: "1mb" }));
   app.use(morgan("dev"));
 

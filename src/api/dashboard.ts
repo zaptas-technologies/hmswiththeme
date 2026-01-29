@@ -6,6 +6,23 @@ export const api = axios.create({
   withCredentials: true,
 });
 
+/** API origin (e.g. http://localhost:4000 or https://api.yourdomain.com). Use for building upload URLs from paths stored in DB. */
+export const getApiOrigin = (): string => {
+  try {
+    return new URL(API_BASE).origin;
+  } catch {
+    return "http://localhost:4000";
+  }
+};
+
+/** Build display URL for doctor/upload image. DB stores path (e.g. /uploads/doctors/xxx.png); full URLs supported for legacy. */
+export const getDoctorImageSrc = (img: string | undefined, defaultSrc = "assets/img/doctors/doctor-01.jpg"): string => {
+  if (!img) return defaultSrc;
+  if (img.startsWith("/uploads/")) return getApiOrigin() + img;
+  if (/^https?:\/\//i.test(img)) return img;
+  return img.startsWith("assets/") ? img : `assets/img/doctors/${img}`;
+};
+
 // Set auth token for requests
 export const setAuthToken = (token: string | null) => {
   if (token) {

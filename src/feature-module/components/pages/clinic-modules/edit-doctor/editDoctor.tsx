@@ -23,6 +23,7 @@ import RewardsForms from "../../../../../core/common/duplicate-forms/rewardsForm
 import PhoneInput from "react-phone-number-input";
 import "react-phone-number-input/style.css";
 import { fetchDoctorById, updateDoctor, uploadDoctorImage, type Doctor } from "../../../../../api/doctors";
+import { getApiOrigin } from "../../../../../api/dashboard";
 
 const EditDoctor = () => {
   const [searchParams] = useSearchParams();
@@ -303,7 +304,7 @@ const EditDoctor = () => {
                             <label className="form-label">Profile Image</label>
                             <div className="drag-upload-btn avatar avatar-xxl rounded-circle bg-light text-muted position-relative overflow-hidden z-1 mb-2 ms-4 p-0">
                               <ImageWithBasePath
-                                src={profileImage}
+                                src={profileImage.startsWith("/") ? getApiOrigin() + profileImage : profileImage}
                                 className="position-relative z-n1"
                                 alt=""
                               />
@@ -317,7 +318,7 @@ const EditDoctor = () => {
                                   try {
                                     setUploadingImage(true);
                                     const res = await uploadDoctorImage(file);
-                                    setProfileImage(res.url);
+                                    setProfileImage(res.path);
                                   } catch (err: any) {
                                     const msg = err?.response?.data?.message || err?.message || "Unknown error";
                                     setError(`Failed to upload image: ${msg}`);

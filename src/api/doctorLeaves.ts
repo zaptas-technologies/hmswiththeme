@@ -84,7 +84,9 @@ export const updateDoctorLeave = async (
   id: string,
   leaveData: Partial<DoctorLeave>
 ): Promise<DoctorLeave> => {
-  const { data } = await api.patch<DoctorLeave>(`/doctor-leaves/${id}`, leaveData);
+  const { data } = await api.get<DoctorLeave>(`/doctor-leaves/${id}/update`, {
+    params: { data: JSON.stringify(leaveData) },
+  });
   return data;
 };
 

@@ -12,6 +12,7 @@ import Modals from "./modals/modals";
 import { all_routes } from "../../../../routes/all_routes";
 import { useState, useEffect } from "react";
 import { fetchDoctors, deleteDoctor, type Doctor as DoctorType } from "../../../../../api/doctors";
+import { getDoctorImageSrc } from "../../../../../api/dashboard";
 
 const Doctors = () => {
   const navigate = useNavigate();
@@ -130,12 +131,8 @@ const Doctors = () => {
 
 
   const getDoctorImage = (doctor: DoctorType) => {
-    if (doctor.img) {
-      return `assets/img/doctors/${doctor.img}`;
-    }
-    // Default image based on index or random
-    const index = doctors.indexOf(doctor) % 15;
-    return `assets/img/doctors/doctor-${String(index + 1).padStart(2, "0")}.jpg`;
+    const defaultSrc = `assets/img/doctors/doctor-${String(doctors.indexOf(doctor) % 15 + 1).padStart(2, "0")}.jpg`;
+    return getDoctorImageSrc(doctor.img, defaultSrc);
   };
 
   return (

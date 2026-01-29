@@ -92,10 +92,8 @@ export const uploadDoctorImage: RequestHandler = async (req, res, next) => {
     }
 
     const relativePath = getDoctorUploadPath(file.filename);
-    const url = `${req.protocol}://${req.get("host")}${relativePath}`;
-
+    // Return path only for DB storage (deployment-safe). Client builds full URL from API origin.
     return res.status(201).json({
-      url,
       path: relativePath,
       filename: file.filename,
     });
@@ -214,7 +212,7 @@ export const getDoctorById: RequestHandler = async (req, res, next) => {
     }
 
     const doctor = await Doctor.findOne(filter)
-      .select("_id Name_Designation img role Department Phone Email Fees Status timeSlotMinutes createdAt updatedAt")
+      .select("_id username Name_Designation img role Department Phone Email Fees Status timeSlotMinutes createdAt updatedAt")
       .lean()
       .exec();
 

@@ -38,3 +38,15 @@ export const saveSchedule = async (
   const { data } = await api.post<ScheduleResponse>("/schedule", scheduleData);
   return data;
 };
+
+/** Partial update (uses GET /schedule/update?data=... to avoid CORS preflight). */
+export const updateSchedule = async (
+  token: string,
+  updateData: Partial<ScheduleResponse>
+): Promise<ScheduleResponse> => {
+  setAuthToken(token);
+  const { data } = await api.get<ScheduleResponse>("/schedule/update", {
+    params: { data: JSON.stringify(updateData) },
+  });
+  return data;
+};

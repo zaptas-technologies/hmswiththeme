@@ -82,7 +82,9 @@ export const updateAppointment = async (
   id: string,
   appointmentData: Partial<Appointment>
 ): Promise<Appointment> => {
-  const { data } = await api.patch<Appointment>(`/appointments/${id}`, appointmentData);
+  const { data } = await api.get<Appointment>(`/appointments/${id}/update`, {
+    params: { data: JSON.stringify(appointmentData) },
+  });
   return data;
 };
 

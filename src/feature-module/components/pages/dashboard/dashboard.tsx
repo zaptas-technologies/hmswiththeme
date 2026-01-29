@@ -13,6 +13,7 @@ import type { Dayjs } from "dayjs";
 import {
   fetchAdminDashboard,
   fetchAdminDashboardSection,
+  getDoctorImageSrc,
   type AdminDashboardResponse,
   type AdminDashboardFilters,
   type DashboardPeriod,
@@ -637,7 +638,7 @@ const Dashboard = () => {
                                 <i className="ti ti-circle-filled d-flex bg-white fs-6 rounded-circle border border-1 border-white" />
                               </span>
                               <ImageWithBasePath
-                                src={doctor.img || "assets/img/doctors/doctor-01.jpg"}
+                                src={getDoctorImageSrc(doctor.img)}
                                 alt="img"
                                 className="rounded-circle"
                               />
@@ -877,7 +878,7 @@ const Dashboard = () => {
                               className="avatar flex-shrink-0"
                             >
                               <ImageWithBasePath
-                                src={doctor.img || "assets/img/doctors/doctor-01.jpg"}
+                                src={getDoctorImageSrc(doctor.img)}
                                 className="rounded-circle"
                                 alt="img"
                               />

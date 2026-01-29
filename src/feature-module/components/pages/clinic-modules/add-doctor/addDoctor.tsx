@@ -19,6 +19,7 @@ import { all_routes } from "../../../../routes/all_routes";
 import PhoneInput from "react-phone-number-input";
 import "react-phone-number-input/style.css";
 import { createDoctor, uploadDoctorImage } from "../../../../../api/doctors";
+import { getApiOrigin } from "../../../../../api/dashboard";
 import type { Doctor, DaySchedule, TimeSlot, Education, Award } from "../../../../../api/doctors";
 import type { Option } from "../../../../../core/common/common-select/commonSelect";
 
@@ -324,7 +325,7 @@ const AddDoctor = () => {
                                   try {
                                     setUploadingImage(true);
                                     const res = await uploadDoctorImage(file);
-                                    setProfileImageUrl(res.url);
+                                    setProfileImageUrl(res.path);
                                   } catch (error: any) {
                                     // eslint-disable-next-line no-console
                                     console.error("Failed to upload doctor image:", error);
@@ -340,7 +341,7 @@ const AddDoctor = () => {
                               />
                               {profileImageUrl && (
                                 <img
-                                  src={profileImageUrl}
+                                  src={profileImageUrl.startsWith("/") ? getApiOrigin() + profileImageUrl : profileImageUrl}
                                   alt="Doctor"
                                   style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
                                 />

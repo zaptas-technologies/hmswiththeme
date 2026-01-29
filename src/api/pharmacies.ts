@@ -58,7 +58,9 @@ export const createPharmacy = async (pharmacyData: PharmacyRequest): Promise<Pha
 };
 
 export const updatePharmacy = async (id: string, pharmacyData: Partial<PharmacyRequest>): Promise<Pharmacy> => {
-  const { data } = await api.patch<Pharmacy>(`/pharmacies/${id}`, pharmacyData);
+  const { data } = await api.get<Pharmacy>(`/pharmacies/${id}/update`, {
+    params: { data: JSON.stringify(pharmacyData) },
+  });
   return data;
 };
 

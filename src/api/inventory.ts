@@ -78,7 +78,9 @@ export const updateInventory = async (
   id: string,
   inventoryData: Partial<Inventory>
 ): Promise<Inventory> => {
-  const { data } = await api.patch<Inventory>(`/inventory/${id}`, inventoryData);
+  const { data } = await api.get<Inventory>(`/inventory/${id}/update`, {
+    params: { data: JSON.stringify(inventoryData) },
+  });
   return data;
 };
 

@@ -124,7 +124,9 @@ export const createDoctor = async (doctorData: Partial<Doctor>): Promise<Doctor>
 };
 
 export const updateDoctor = async (id: string, doctorData: Partial<Doctor>): Promise<Doctor> => {
-  const { data } = await api.patch<Doctor>(`/doctors/${id}`, doctorData);
+  const { data } = await api.get<Doctor>(`/doctors/${id}/update`, {
+    params: { data: JSON.stringify(doctorData) },
+  });
   return data;
 };
 
@@ -132,10 +134,11 @@ export const deleteDoctor = async (id: string): Promise<void> => {
   await api.delete(`/doctors/${id}`);
 };
 
-export const uploadDoctorImage = async (file: File): Promise<{ url: string; path: string; filename: string }> => {
+/** Upload returns path only (e.g. /uploads/doctors/xxx.png). Store path in DB; build full URL for display using getApiOrigin() + path. */
+export const uploadDoctorImage = async (file: File): Promise<{ path: string; filename: string }> => {
   const form = new FormData();
   form.append("image", file);
-  const { data } = await api.post<{ url: string; path: string; filename: string }>(
+  const { data } = await api.post<{ path: string; filename: string }>(
     "/doctors/upload-image",
     form,
     { headers: { "Content-Type": "multipart/form-data" } }

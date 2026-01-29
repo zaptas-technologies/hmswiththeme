@@ -62,7 +62,9 @@ export const createHospital = async (hospitalData: HospitalRequest): Promise<Hos
 };
 
 export const updateHospital = async (id: string, hospitalData: Partial<HospitalRequest>): Promise<Hospital> => {
-  const { data } = await api.patch<HospitalResponse>(`/hospitals/${id}`, hospitalData);
+  const { data } = await api.get<HospitalResponse>(`/hospitals/${id}/update`, {
+    params: { data: JSON.stringify(hospitalData) },
+  });
   return data.data as Hospital;
 };
 
