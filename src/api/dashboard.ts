@@ -200,7 +200,17 @@ export type AdminDashboardResponse = {
   appointmentTrend: AppointmentTrend;
 };
 
-export type DashboardPeriod = "weekly" | "monthly" | "yearly";
+export type DashboardPeriod =
+  | "today"
+  | "yesterday"
+  | "last7days"
+  | "last30days"
+  | "last6months"
+  | "all"
+  // backward compatible
+  | "weekly"
+  | "monthly"
+  | "yearly";
 export type LeavePeriod = "today" | "week" | "month";
 export type AppointmentTypeFilter = "all" | "in-person" | "online";
 

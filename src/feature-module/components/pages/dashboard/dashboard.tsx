@@ -48,11 +48,11 @@ type SectionFilterState = {
 };
 
 const DEFAULT_SECTION_FILTERS: SectionFilterState = {
-  appointmentStatistics: "monthly",
-  popularDoctors: "weekly",
-  topDepartments: "weekly",
-  incomeByTreatment: "weekly",
-  recentTransactions: "weekly",
+  appointmentStatistics: "last30days",
+  popularDoctors: "last30days",
+  topDepartments: "last30days",
+  incomeByTreatment: "last30days",
+  recentTransactions: "last30days",
   leaveRequests: "week",
   appointmentsType: "all",
 };
@@ -62,6 +62,7 @@ const Dashboard = () => {
   const [dashboardData, setDashboardData] = useState<AdminDashboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [dashboardPeriod, setDashboardPeriod] = useState<DashboardPeriod>("last30days");
   const [sectionFilters, setSectionFilters] = useState<SectionFilterState>(DEFAULT_SECTION_FILTERS);
   const [sectionLoading, setSectionLoading] = useState<DashboardSectionName | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -112,7 +113,7 @@ const Dashboard = () => {
     const loadDashboard = async () => {
       try {
         setLoading(true);
-        const data = await fetchAdminDashboard({ period: "monthly" });
+        const data = await fetchAdminDashboard({ period: dashboardPeriod });
         setDashboardData(data);
       } catch (err: any) {
         setError(err?.response?.data?.message || err?.message || "Failed to load dashboard");
@@ -123,14 +124,14 @@ const Dashboard = () => {
       }
     };
     loadDashboard();
-  }, []);
+  }, [dashboardPeriod]);
 
   const applySectionFilter = useCallback(
     async (section: DashboardSectionName, filters: AdminDashboardFilters) => {
       if (!dashboardData) return;
       setSectionLoading(section);
       try {
-        const res = await fetchAdminDashboardSection(section, filters);
+        const res = await fetchAdminDashboardSection(section, { period: dashboardPeriod, ...filters });
         if (section === "scheduleStats" || section === "scheduledDoctors") {
           setDashboardData((prev) =>
             prev
@@ -155,7 +156,7 @@ const Dashboard = () => {
         setSectionLoading(null);
       }
     },
-    [dashboardData]
+    [dashboardData, dashboardPeriod]
   );
 
   const openCardModal = useCallback(
@@ -167,7 +168,7 @@ const Dashboard = () => {
         const limit = ["recentAppointments", "allAppointments", "popularDoctors", "topPatients", "recentTransactions", "leaveRequests"].includes(section)
           ? 50
           : undefined;
-        const filters: AdminDashboardFilters = { limit };
+        const filters: AdminDashboardFilters = { limit, period: dashboardPeriod };
         if (section === "appointmentStatistics") filters.period = sectionFilters.appointmentStatistics;
         if (section === "popularDoctors") filters.period = sectionFilters.popularDoctors;
         if (section === "recentAppointments" || section === "allAppointments") filters.type = sectionFilters.appointmentsType;
@@ -185,7 +186,7 @@ const Dashboard = () => {
         setModalData({ error: "Failed to load data" });
       }
     },
-    [sectionFilters]
+    [sectionFilters, dashboardPeriod]
   );
 
   const onPanelChange = (value: Dayjs, mode: CalendarProps<Dayjs>["mode"]) => {
@@ -268,20 +269,35 @@ const Dashboard = () => {
               )}
             </div>
             <div className="d-flex align-items-center flex-wrap gap-2">
-              <Link
-                to={all_routes.newAppointment}
-                className="btn btn-primary d-inline-flex align-items-center"
-              >
-                <i className="ti ti-plus me-1" />
-                New Appointment
-              </Link>
-              <Link
-                to={all_routes.doctorschedule}
-                className="btn btn-outline-white bg-white d-inline-flex align-items-center"
-              >
-                <i className="ti ti-calendar-time me-1" />
-                Schedule Availability
-              </Link>
+              <div className="dropdown">
+                <button
+                  type="button"
+                  className="btn btn-outline-white bg-white d-inline-flex align-items-center"
+                  data-bs-toggle="dropdown"
+                  disabled={loading}
+                >
+                  <i className="ti ti-filter me-1" />
+                  {dashboardPeriod === "last7days" ? "Last 7 days" : dashboardPeriod === "last30days" ? "Last 30 days" : "All"}
+                  <i className="ti ti-chevron-down ms-1" />
+                </button>
+                <ul className="dropdown-menu dropdown-menu-end">
+                  <li>
+                    <button type="button" className="dropdown-item" onClick={() => setDashboardPeriod("last7days")}>
+                      Last 7 days
+                    </button>
+                  </li>
+                  <li>
+                    <button type="button" className="dropdown-item" onClick={() => setDashboardPeriod("last30days")}>
+                      Last 30 days
+                    </button>
+                  </li>
+                  <li>
+                    <button type="button" className="dropdown-item" onClick={() => setDashboardPeriod("all")}>
+                      All
+                    </button>
+                  </li>
+                </ul>
+              </div>
             </div>
           </div>
           {/* End Page Header */}
@@ -488,7 +504,7 @@ const Dashboard = () => {
                       <i className="ti ti-chevron-down ms-1" />
                     </button>
                     <ul className="dropdown-menu">
-                      {(["monthly", "weekly", "yearly"] as const).map((p) => (
+                      {(["last30days", "last7days", "today", "yesterday", "last6months"] as const).map((p) => (
                         <li key={p}>
                           <button
                             type="button"
@@ -498,7 +514,15 @@ const Dashboard = () => {
                               applySectionFilter("appointmentStatistics", { period: p });
                             }}
                           >
-                            {p.charAt(0).toUpperCase() + p.slice(1)}
+                            {p === "last30days"
+                              ? "Last 30 Days"
+                              : p === "last7days"
+                                ? "Last 7 Days"
+                                : p === "last6months"
+                                  ? "Last 6 Months"
+                                  : p === "today"
+                                    ? "Today"
+                                    : "Yesterday"}
                           </button>
                         </li>
                       ))}
@@ -572,7 +596,7 @@ const Dashboard = () => {
                       <i className="ti ti-chevron-down ms-1" />
                     </button>
                     <ul className="dropdown-menu">
-                      {(["weekly", "monthly", "yearly"] as const).map((p) => (
+                      {(["last30days", "last7days", "today", "yesterday", "last6months"] as const).map((p) => (
                         <li key={p}>
                           <button
                             type="button"
@@ -582,7 +606,15 @@ const Dashboard = () => {
                               applySectionFilter("popularDoctors", { period: p });
                             }}
                           >
-                            {p.charAt(0).toUpperCase() + p.slice(1)}
+                            {p === "last30days"
+                              ? "Last 30 Days"
+                              : p === "last7days"
+                                ? "Last 7 Days"
+                                : p === "last6months"
+                                  ? "Last 6 Months"
+                                  : p === "today"
+                                    ? "Today"
+                                    : "Yesterday"}
                           </button>
                         </li>
                       ))}
@@ -747,7 +779,7 @@ const Dashboard = () => {
                       <i className="ti ti-chevron-down ms-1" />
                     </button>
                     <ul className="dropdown-menu">
-                      {(["weekly", "monthly", "yearly"] as const).map((p) => (
+                      {(["last30days", "last7days", "today", "yesterday", "last6months"] as const).map((p) => (
                         <li key={p}>
                           <button
                             type="button"
@@ -757,7 +789,15 @@ const Dashboard = () => {
                               applySectionFilter("topDepartments", { period: p });
                             }}
                           >
-                            {p.charAt(0).toUpperCase() + p.slice(1)}
+                            {p === "last30days"
+                              ? "Last 30 Days"
+                              : p === "last7days"
+                                ? "Last 7 Days"
+                                : p === "last6months"
+                                  ? "Last 6 Months"
+                                  : p === "today"
+                                    ? "Today"
+                                    : "Yesterday"}
                           </button>
                         </li>
                       ))}
@@ -894,7 +934,7 @@ const Dashboard = () => {
                       <i className="ti ti-chevron-down ms-1" />
                     </button>
                     <ul className="dropdown-menu">
-                      {(["weekly", "monthly", "yearly"] as const).map((p) => (
+                      {(["last30days", "last7days", "today", "yesterday", "last6months"] as const).map((p) => (
                         <li key={p}>
                           <button
                             type="button"
@@ -904,7 +944,15 @@ const Dashboard = () => {
                               applySectionFilter("incomeByTreatment", { period: p });
                             }}
                           >
-                            {p.charAt(0).toUpperCase() + p.slice(1)}
+                            {p === "last30days"
+                              ? "Last 30 Days"
+                              : p === "last7days"
+                                ? "Last 7 Days"
+                                : p === "last6months"
+                                  ? "Last 6 Months"
+                                  : p === "today"
+                                    ? "Today"
+                                    : "Yesterday"}
                           </button>
                         </li>
                       ))}
@@ -1128,7 +1176,7 @@ const Dashboard = () => {
                       <i className="ti ti-chevron-down ms-1" />
                     </button>
                     <ul className="dropdown-menu">
-                      {(["weekly", "monthly", "yearly"] as const).map((p) => (
+                      {(["last30days", "last7days", "today", "yesterday", "last6months"] as const).map((p) => (
                         <li key={p}>
                           <button
                             type="button"
@@ -1138,7 +1186,15 @@ const Dashboard = () => {
                               applySectionFilter("recentTransactions", { period: p });
                             }}
                           >
-                            {p.charAt(0).toUpperCase() + p.slice(1)}
+                            {p === "last30days"
+                              ? "Last 30 Days"
+                              : p === "last7days"
+                                ? "Last 7 Days"
+                                : p === "last6months"
+                                  ? "Last 6 Months"
+                                  : p === "today"
+                                    ? "Today"
+                                    : "Yesterday"}
                           </button>
                         </li>
                       ))}

@@ -1,7 +1,17 @@
 /**
  * Get start and end dates for a period, or use custom dateFrom/dateTo.
  */
-export type Period = "weekly" | "monthly" | "yearly";
+export type Period =
+  | "today"
+  | "yesterday"
+  | "last7days"
+  | "last30days"
+  | "last6months"
+  | "all"
+  // Backward-compatible (older UI)
+  | "weekly"
+  | "monthly"
+  | "yearly";
 
 export interface DashboardDateRange {
   start: Date;
@@ -9,7 +19,7 @@ export interface DashboardDateRange {
 }
 
 export function getDateRange(
-  period: Period = "monthly",
+  period: Period = "last30days",
   dateFrom?: string,
   dateTo?: string
 ): DashboardDateRange {
@@ -26,6 +36,23 @@ export function getDateRange(
 
   // Pure period-based
   switch (period) {
+    case "today": {
+      const s = new Date(end);
+      s.setHours(0, 0, 0, 0);
+      const e = new Date(end);
+      e.setHours(23, 59, 59, 999);
+      return { start: s, end: e };
+    }
+    case "yesterday": {
+      const s = new Date(end);
+      s.setDate(s.getDate() - 1);
+      s.setHours(0, 0, 0, 0);
+      const e = new Date(end);
+      e.setDate(e.getDate() - 1);
+      e.setHours(23, 59, 59, 999);
+      return { start: s, end: e };
+    }
+    case "last7days":
     case "weekly": {
       const weekStart = new Date(end);
       weekStart.setDate(weekStart.getDate() - 6);
@@ -34,10 +61,29 @@ export function getDateRange(
       weekEnd.setHours(23, 59, 59, 999);
       return { start: weekStart, end: weekEnd };
     }
+    case "last30days": {
+      const s = new Date(end);
+      s.setDate(s.getDate() - 29);
+      s.setHours(0, 0, 0, 0);
+      const e = new Date(end);
+      e.setHours(23, 59, 59, 999);
+      return { start: s, end: e };
+    }
     case "monthly": {
       const monthStart = new Date(end.getFullYear(), end.getMonth(), 1);
       const monthEnd = new Date(end.getFullYear(), end.getMonth() + 1, 0, 23, 59, 59, 999);
       return { start: monthStart, end: monthEnd };
+    }
+    case "last6months": {
+      const s = new Date(end);
+      s.setMonth(s.getMonth() - 6);
+      s.setHours(0, 0, 0, 0);
+      const e = new Date(end);
+      e.setHours(23, 59, 59, 999);
+      return { start: s, end: e };
+    }
+    case "all": {
+      return { start: new Date(0), end };
     }
     case "yearly": {
       const yearStart = new Date(end.getFullYear(), 0, 1);
@@ -45,7 +91,7 @@ export function getDateRange(
       return { start: yearStart, end: yearEnd };
     }
     default:
-      return getDateRange("monthly");
+      return getDateRange("last30days");
   }
 }
 
@@ -97,5 +143,8 @@ export function appointmentDateFilterForRange(range: DashboardDateRange): { $or:
     or.push({ Date_Time: { $regex: escaped } });
     current.setDate(current.getDate() + 1);
   }
-  return { $or: or };
+  // Also support ISO Date_Time (lexicographic range works for ISO strings)
+  // Example: "2026-01-29T10:15:00.000Z"
+  const isoRange = { Date_Time: { $gte: range.start.toISOString(), $lte: range.end.toISOString() } } as any;
+  return { $or: [...or, isoRange] };
 }

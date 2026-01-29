@@ -38,10 +38,9 @@ DoctorPrescriptionSchema.index({ hospital: 1, createdAt: -1 });
 DoctorPrescriptionSchema.index({ Doctor: 1, createdAt: -1 });
 DoctorPrescriptionSchema.index({ Patient: 1, createdAt: -1 });
 DoctorPrescriptionSchema.index({ Status: 1 });
-DoctorPrescriptionSchema.index({ Appointment_ID: 1 });
-DoctorPrescriptionSchema.index({ consultationId: 1 });
-DoctorPrescriptionSchema.index({ patientId: 1 });
-DoctorPrescriptionSchema.index({ doctorId: 1 });
+// NOTE: Appointment_ID / consultationId / patientId / doctorId already have `index: true`
+// in `DoctorPrescriptionSchema` (see `models/schemas/clinical.ts`). Duplicating them here
+// triggers Mongoose "Duplicate schema index" warnings.
 
 export const Prescription =
   mongoose.models.Prescription ||

@@ -29,7 +29,17 @@ function parseFilters(query: Record<string, any>): DashboardFilters {
   const type = query.type as string | undefined;
   return {
     period:
-      period === "weekly" || period === "monthly" || period === "yearly" ? period : undefined,
+      period === "today" ||
+      period === "yesterday" ||
+      period === "last7days" ||
+      period === "last30days" ||
+      period === "last6months" ||
+      period === "all" ||
+      period === "weekly" ||
+      period === "monthly" ||
+      period === "yearly"
+        ? (period as any)
+        : undefined,
     dateFrom: query.dateFrom as string | undefined,
     dateTo: query.dateTo as string | undefined,
     leavePeriod:
@@ -60,6 +70,11 @@ export const getAdminDashboard: RequestHandler = async (req, res, next) => {
 
     const filters = parseFilters(req.query);
     const section = req.query.section as string | undefined;
+    const debug = String(req.query.debug ?? "") === "1" || String(req.query.debug ?? "").toLowerCase() === "true";
+    if (debug) {
+      // eslint-disable-next-line no-console
+      console.log("[admin-dashboard] role=", req.user.role, "hospitalId=", hospitalId, "section=", section, "filters=", filters);
+    }
 
     if (section && SECTION_NAMES.includes(section as DashboardSectionName)) {
       const payload = await buildAdminDashboardSection(
@@ -67,12 +82,20 @@ export const getAdminDashboard: RequestHandler = async (req, res, next) => {
         section as DashboardSectionName,
         Object.keys(filters).length ? filters : undefined
       );
+      if (debug) {
+        // eslint-disable-next-line no-console
+        console.log("[admin-dashboard] section response keys=", Object.keys(payload || {}));
+      }
       return res.json(payload);
     }
 
     const payload = await buildAdminDashboardPayload(hospitalId, Object.keys(filters).length ? filters : undefined);
     if (hospitalId) {
       (payload as any).filteredByHospitalId = hospitalId;
+    }
+    if (debug) {
+      // eslint-disable-next-line no-console
+      console.log("[admin-dashboard] full payload ok");
     }
     return res.json(payload);
   } catch (err) {

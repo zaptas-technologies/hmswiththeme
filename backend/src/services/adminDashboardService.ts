@@ -24,8 +24,10 @@ export type DashboardFilters = {
 
 export const buildAdminDashboardPayload = async (hospitalId?: string, filters?: DashboardFilters) => {
   const now = new Date();
-  const period = filters?.period ?? "monthly";
-  const dateRange = getDateRange(period, filters?.dateFrom, filters?.dateTo);
+  const period = filters?.period ?? "last30days";
+  const hasCustomRange = Boolean(filters?.dateFrom || filters?.dateTo);
+  const shouldApplyDateRange = period !== "all" || hasCustomRange;
+  const dateRange = shouldApplyDateRange ? getDateRange(period, filters?.dateFrom, filters?.dateTo) : null;
   const sevenDaysAgo = new Date(now);
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   const fourteenDaysAgo = new Date(now);
@@ -43,7 +45,8 @@ export const buildAdminDashboardPayload = async (hospitalId?: string, filters?: 
     }
   }
 
-  const appointmentDateFilter = appointmentDateFilterForRange(dateRange);
+  const appointmentDateFilter = dateRange ? appointmentDateFilterForRange(dateRange) : null;
+  const appointmentMatchBase = { ...hospitalFilter, ...(appointmentDateFilter ?? {}) };
   const last7DaysRange = { start: sevenDaysAgo, end: now };
   const prev7DaysRange = { start: fourteenDaysAgo, end: sevenDaysAgo };
   const last7AppointmentDateFilter = appointmentDateFilterForRange(last7DaysRange);
@@ -52,7 +55,7 @@ export const buildAdminDashboardPayload = async (hospitalId?: string, filters?: 
   const [doctorsCount, patientsCount, appointmentsCount] = await Promise.all([
     Doctor.countDocuments(hospitalFilter),
     Patient.countDocuments(hospitalFilter),
-    Appointment.countDocuments({ ...hospitalFilter, ...appointmentDateFilter }),
+    Appointment.countDocuments(appointmentMatchBase),
   ]);
 
   const [last7Doctors, prev7Doctors] = await Promise.all([
@@ -71,13 +74,13 @@ export const buildAdminDashboardPayload = async (hospitalId?: string, filters?: 
   ]);
 
   const revenueAgg = await Appointment.aggregate([
-    { $match: { ...hospitalFilter, ...appointmentDateFilter, Status: { $in: ["Confirmed", "Checked Out", "Completed"] } } },
+    { $match: { ...appointmentMatchBase, Status: { $in: ["Confirmed", "Checked Out", "Completed"] } } },
     { $group: { _id: null, total: { $sum: { $ifNull: [{ $toDouble: "$Fees" }, 0] } } } },
   ]);
   const revenue = revenueAgg[0]?.total || 0;
 
   const appointmentStats = await Appointment.aggregate([
-    { $match: { ...hospitalFilter, ...appointmentDateFilter } },
+    { $match: appointmentMatchBase },
     {
       $group: {
         _id: "$Status",
@@ -103,7 +106,7 @@ export const buildAdminDashboardPayload = async (hospitalId?: string, filters?: 
   }
 
   const popularDoctors = await Appointment.aggregate([
-    { $match: { ...hospitalFilter, ...appointmentDateFilter } },
+    { $match: appointmentMatchBase },
     { $group: { _id: "$Doctor", count: { $sum: 1 } } },
     { $sort: { count: -1 } },
     { $limit: 3 },
@@ -142,8 +145,7 @@ export const buildAdminDashboardPayload = async (hospitalId?: string, filters?: 
       ? { Mode: filters.type === "in-person" ? "In-Person" : filters.type === "online" ? "Online" : filters.type }
       : {};
   const recentAppointments = await Appointment.find({
-    ...hospitalFilter,
-    ...appointmentDateFilter,
+    ...appointmentMatchBase,
     ...appointmentTypeFilter,
   })
     .sort({ Date_Time: -1 })
@@ -151,7 +153,7 @@ export const buildAdminDashboardPayload = async (hospitalId?: string, filters?: 
     .lean();
 
   const topDepartments = await Appointment.aggregate([
-    { $match: { ...hospitalFilter, ...appointmentDateFilter, Department: { $exists: true, $ne: "" } } },
+    { $match: { ...appointmentMatchBase, Department: { $exists: true, $ne: "" } } },
     { $group: { _id: "$Department", count: { $sum: 1 } } },
     { $sort: { count: -1 } },
     { $limit: 3 },
@@ -193,7 +195,7 @@ export const buildAdminDashboardPayload = async (hospitalId?: string, filters?: 
     .lean();
 
   const incomeByTreatment = await Appointment.aggregate([
-    { $match: { ...hospitalFilter, ...appointmentDateFilter, Department: { $exists: true, $ne: "" }, Status: { $in: ["Confirmed", "Checked Out", "Completed"] } } },
+    { $match: { ...appointmentMatchBase, Department: { $exists: true, $ne: "" }, Status: { $in: ["Confirmed", "Checked Out", "Completed"] } } },
     {
       $group: {
         _id: "$Department",
@@ -206,7 +208,7 @@ export const buildAdminDashboardPayload = async (hospitalId?: string, filters?: 
   ]);
 
   const topPatients = await Appointment.aggregate([
-    { $match: { ...hospitalFilter, ...appointmentDateFilter } },
+    { $match: appointmentMatchBase },
     { $group: { _id: "$Patient", count: { $sum: 1 }, totalPaid: { $sum: { $ifNull: [{ $toDouble: "$Fees" }, 0] } } } },
     { $sort: { count: -1 } },
     { $limit: 5 },
@@ -242,8 +244,7 @@ export const buildAdminDashboardPayload = async (hospitalId?: string, filters?: 
   ]);
 
   const recentTransactions = await Appointment.find({
-    ...hospitalFilter,
-    ...appointmentDateFilter,
+    ...appointmentMatchBase,
     Fees: { $exists: true, $ne: null },
     Status: { $in: ["Confirmed", "Checked Out", "Completed"] },
   })

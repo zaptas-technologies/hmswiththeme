@@ -51,7 +51,8 @@ export interface ConsultationDoc extends Document {
 // Add indexes for role-based access
 ConsultationSchema.index({ user: 1, createdAt: -1 });
 ConsultationSchema.index({ hospital: 1, createdAt: -1 });
-ConsultationSchema.index({ Appointment_ID: 1 });
+// NOTE: Appointment_ID already has `index: true` in `ConsultationSchema` definition
+// (see `models/schemas/clinical.ts`). Duplicating it here triggers Mongoose warnings.
 ConsultationSchema.index({ Doctor: 1, createdAt: -1 });
 ConsultationSchema.index({ Status: 1 });
 
