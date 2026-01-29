@@ -393,7 +393,7 @@ const DoctorAppointments = () => {
           </Link>
           <ul className="dropdown-menu p-2">
             <li>
-              <Link
+              {/* <Link
                 to="#"
                 className="dropdown-item d-flex align-items-center"
                 data-bs-toggle="offcanvas"
@@ -405,7 +405,7 @@ const DoctorAppointments = () => {
               >
                 <i className="ti ti-edit me-2" />
                 Edit
-              </Link>
+              </Link> */}
             </li>
             <li>
               <Link
