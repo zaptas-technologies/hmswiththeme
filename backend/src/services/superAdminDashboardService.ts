@@ -54,6 +54,10 @@ const toIdString = (v: any): string => {
 export const buildSuperAdminDashboardPayload = async (): Promise<SuperAdminDashboardResponse> => {
   const generatedAt = new Date().toISOString();
 
+  // Only consider data for hospitals that exist in DB (ignore orphaned doctors/patients from deleted hospitals)
+  const existingHospitals = await Hospital.find().select("_id").lean();
+  const hospitalIds = existingHospitals.map((h: any) => h._id);
+
   const [
     branchesCount,
     hospitalAdminsCount,
@@ -62,30 +66,30 @@ export const buildSuperAdminDashboardPayload = async (): Promise<SuperAdminDashb
     appointmentsCount,
   ] = await Promise.all([
     Hospital.countDocuments(),
-    User.countDocuments({ role: "hospital_admin" }),
-    Doctor.countDocuments(),
-    Patient.countDocuments(),
-    Appointment.countDocuments(),
+    User.countDocuments({ role: "hospital_admin", hospitalId: { $in: hospitalIds } }),
+    Doctor.countDocuments({ hospital: { $in: hospitalIds } }),
+    Patient.countDocuments({ hospital: { $in: hospitalIds } }),
+    Appointment.countDocuments({ hospital: { $in: hospitalIds } }),
   ]);
 
   const revenueAgg = await Appointment.aggregate([
-    { $match: { Status: { $in: ["Confirmed", "Checked Out", "Completed"] } } },
+    { $match: { hospital: { $in: hospitalIds }, Status: { $in: ["Confirmed", "Checked Out", "Completed"] } } },
     { $group: { _id: null, total: { $sum: { $ifNull: [{ $toDouble: "$Fees" }, 0] } } } },
   ]);
   const revenue = revenueAgg[0]?.total || 0;
 
-  // Per-branch counts (only where documents have `hospital` field)
+  // Per-branch counts: only for existing hospitals
   const [doctorsByHospital, patientsByHospital, apptsByHospital] = await Promise.all([
     Doctor.aggregate([
-      { $match: { hospital: { $exists: true, $ne: null } } },
+      { $match: { hospital: { $in: hospitalIds } } },
       { $group: { _id: "$hospital", c: { $sum: 1 } } },
     ]),
     Patient.aggregate([
-      { $match: { hospital: { $exists: true, $ne: null } } },
+      { $match: { hospital: { $in: hospitalIds } } },
       { $group: { _id: "$hospital", c: { $sum: 1 } } },
     ]),
     Appointment.aggregate([
-      { $match: { hospital: { $exists: true, $ne: null } } },
+      { $match: { hospital: { $in: hospitalIds } } },
       { $group: { _id: "$hospital", c: { $sum: 1 } } },
     ]),
   ]);
