@@ -95,6 +95,7 @@ import Dashboard from "../components/pages/dashboard/dashboard";
 import DoctorDahboard from "../components/pages/dashboard/doctor-dashboard/doctorDahboard";
 import PatientDashboard from "../components/pages/dashboard/patient-dashboard/patientDashboard";
 import PharmacyDashboard from "../components/pages/dashboard/pharmacy-dashboard/pharmacyDashboard";
+import PharmacyInvoice from "../components/pages/dashboard/pharmacy-dashboard/pharmacyInvoice";
 import SuperAdminDashboard from "../components/pages/super-admin/super-admin-dashboard/superAdminDashboard";
 import DoctorAppointments from "../components/pages/doctor-modules/doctor-appointments/doctorAppointments";
 import DoctorsAppointmentDetails from "../components/pages/doctor-modules/doctors-appointment-details/doctorsAppointmentDetails";
@@ -1411,6 +1412,11 @@ export const publicRoutes = [
   {
     path: routes.pharmacyDashboard,
     element: <PharmacyDashboard />,
+    route: Route,
+  },
+  {
+    path: routes.pharmacyInvoice,
+    element: <PharmacyInvoice />,
     route: Route,
   },
   {

@@ -108,14 +108,40 @@ export interface PharmacyDashboardConsultation {
   createdAt?: string;
 }
 
+export interface PharmacyDashboardStats {
+  pendingCount: number;
+  completedCount: number;
+  completedTodayCount: number;
+}
+
 export interface PharmacyDashboardResponse {
   hospital: { id: string; name: string; city?: string; state?: string } | null;
   prescriptions: PharmacyDashboardPrescription[];
+  completedPrescriptions: PharmacyDashboardPrescription[];
+  stats: PharmacyDashboardStats;
   consultations: PharmacyDashboardConsultation[];
 }
 
 export const fetchPharmacyDashboard = async (): Promise<PharmacyDashboardResponse> => {
   const { data } = await api.get<PharmacyDashboardResponse>("/pharmacies/dashboard");
+  return data;
+};
+
+export interface PrescriptionPriceLineItem {
+  medicine: string;
+  dosage?: string;
+  unitPrice: number;
+  quantity: number;
+  subtotal: number;
+}
+
+export interface PrescriptionPriceBreakdown {
+  lineItems: PrescriptionPriceLineItem[];
+  total: number;
+}
+
+export const fetchPrescriptionPriceBreakdown = async (prescriptionId: string): Promise<PrescriptionPriceBreakdown> => {
+  const { data } = await api.get<PrescriptionPriceBreakdown>(`/prescriptions/${prescriptionId}/price-breakdown`);
   return data;
 };
 

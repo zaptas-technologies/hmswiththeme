@@ -25,6 +25,9 @@ export interface ConsultationDoc extends Document {
     frequency?: string;
     duration?: string;
     inventoryId?: mongoose.Types.ObjectId;
+    quantity?: number;
+    unitPrice?: number;
+    subtotal?: number;
   }>;
   Advice?: Array<{ advice: string }>;
   Investigations?: Array<{ investigation: string; notes?: string }>;

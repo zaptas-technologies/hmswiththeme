@@ -30,6 +30,9 @@ export interface ConsultationData {
     frequency?: string;
     duration?: string;
     inventoryId?: string;
+    quantity?: number;
+    unitPrice?: number;
+    subtotal?: number;
   }>;
   advice?: Array<{ advice: string }>;
   investigations?: Array<{
@@ -335,19 +338,25 @@ export const saveConsultation: RequestHandler = async (req, res, next) => {
       consultationDocument.Diagnosis = consultationData.diagnosis;
     }
     if (consultationData?.medications && Array.isArray(consultationData.medications) && consultationData.medications.length > 0) {
-      // Normalize and preserve optional inventoryId for each medication
+      // Normalize and preserve optional inventoryId, quantity, unitPrice, subtotal for each medication
       consultationDocument.Medications = consultationData.medications.map((m: any) => {
         const inventoryIdStr = String(m.inventoryId || "").trim();
         const inventoryId =
           inventoryIdStr && mongoose.Types.ObjectId.isValid(inventoryIdStr)
             ? new mongoose.Types.ObjectId(inventoryIdStr)
             : undefined;
+        const quantity = typeof m.quantity === "number" && m.quantity >= 0 ? m.quantity : 1;
+        const unitPrice = typeof m.unitPrice === "number" && m.unitPrice >= 0 ? m.unitPrice : 0;
+        const subtotal = typeof m.subtotal === "number" && m.subtotal >= 0 ? m.subtotal : unitPrice * quantity;
         return {
           medicine: String(m.medicine || "").trim(),
           dosage: String(m.dosage || "").trim(),
           frequency: String(m.frequency || "").trim(),
           duration: String(m.duration || "").trim(),
           ...(inventoryId ? { inventoryId } : {}),
+          quantity,
+          unitPrice,
+          subtotal,
         };
       });
     }

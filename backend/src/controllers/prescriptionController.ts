@@ -453,6 +453,73 @@ export const getPrescriptionById: RequestHandler = async (req, res, next) => {
   }
 };
 
+/** Get prescription price breakdown from inventory (for pharmacy fulfill modal). */
+export const getPrescriptionPriceBreakdown: RequestHandler = async (req, res, next) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    const { id } = req.params;
+    const filter = buildAccessFilter(req.user);
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      filter._id = new mongoose.Types.ObjectId(id);
+    } else {
+      filter.Prescription_ID = id;
+    }
+
+    const prescription = await Prescription.findOne(filter)
+      .select("Medications")
+      .lean()
+      .exec();
+    if (!prescription) {
+      return res.status(404).json({ message: "Prescription not found" });
+    }
+
+    const medications = (prescription as any).Medications || [];
+    const hospitalId = req.user.hospitalId;
+    const hospitalObjectId = hospitalId ? new mongoose.Types.ObjectId(hospitalId) : null;
+
+    const lineItems: Array<{ medicine: string; dosage?: string; unitPrice: number; quantity: number; subtotal: number }> = [];
+    let total = 0;
+
+    for (const med of medications) {
+      const invId = (med as any).inventoryId;
+      const medicineName = typeof (med as any).medicine === "string" ? (med as any).medicine : "—";
+      const dosage = (med as any).dosage;
+      const quantity = 1;
+      if (!invId || !hospitalObjectId) {
+        lineItems.push({ medicine: medicineName, dosage, unitPrice: 0, quantity, subtotal: 0 });
+        continue;
+      }
+      const invObjId = invId instanceof mongoose.Types.ObjectId ? invId : new mongoose.Types.ObjectId(String(invId));
+      const inv = await Inventory.findOne({
+        _id: invObjId,
+        hospital: hospitalObjectId,
+      })
+        .select("Item_Name Unit_Price Quantity")
+        .lean()
+        .exec();
+      const unitPrice = (inv as any)?.Unit_Price ?? 0;
+      const subtotal = unitPrice * quantity;
+      total += subtotal;
+      lineItems.push({
+        medicine: (inv as any)?.Item_Name || medicineName,
+        dosage,
+        unitPrice,
+        quantity,
+        subtotal,
+      });
+    }
+
+    return res.json({ lineItems, total });
+  } catch (err: any) {
+    if (err?.name === "CastError") {
+      return res.status(400).json({ message: "Invalid prescription id" });
+    }
+    next(err);
+  }
+};
+
 export const createPrescription: RequestHandler = async (req, res, next) => {
   try {
     if (!req.user) {

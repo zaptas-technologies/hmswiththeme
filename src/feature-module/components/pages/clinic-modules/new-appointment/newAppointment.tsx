@@ -23,6 +23,9 @@ const PAYMENT_MODES = [
   { value: "Online", label: "Online" },
 ];
 
+/** True if string looks like a phone number (digits only, at least 6 chars) */
+const looksLikePhone = (s: string): boolean => /^\d{6,}$/.test(s.replace(/\s/g, ""));
+
 const NewAppointment = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -43,6 +46,11 @@ const NewAppointment = () => {
     Reason: "",
     Status: "Schedule", // Always mark as scheduled when booking
   });
+  const [showNewPatientModal, setShowNewPatientModal] = useState(false);
+  const [pendingNewPatientPhone, setPendingNewPatientPhone] = useState<string>("");
+  const [redirectCountdown, setRedirectCountdown] = useState<number | null>(null);
+  const [redirectStarted, setRedirectStarted] = useState(false);
+  const [prefillPhoneForAddModal, setPrefillPhoneForAddModal] = useState<string | null>(null);
 
 
   const getModalContainer = () => {
@@ -77,7 +85,18 @@ const NewAppointment = () => {
         if (patientSearch.trim()) params.search = patientSearch.trim();
         const patientsRes = await fetchPatients(params);
         const list = Array.isArray(patientsRes) ? patientsRes : patientsRes.data || [];
-        if (!cancelled) setPatients(list);
+        if (!cancelled) {
+          setPatients(list);
+          const searchTerm = patientSearch.trim();
+          if (searchTerm && looksLikePhone(searchTerm)) {
+            if (list.length === 1) {
+              setFormData((prev) => ({ ...prev, Patient: list[0].Patient || "" }));
+            } else if (list.length === 0) {
+              setPendingNewPatientPhone(searchTerm);
+              setShowNewPatientModal(true);
+            }
+          }
+        }
       } catch (error) {
         if (!cancelled) setPatients([]);
         // eslint-disable-next-line no-console
@@ -91,6 +110,50 @@ const NewAppointment = () => {
       clearTimeout(timer);
     };
   }, [patientSearch]);
+
+  // Redirect countdown when user chooses "No" on new-patient modal (runs once when started)
+  useEffect(() => {
+    if (!redirectStarted) return;
+    const id = setInterval(() => {
+      setRedirectCountdown((c) => {
+        if (c === null || c <= 1) {
+          navigate(all_routes.appointments);
+          return null;
+        }
+        return c - 1;
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, [redirectStarted, navigate]);
+
+  const openAddPatientModal = () => {
+    setPrefillPhoneForAddModal(pendingNewPatientPhone);
+    setShowNewPatientModal(false);
+    setPendingNewPatientPhone("");
+    const addModalEl = document.getElementById("add_modal");
+    if (addModalEl) {
+      const bsModal = (window as any).bootstrap?.Modal?.getOrCreateInstance(addModalEl);
+      bsModal?.show();
+    }
+  };
+
+  const handleNewPatientNo = () => {
+    const el = document.getElementById("new_patient_choice_modal");
+    if (el) (window as any).bootstrap?.Modal?.getInstance(el)?.hide();
+    setShowNewPatientModal(false);
+    setPendingNewPatientPhone("");
+    setRedirectCountdown(3);
+    setRedirectStarted(true);
+  };
+
+  // Show/hide new patient choice modal with Bootstrap
+  useEffect(() => {
+    const el = document.getElementById("new_patient_choice_modal");
+    if (!el) return;
+    const bsModal = (window as any).bootstrap?.Modal?.getOrCreateInstance(el);
+    if (showNewPatientModal) bsModal?.show();
+    else bsModal?.hide();
+  }, [showNewPatientModal]);
 
   const doctorOptions: Option[] = useMemo(
     () =>
@@ -494,7 +557,59 @@ const NewAppointment = () => {
       {/* ========================
 			End Page Content
 		========================= */}
-      <Modals onPatientCreated={handlePatientCreated} />
+
+      {/* Redirect countdown toast */}
+      {redirectCountdown !== null && redirectCountdown > 0 && (
+        <div className="position-fixed bottom-0 end-0 m-4 p-3 bg-dark text-white rounded shadow-lg" style={{ zIndex: 9999 }}>
+          <i className="ti ti-arrow-left me-2" />
+          Redirecting to appointments in <strong>{redirectCountdown}</strong> second{redirectCountdown !== 1 ? "s" : ""}...
+        </div>
+      )}
+
+      {/* New patient choice modal: no patient found by phone */}
+      <div
+        className="modal fade"
+        id="new_patient_choice_modal"
+        tabIndex={-1}
+        aria-labelledby="newPatientChoiceLabel"
+        aria-hidden="true"
+        data-bs-backdrop="static"
+      >
+        <div className="modal-dialog modal-dialog-centered">
+          <div className="modal-content">
+            <div className="modal-header border-0 pb-0">
+              <h5 className="modal-title fw-bold" id="newPatientChoiceLabel">
+                No patient found
+              </h5>
+              <button
+                type="button"
+                className="btn-close"
+                aria-label="Close"
+                onClick={handleNewPatientNo}
+              />
+            </div>
+            <div className="modal-body pt-0">
+              <p className="mb-0">
+                No patient found with phone number <strong>{pendingNewPatientPhone}</strong>. This may be a new patient. Do you want to add them?
+              </p>
+            </div>
+            <div className="modal-footer border-0 gap-2">
+              <button type="button" className="btn btn-light" onClick={handleNewPatientNo}>
+                No, go back
+              </button>
+              <button type="button" className="btn btn-primary" onClick={openAddPatientModal}>
+                Yes, add patient
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <Modals
+        onPatientCreated={handlePatientCreated}
+        prefillPhone={prefillPhoneForAddModal}
+        onAddModalClosed={() => setPrefillPhoneForAddModal(null)}
+      />
     </>
   );
 };

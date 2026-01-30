@@ -319,7 +319,7 @@ const DoctorsPrescriptionDetails = () => {
                   {/* Items */}
                   <div className="pb-3 mb-3 border-1 border-bottom d-flex align-items-center justify-content-between flex-wrap gap-2">
                     <div className="">
-                      <h6 className="mb-1 16-14 fw-semibold"> Follow Up </h6>
+                      <h6 className="mb-1 16-14 fw-semibold"> Follow Up</h6>
                       <p className="mb-0">{(prescription as any)?.FollowUpText || "-"}</p>
                     </div>
                     <div className="">

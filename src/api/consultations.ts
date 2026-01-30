@@ -20,6 +20,9 @@ export interface ConsultationData {
     frequency?: string;
     duration?: string;
     inventoryId?: string;
+    quantity?: number;
+    unitPrice?: number;
+    subtotal?: number;
   }>;
   advice?: Array<{ advice: string }>;
   investigations?: Array<{

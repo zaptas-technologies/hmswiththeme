@@ -216,6 +216,10 @@ export const ConsultationSchema = new Schema(
       duration: { type: String },
       // Optional link to inventory item when medicine comes from inventory
       inventoryId: { type: Schema.Types.ObjectId, ref: "Inventory", index: true },
+      // From inventory: quantity, unitPrice, subtotal (for pharmacy invoice)
+      quantity: { type: Number, default: 1 },
+      unitPrice: { type: Number, default: 0 },
+      subtotal: { type: Number, default: 0 },
     }],
     // Advice
     Advice: [{

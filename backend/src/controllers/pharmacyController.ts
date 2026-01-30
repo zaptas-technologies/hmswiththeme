@@ -333,7 +333,29 @@ export const deletePharmacy: RequestHandler = async (req, res, next) => {
   }
 };
 
-/** Pharmacy dashboard: prescriptions (pending) and consultations for the pharmacist's hospital */
+const formatPrescriptionForDashboard = (p: any) => ({
+  id: p._id?.toString(),
+  _id: p._id?.toString(),
+  Prescription_ID: p.Prescription_ID,
+  Date: p.Date,
+  Prescribed_On: p.Prescribed_On,
+  Patient: p.Patient,
+  Patient_Image: p.Patient_Image,
+  Doctor: p.Doctor,
+  Medicine: p.Medicine,
+  Status: p.Status,
+  Dosage: p.Dosage,
+  Frequency: p.Frequency,
+  Duration: p.Duration,
+  Medications: p.Medications || [],
+  Appointment_ID: p.Appointment_ID?.toString?.(),
+  consultationId: p.consultationId?.toString?.(),
+  Amount: p.Amount,
+  createdAt: p.createdAt,
+  updatedAt: p.updatedAt,
+});
+
+/** Pharmacy dashboard: pending + completed prescriptions, stats, consultations */
 export const getPharmacyDashboard: RequestHandler = async (req, res, next) => {
   try {
     if (!req.user) {
@@ -350,17 +372,28 @@ export const getPharmacyDashboard: RequestHandler = async (req, res, next) => {
     const hospitalObjectId = new mongoose.Types.ObjectId(hospitalId);
     const hospitalFilter = { hospital: hospitalObjectId };
 
-    // Pending prescriptions (not yet dispensed) – statuses that mean "to be dispensed"
-    const pendingPrescriptionFilter = {
+    const pendingFilter = {
       ...hospitalFilter,
       Status: { $nin: ["Dispensed", "Completed", "Cancelled"] },
     };
-    const [prescriptions, consultations, hospitalDoc] = await Promise.all([
-      Prescription.find(pendingPrescriptionFilter)
-        .sort({ createdAt: -1 })
-        .limit(100)
-        .lean()
-        .exec(),
+    const completedFilter = {
+      ...hospitalFilter,
+      Status: { $in: ["Dispensed", "Completed"] },
+    };
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+    const completedTodayFilter = {
+      ...completedFilter,
+      updatedAt: { $gte: todayStart, $lte: todayEnd },
+    };
+
+    const [pendingPrescriptions, completedPrescriptions, completedTodayCount, consultations, hospitalDoc] = await Promise.all([
+      Prescription.find(pendingFilter).sort({ createdAt: -1 }).limit(200).lean().exec(),
+      Prescription.find(completedFilter).sort({ updatedAt: -1 }).limit(200).lean().exec(),
+      Prescription.countDocuments(completedTodayFilter),
       Consultation.find({ ...hospitalFilter, Status: "Completed" })
         .sort({ Completed_At: -1, createdAt: -1 })
         .limit(50)
@@ -368,27 +401,6 @@ export const getPharmacyDashboard: RequestHandler = async (req, res, next) => {
         .exec(),
       Hospital.findById(hospitalId).select("name city state").lean().exec(),
     ]);
-
-    const formatPrescription = (p: any) => ({
-      id: p._id?.toString(),
-      _id: p._id?.toString(),
-      Prescription_ID: p.Prescription_ID,
-      Date: p.Date,
-      Prescribed_On: p.Prescribed_On,
-      Patient: p.Patient,
-      Patient_Image: p.Patient_Image,
-      Doctor: p.Doctor,
-      Medicine: p.Medicine,
-      Status: p.Status,
-      Dosage: p.Dosage,
-      Frequency: p.Frequency,
-      Duration: p.Duration,
-      Medications: p.Medications || [],
-      Appointment_ID: p.Appointment_ID?.toString?.(),
-      consultationId: p.consultationId?.toString?.(),
-      Amount: p.Amount,
-      createdAt: p.createdAt,
-    });
 
     const formatConsultation = (c: any) => ({
       id: c._id?.toString(),
@@ -407,7 +419,13 @@ export const getPharmacyDashboard: RequestHandler = async (req, res, next) => {
       hospital: hospitalDoc
         ? { id: hospitalId, name: (hospitalDoc as any).name, city: (hospitalDoc as any).city, state: (hospitalDoc as any).state }
         : null,
-      prescriptions: prescriptions.map(formatPrescription),
+      prescriptions: pendingPrescriptions.map(formatPrescriptionForDashboard),
+      completedPrescriptions: completedPrescriptions.map(formatPrescriptionForDashboard),
+      stats: {
+        pendingCount: pendingPrescriptions.length,
+        completedCount: completedPrescriptions.length,
+        completedTodayCount,
+      },
       consultations: consultations.map(formatConsultation),
     });
   } catch (err) {

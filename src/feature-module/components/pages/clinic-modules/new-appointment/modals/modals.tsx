@@ -21,9 +21,11 @@ import type { Option } from "../../../../../../core/common/common-select/commonS
 
 interface ModalsProps {
   onPatientCreated?: () => void;
+  prefillPhone?: string | null;
+  onAddModalClosed?: () => void;
 }
 
-const Modals = ({ onPatientCreated }: ModalsProps) => {
+const Modals = ({ onPatientCreated, prefillPhone, onAddModalClosed }: ModalsProps) => {
   const [phone, setPhone] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
@@ -58,6 +60,23 @@ const Modals = ({ onPatientCreated }: ModalsProps) => {
     };
     loadDoctors();
   }, []);
+
+  // Prefill phone when opened from "new patient?" flow (search by phone found no match)
+  useEffect(() => {
+    if (prefillPhone) {
+      setPhone(prefillPhone);
+      setFormData((prev) => ({ ...prev, Phone: prefillPhone }));
+    }
+  }, [prefillPhone]);
+
+  // Notify parent when add modal is closed so they can clear prefill
+  useEffect(() => {
+    const el = document.getElementById("add_modal");
+    if (!el || !onAddModalClosed) return;
+    const onHidden = () => onAddModalClosed();
+    el.addEventListener("hidden.bs.modal", onHidden);
+    return () => el.removeEventListener("hidden.bs.modal", onHidden);
+  }, [onAddModalClosed]);
 
   const doctorOptions: Option[] = doctors.map((doc) => ({
     value: doc.Name_Designation || doc.Doctor || "",

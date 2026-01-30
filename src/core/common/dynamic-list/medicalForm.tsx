@@ -7,6 +7,7 @@ import MedicineAutocomplete from "../medicine-autocomplete/MedicineAutocomplete"
 export interface MedicationItem {
   id: number;
   medicine?: string;
+  /** Plain dosage e.g. "1 tablet", "500mg" (used when from inventory or manual text) */
   dosage?: string;
   dosageMg?: string;
   dosageM?: string;
@@ -26,6 +27,10 @@ export interface MedicationItem {
   inventoryUnitPrice?: number;
   inventoryExpiryDate?: string;
   inventoryBatchNumber?: string;
+  /** From inventory: quantity, unitPrice, subtotal (saved to DB for pharmacy invoice) */
+  quantity?: number;
+  unitPrice?: number;
+  subtotal?: number;
 }
 
 interface MedicalFormProps {
@@ -37,12 +42,16 @@ const MedicalForm: React.FC<MedicalFormProps> = ({ value, onChange }) => {
   const createEmptyRow = (): MedicationItem => ({
     id: Date.now() + Math.random(),
     medicine: "",
+    dosage: "",
     dosageMg: "",
     dosageM: "",
     instruction: "",
     frequency: Frequency[0]?.value,
     timing: Timing[0]?.value,
     duration: "",
+    quantity: 1,
+    unitPrice: 0,
+    subtotal: 0,
   });
 
   const [medications, setMedications] = useState<MedicationItem[]>(
@@ -82,17 +91,34 @@ const MedicalForm: React.FC<MedicalFormProps> = ({ value, onChange }) => {
       const name = (medicineName || "").trim();
       if (!name) return;
 
+      const fromInventory = details != null && (inventoryId || inventoryCode);
+      const unit = fromInventory ? (details?.unit || "tablet").trim().toLowerCase() : "";
+      const unitLabel = unit === "pcs" || unit === "pc" ? "tablet" : unit || "tablet";
+      const dosageText = fromInventory ? `1 ${unitLabel}` : "";
+      const unitPrice = fromInventory && typeof details?.unitPrice === "number" && details.unitPrice >= 0 ? details.unitPrice : 0;
+      const quantity = fromInventory ? 1 : 1;
+      const subtotal = fromInventory ? unitPrice * quantity : 0;
+
       const newMedication: MedicationItem = {
         ...createEmptyRow(),
         medicine: name,
-        inventoryId,
-        inventoryCode,
-        inventoryCategory: details?.category,
-        inventoryManufacturer: details?.manufacturer,
-        inventoryStock: details?.quantity,
-        inventoryStatus: details?.status,
-        inventoryUnit: details?.unit,
-        inventoryUnitPrice: details?.unitPrice,
+        ...(fromInventory
+          ? {
+              dosage: dosageText,
+              duration: "As directed",
+              inventoryId,
+              inventoryCode,
+              inventoryCategory: details?.category,
+              inventoryManufacturer: details?.manufacturer,
+              inventoryStock: details?.quantity,
+              inventoryStatus: details?.status,
+              inventoryUnit: details?.unit,
+              inventoryUnitPrice: unitPrice,
+              quantity,
+              unitPrice,
+              subtotal,
+            }
+          : {}),
       };
 
       setMedications((prev) => {
@@ -100,7 +126,6 @@ const MedicalForm: React.FC<MedicalFormProps> = ({ value, onChange }) => {
         const last = list[list.length - 1];
         const hasEmptyLastRow = !last?.medicine && !last?.inventoryCode;
 
-        // Keep one empty row at the end for fast entry UX
         const tail = hasEmptyLastRow ? last : createEmptyRow();
         const body = hasEmptyLastRow ? list.slice(0, -1) : list;
 
@@ -112,13 +137,11 @@ const MedicalForm: React.FC<MedicalFormProps> = ({ value, onChange }) => {
     []
   );
 
-  // Add a new medication row above last
+  // Add a new medication row above last (manual entry)
   const handleAddAboveLast = () => {
     const newMedication: MedicationItem = {
+      ...createEmptyRow(),
       id: Date.now() + Math.random(),
-      dosageMg: "",
-      dosageM: "",
-      instruction: "",
     };
 
     setMedications((prev) => {
@@ -132,33 +155,29 @@ const MedicalForm: React.FC<MedicalFormProps> = ({ value, onChange }) => {
     setMedications((prev) => prev.filter((item) => item.id !== id));
   };
 
-  // Handlers for controlled inputs
-  const handleDosageMgChange = (id: number, value: string) => {
+  // Single dosage text (e.g. "1 tablet", "500mg") – used for both manual and inventory
+  const handleDosageChange = (id: number, value: string) => {
     setMedications((prev) =>
-      prev.map((item) => {
-        if (item.id === id) {
-          const dosage = value ? `${value}mg` : (item.dosageM ? `${item.dosageM}m` : "");
-          return { ...item, dosageMg: value, dosage };
-        }
-        return item;
-      })
+      prev.map((item) => (item.id === id ? { ...item, dosage: value || "" } : item))
     );
   };
 
-  const handleDosageMChange = (id: number, value: string) => {
+  const handleDurationChange = (id: number, value: string) => {
     setMedications((prev) =>
-      prev.map((item) => {
-        if (item.id === id) {
-          const dosage = value ? `${value}m` : (item.dosageMg ? `${item.dosageMg}mg` : "");
-          return { ...item, dosageM: value, dosage };
-        }
-        return item;
-      })
+      prev.map((item) => (item.id === id ? { ...item, duration: value || "" } : item))
     );
   };
 
   const handleInstructionChange = (id: number, value: string) => {
     setMedications((prev) => prev.map((item) => (item.id === id ? { ...item, instruction: value } : item)));
+  };
+
+  // Display dosage: prefer plain dosage text, else derive from mg/m
+  const getDosageDisplay = (item: MedicationItem) => {
+    if (item.dosage && String(item.dosage).trim()) return item.dosage;
+    const mg = item.dosageMg ? `${item.dosageMg}mg` : "";
+    const m = item.dosageM ? `${item.dosageM}m` : "";
+    return [mg, m].filter(Boolean).join(" ") || "";
   };
 
   return (
@@ -171,7 +190,7 @@ const MedicalForm: React.FC<MedicalFormProps> = ({ value, onChange }) => {
               Search medicine (Inventory)
             </label>
             <div className="text-muted fs-12">
-              Select an item to auto-fill code, stock and price.
+              Select from inventory to auto-fill dosage (e.g. 1 tablet); or type and add manually.
             </div>
           </div>
         </div>
@@ -295,12 +314,6 @@ const MedicalForm: React.FC<MedicalFormProps> = ({ value, onChange }) => {
                               )}
                             </span>
                           )}
-                          {item.inventoryUnitPrice && item.inventoryUnitPrice > 0 && (
-                            <span>
-                              <i className="ti ti-currency-rupee me-1" />
-                              ₹{item.inventoryUnitPrice.toFixed(2)}/{item.inventoryUnit || "unit"}
-                            </span>
-                          )}
                         </small>
                         {/* Show warning for out of stock or low stock */}
                         {item.inventoryStatus === "Out of Stock" && (
@@ -328,41 +341,13 @@ const MedicalForm: React.FC<MedicalFormProps> = ({ value, onChange }) => {
                         Dosage
                       </label>
                     )}
-                    <div className="input-group">
-                      <input
-                        type="text"
-                        className="form-control"
-                        value={item.dosageMg}
-                        onChange={(e) =>
-                          handleDosageMgChange(item.id, e.target.value)
-                        }
-                      />
-                      <span className="input-group-text bg-transparent text-dark fs-14">
-                        mg
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <div className="col-lg-2">
-                  <div className="mb-3">
-                    {index === 0 && (
-                      <label className="form-label mb-1 text-dark fs-14 fw-medium">
-                        Dosage
-                      </label>
-                    )}
-                    <div className="input-group">
-                      <input
-                        type="text"
-                        className="form-control"
-                        value={item.dosageM}
-                        onChange={(e) =>
-                          handleDosageMChange(item.id, e.target.value)
-                        }
-                      />
-                      <span className="input-group-text bg-transparent text-dark fs-14">
-                        m
-                      </span>
-                    </div>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={getDosageDisplay(item)}
+                      onChange={(e) => handleDosageChange(item.id, e.target.value)}
+                      placeholder="e.g. 1 tablet, 500mg"
+                    />
                   </div>
                 </div>
                 <div className="col-lg-2">
@@ -381,6 +366,22 @@ const MedicalForm: React.FC<MedicalFormProps> = ({ value, onChange }) => {
                           prev.map((med) => (med.id === item.id ? { ...med, frequency: value } : med))
                         );
                       }}
+                    />
+                  </div>
+                </div>
+                <div className="col-lg-2">
+                  <div className="mb-3">
+                    {index === 0 && (
+                      <label className="form-label mb-1 text-dark fs-14 fw-medium">
+                        Duration
+                      </label>
+                    )}
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={item.duration || ""}
+                      onChange={(e) => handleDurationChange(item.id, e.target.value)}
+                      placeholder="e.g. 5 days, As directed"
                     />
                   </div>
                 </div>
@@ -410,16 +411,13 @@ const MedicalForm: React.FC<MedicalFormProps> = ({ value, onChange }) => {
                         Instruction
                       </label>
                     )}
-                    <div className="input-group">
-                      <input
-                        type="text"
-                        className="form-control"
-                        value={item.instruction}
-                        onChange={(e) =>
-                          handleInstructionChange(item.id, e.target.value)
-                        }
-                      />
-                    </div>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={item.instruction || ""}
+                      onChange={(e) => handleInstructionChange(item.id, e.target.value)}
+                      placeholder="Optional"
+                    />
                   </div>
                 </div>
               </div>

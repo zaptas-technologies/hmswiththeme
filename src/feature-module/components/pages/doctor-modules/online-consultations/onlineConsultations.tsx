@@ -48,9 +48,7 @@ const OnlineConsultations = () => {
     dosage?: string;
     frequency?: string;
     duration?: string;
-    // Inventory document id (MongoDB ObjectId as string)
     inventoryId?: string;
-    // Optional inventory metadata
     inventoryCode?: string;
     inventoryCategory?: string;
     inventoryManufacturer?: string;
@@ -58,6 +56,10 @@ const OnlineConsultations = () => {
     inventoryStatus?: "Available" | "Low Stock" | "Out of Stock" | "Expired";
     inventoryUnit?: string;
     inventoryUnitPrice?: number;
+    /** From inventory: saved to DB for pharmacy invoice */
+    quantity?: number;
+    unitPrice?: number;
+    subtotal?: number;
   }>>([]);
 
   const [complaints, setComplaints] = useState<Array<{
@@ -89,7 +91,6 @@ const OnlineConsultations = () => {
         frequency: med.frequency,
         duration: med.duration,
         inventoryId: med.inventoryId,
-        // Include inventory metadata
         inventoryCode: med.inventoryCode,
         inventoryCategory: med.inventoryCategory,
         inventoryManufacturer: med.inventoryManufacturer,
@@ -97,6 +98,9 @@ const OnlineConsultations = () => {
         inventoryStatus: med.inventoryStatus,
         inventoryUnit: med.inventoryUnit,
         inventoryUnitPrice: med.inventoryUnitPrice,
+        quantity: med.quantity,
+        unitPrice: med.unitPrice,
+        subtotal: med.subtotal,
       })),
     [medications]
   );
@@ -118,6 +122,9 @@ const OnlineConsultations = () => {
       inventoryStatus?: "Available" | "Low Stock" | "Out of Stock" | "Expired";
       inventoryUnit?: string;
       inventoryUnitPrice?: number;
+      quantity?: number;
+      unitPrice?: number;
+      subtotal?: number;
     }>) => {
       setMedications(
         meds.map((med) => ({
@@ -126,7 +133,6 @@ const OnlineConsultations = () => {
           frequency: med.frequency || "",
           duration: med.duration || "",
           inventoryId: med.inventoryId,
-          // Preserve inventory metadata
           inventoryCode: med.inventoryCode,
           inventoryCategory: med.inventoryCategory,
           inventoryManufacturer: med.inventoryManufacturer,
@@ -134,6 +140,9 @@ const OnlineConsultations = () => {
           inventoryStatus: med.inventoryStatus,
           inventoryUnit: med.inventoryUnit,
           inventoryUnitPrice: med.inventoryUnitPrice,
+          quantity: med.quantity,
+          unitPrice: med.unitPrice,
+          subtotal: med.subtotal,
         }))
       );
     },
@@ -252,6 +261,9 @@ const OnlineConsultations = () => {
           frequency: (med.frequency || "").trim(),
           duration: (med.duration || "").trim(),
           inventoryId: med.inventoryId,
+          quantity: typeof med.quantity === "number" && med.quantity >= 0 ? med.quantity : 1,
+          unitPrice: typeof med.unitPrice === "number" && med.unitPrice >= 0 ? med.unitPrice : 0,
+          subtotal: typeof med.subtotal === "number" && med.subtotal >= 0 ? med.subtotal : (med.unitPrice ?? 0) * (med.quantity ?? 1),
         }));
 
       // Format complaints for API

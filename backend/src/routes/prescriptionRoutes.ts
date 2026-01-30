@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   getAllPrescriptions,
   getPrescriptionById,
+  getPrescriptionPriceBreakdown,
   createPrescription,
   updatePrescription,
   deletePrescription,
@@ -14,6 +15,7 @@ export const buildPrescriptionRouter = () => {
   const router = Router();
 
   router.get("/", authMiddleware, getAllPrescriptions);
+  router.get("/:id/price-breakdown", authMiddleware, getPrescriptionPriceBreakdown);
   router.get("/:id", authMiddleware, getPrescriptionById);
   router.post("/", authMiddleware, createPrescription);
   router.post("/:id/fulfill", authMiddleware, fulfillPrescription);

@@ -132,6 +132,7 @@ export const all_routes = {
   addPharmacy: "/add-pharmacy",
   editPharmacy: "/edit-pharmacy",
   pharmacyDashboard: "/pharmacy/dashboard",
+  pharmacyInvoice: "/pharmacy/invoice",
   assets: "/assets",
   activities: "/activities",
   messages: "/messages",
