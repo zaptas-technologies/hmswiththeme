@@ -20,9 +20,8 @@ const uploadDoctorImage = async (req, res, next) => {
             return res.status(400).json({ message: "No image uploaded" });
         }
         const relativePath = (0, uploadDoctorImage_1.getDoctorUploadPath)(file.filename);
-        const url = `${req.protocol}://${req.get("host")}${relativePath}`;
+        // Return path only for DB storage (deployment-safe). Client builds full URL from API origin.
         return res.status(201).json({
-            url,
             path: relativePath,
             filename: file.filename,
         });
@@ -114,6 +113,25 @@ const getAllDoctors = async (req, res, next) => {
     }
 };
 exports.getAllDoctors = getAllDoctors;
+/** Resolve current hospital ID for the logged-in user (for schedule filtering). */
+async function getCurrentHospitalId(req) {
+    if (!req.user)
+        return undefined;
+    if (req.user.role === "HOSPITAL_ADMIN" || req.user.role === "PHARMACIST") {
+        if (req.user.hospitalId && mongoose_1.default.Types.ObjectId.isValid(req.user.hospitalId)) {
+            return new mongoose_1.default.Types.ObjectId(req.user.hospitalId);
+        }
+        return undefined;
+    }
+    if (req.user.role === "USER") {
+        const doctor = await doctorModel_1.Doctor.findOne({ user: req.user.userId }).select("hospital").lean();
+        if (doctor?.hospital && mongoose_1.default.Types.ObjectId.isValid(doctor.hospital.toString())) {
+            return new mongoose_1.default.Types.ObjectId(doctor.hospital.toString());
+        }
+        return undefined;
+    }
+    return undefined; // SUPER_ADMIN: no single current hospital
+}
 const getDoctorById = async (req, res, next) => {
     try {
         if (!req.user) {
@@ -129,13 +147,46 @@ const getDoctorById = async (req, res, next) => {
             return res.status(400).json({ message: "Invalid doctor ID format" });
         }
         const doctor = await doctorModel_1.Doctor.findOne(filter)
-            .select("_id Name_Designation img role Department Phone Email Fees Status timeSlotMinutes createdAt updatedAt")
             .lean()
             .exec();
         if (!doctor) {
             return res.status(404).json({ message: "Doctor not found" });
         }
-        res.json(formatDoctorResponse(doctor));
+        const doctorIdObj = new mongoose_1.default.Types.ObjectId(doctor._id?.toString?.() ?? doctor._id);
+        const currentHospitalId = await getCurrentHospitalId(req);
+        console.log("[getDoctorById] doctorId:", doctorIdObj.toString(), "currentHospitalId:", currentHospitalId?.toString() ?? "none", "user.role:", req.user?.role);
+        const scheduleFilter = { doctorId: doctorIdObj };
+        if (currentHospitalId) {
+            scheduleFilter.hospital = currentHospitalId;
+        }
+        console.log("[getDoctorById] scheduleFilter:", JSON.stringify({ doctorId: scheduleFilter.doctorId.toString(), hospital: scheduleFilter.hospital?.toString() }));
+        const scheduleCountForDoctor = await doctorScheduleModel_1.DoctorSchedule.countDocuments({ doctorId: doctorIdObj });
+        console.log("[getDoctorById] DoctorSchedule count for this doctorId:", scheduleCountForDoctor);
+        let doctorScheduleDoc = await doctorScheduleModel_1.DoctorSchedule.findOne(scheduleFilter)
+            .sort({ createdAt: -1 })
+            .lean()
+            .exec();
+        console.log("[getDoctorById] first query (by doctorId + hospital): found =", !!doctorScheduleDoc);
+        // Fallback: if no schedule for current hospital, use latest schedule for this doctor (any hospital)
+        if (!doctorScheduleDoc) {
+            doctorScheduleDoc = await doctorScheduleModel_1.DoctorSchedule.findOne({ doctorId: doctorIdObj })
+                .sort({ createdAt: -1 })
+                .lean()
+                .exec();
+            console.log("[getDoctorById] fallback (by doctorId only): found =", !!doctorScheduleDoc, doctorScheduleDoc ? { _id: doctorScheduleDoc._id, hospital: doctorScheduleDoc.hospital } : "");
+        }
+        console.log("[getDoctorById] scheduleDetail:", doctorScheduleDoc ? "included" : "null");
+        const response = formatDoctorResponse(doctor);
+        response.scheduleDetail = doctorScheduleDoc
+            ? {
+                location: doctorScheduleDoc.location,
+                fromDate: doctorScheduleDoc.fromDate.toISOString?.()?.split("T")[0] ?? doctorScheduleDoc.fromDate,
+                toDate: doctorScheduleDoc.toDate.toISOString?.()?.split("T")[0] ?? doctorScheduleDoc.toDate,
+                recursEvery: doctorScheduleDoc.recursEvery,
+                schedules: doctorScheduleDoc.schedules ?? [],
+            }
+            : null;
+        res.json(response);
     }
     catch (err) {
         next(err);
@@ -327,8 +378,8 @@ const updateDoctor = async (req, res, next) => {
         }
         const { id } = req.params;
         const updateData = req.body;
-        // Extract password before cleaning (password is only for User account, not doctor record)
-        const { password, id: _ignoredId, _id: _ignoredMongoId, ...cleanUpdateData } = updateData;
+        // Extract password and schedule-related fields (schedule is stored in DoctorSchedule, not on doctor doc)
+        const { password, id: _ignoredId, _id: _ignoredMongoId, schedules: updateSchedules, scheduleLocation: updateScheduleLocation, scheduleFromDate: updateScheduleFromDate, scheduleToDate: updateScheduleToDate, scheduleRecursEvery: updateScheduleRecursEvery, ...cleanUpdateData } = updateData;
         // Validate if updating required fields
         if (updateData.Email || updateData.Phone || updateData.Name_Designation || updateData.Status) {
             const validation = validateDoctorData({ ...updateData, Email: updateData.Email || "", Phone: updateData.Phone || "", Name_Designation: updateData.Name_Designation || "", Status: updateData.Status || "Available" });
@@ -363,9 +414,59 @@ const updateDoctor = async (req, res, next) => {
                 return res.status(409).json({ message: "User account with this email already exists" });
             }
         }
-        // Update doctor (without password)
+        // Update doctor (without password and without schedule fields)
         Object.assign(doctor, cleanUpdateData);
         await doctor.save();
+        // Upsert DoctorSchedule if schedule data is provided
+        if (updateSchedules &&
+            Array.isArray(updateSchedules) &&
+            updateSchedules.length > 0 &&
+            updateScheduleLocation?.trim() &&
+            updateScheduleFromDate &&
+            updateScheduleToDate) {
+            const fromDate = new Date(updateScheduleFromDate);
+            const toDate = new Date(updateScheduleToDate);
+            if (!isNaN(fromDate.getTime()) && !isNaN(toDate.getTime()) && toDate >= fromDate) {
+                const doctorId = doctor._id;
+                const location = updateScheduleLocation.trim();
+                const recursEvery = updateScheduleRecursEvery || "1 Week";
+                const normalizedSchedules = updateSchedules.map((s) => ({
+                    day: s.day,
+                    timeSlots: (s.timeSlots || []).map((slot) => ({
+                        session: slot.session ?? "",
+                        from: slot.from ?? "",
+                        to: slot.to ?? "",
+                    })),
+                }));
+                const existingSchedule = await doctorScheduleModel_1.DoctorSchedule.findOne({ doctorId }).sort({ createdAt: -1 }).exec();
+                if (existingSchedule) {
+                    existingSchedule.set({
+                        location,
+                        fromDate,
+                        toDate,
+                        recursEvery,
+                        schedules: normalizedSchedules,
+                    });
+                    existingSchedule.markModified("schedules");
+                    await existingSchedule.save();
+                }
+                else {
+                    const doctorForHospital = await doctorModel_1.Doctor.findById(doctorId).select("hospital").lean();
+                    const hospitalId = doctorForHospital?.hospital
+                        ? new mongoose_1.default.Types.ObjectId(doctorForHospital.hospital.toString())
+                        : undefined;
+                    await doctorScheduleModel_1.DoctorSchedule.create({
+                        doctorId,
+                        location,
+                        fromDate,
+                        toDate,
+                        recursEvery,
+                        schedules: normalizedSchedules,
+                        ...(hospitalId && { hospital: hospitalId }),
+                    });
+                }
+            }
+        }
         // Update user account if email or password is being changed
         // Find user by old email (before update)
         let user = oldEmail ? await userModel_1.User.findOne({ email: oldEmail }) : null;

@@ -7,14 +7,13 @@ import {
   deleteGRN,
 } from "../controllers/grnController";
 import { authMiddleware } from "../middlewares/authMiddleware";
-import { parseUpdateQuery } from "../middlewares/parseUpdateQuery";
 
 export const buildGRNRouter = () => {
   const router = Router();
   router.get("/", authMiddleware, getAllGRN);
   router.get("/:id", authMiddleware, getGRNById);
   router.post("/", authMiddleware, createGRN);
-  router.get("/:id/update", authMiddleware, parseUpdateQuery, updateGRN);
+  router.put("/:id", authMiddleware, updateGRN);
   router.delete("/:id", authMiddleware, deleteGRN);
 
   return router;

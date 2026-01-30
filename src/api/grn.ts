@@ -88,9 +88,8 @@ export const updateGRN = async (
   id: string,
   grnData: Partial<GRN>
 ): Promise<GRN> => {
-  const { data } = await api.get<GRN>(`/grn/${id}/update`, {
-    params: { data: JSON.stringify(grnData) },
-  });
+  const { id: _ignoredId, _id: _ignoredMongoId, ...body } = grnData;
+  const { data } = await api.put<GRN>(`/grn/${id}`, body);
   return data;
 };
 

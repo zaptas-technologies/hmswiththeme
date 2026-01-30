@@ -1,7 +1,7 @@
 import { Link, useSearchParams, useNavigate } from "react-router";
 import { all_routes } from "../../../../routes/all_routes";
 import ImageWithBasePath from "../../../../../core/imageWithBasePath";
-import { DatePicker } from "antd";
+import { DatePicker, TimePicker } from "antd";
 import type { Dayjs } from "dayjs";
 import dayjs from "dayjs";
 import {
@@ -13,17 +13,24 @@ import {
   Designation,
   Gender,
   State,
+  Session,
 } from "../../../../../core/common/selectOption";
 import CommonSelect from "../../../../../core/common/common-select/commonSelect";
 import TagInput from "../../../../../core/common/Taginput";
 import { useState, useEffect } from "react";
-import DuplicateForms from "../../../../../core/common/duplicate-forms/duplicateForms";
 import EducationForms from "../../../../../core/common/duplicate-forms/educationForm";
 import RewardsForms from "../../../../../core/common/duplicate-forms/rewardsForm";
 import PhoneInput from "react-phone-number-input";
 import "react-phone-number-input/style.css";
-import { fetchDoctorById, updateDoctor, uploadDoctorImage, type Doctor } from "../../../../../api/doctors";
+import { fetchDoctorById, updateDoctor, uploadDoctorImage, type Doctor, type DaySchedule } from "../../../../../api/doctors";
 import { getApiOrigin } from "../../../../../api/dashboard";
+
+interface ScheduleRow {
+  id: number;
+  session: string;
+  from: Dayjs | null;
+  to: Dayjs | null;
+}
 
 const EditDoctor = () => {
   const [searchParams] = useSearchParams();
@@ -72,6 +79,15 @@ const EditDoctor = () => {
   const [profileImage, setProfileImage] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [uploadingImage, setUploadingImage] = useState(false);
+
+  // Schedule (DoctorSchedule): metadata + per-day time slots
+  const [scheduleLocation, setScheduleLocation] = useState("");
+  const [scheduleFromDate, setScheduleFromDate] = useState<Dayjs | null>(null);
+  const [scheduleToDate, setScheduleToDate] = useState<Dayjs | null>(null);
+  const [scheduleRecursEvery, setScheduleRecursEvery] = useState("1 Week");
+  const [schedulesByDay, setSchedulesByDay] = useState<Record<string, ScheduleRow[]>>({
+    Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [], Sunday: [],
+  });
 
   const getModalContainer = () => {
     const modalElement = document.getElementById("modal-datepicker");
@@ -126,6 +142,30 @@ const EditDoctor = () => {
           awards: doctorData.awards || [],
           certifications: doctorData.certifications || [],
         });
+
+        // Populate schedule from scheduleDetail (DoctorSchedule)
+        const sd = doctorData.scheduleDetail;
+        if (sd) {
+          setScheduleLocation(sd.location || "");
+          setScheduleFromDate(sd.fromDate ? dayjs(sd.fromDate) : null);
+          setScheduleToDate(sd.toDate ? dayjs(sd.toDate) : null);
+          setScheduleRecursEvery(sd.recursEvery || "1 Week");
+          const byDay: Record<string, ScheduleRow[]> = {
+            Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [], Sunday: [],
+          };
+          (sd.schedules || []).forEach((s: { day: string; timeSlots: Array<{ session: string; from: string; to: string }> }) => {
+            const day = s.day;
+            if (byDay[day]) {
+              byDay[day] = (s.timeSlots || []).map((slot, i) => ({
+                id: Date.now() + i + Math.random(),
+                session: slot.session || Session[0]?.value || "",
+                from: slot.from ? dayjs(slot.from, "HH:mm") : null,
+                to: slot.to ? dayjs(slot.to, "HH:mm") : null,
+              }));
+            }
+          });
+          setSchedulesByDay(byDay);
+        }
         
         setPhone(doctorData.Phone);
         setProfileImage(doctorData.img || "assets/img/doctors/doctor-01.jpg");
@@ -140,6 +180,29 @@ const EditDoctor = () => {
 
     loadDoctor();
   }, [doctorId]);
+
+  const handleScheduleChange = (day: string, rows: ScheduleRow[]) => {
+    setSchedulesByDay(prev => ({ ...prev, [day]: rows }));
+  };
+
+  const convertScheduleToAPIFormat = (): DaySchedule[] => {
+    const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+    return days
+      .map(day => {
+        const dayRows = schedulesByDay[day] || [];
+        if (dayRows.length === 0) return null;
+        const timeSlots = dayRows
+          .filter(row => row.from && row.to)
+          .map(row => ({
+            session: row.session || Session[0]?.value || "",
+            from: row.from ? row.from.format("HH:mm") : "",
+            to: row.to ? row.to.format("HH:mm") : "",
+          }));
+        if (timeSlots.length === 0) return null;
+        return { day: day as DaySchedule["day"], timeSlots };
+      })
+      .filter((s): s is DaySchedule => s !== null);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -188,12 +251,20 @@ const EditDoctor = () => {
         ...(formData.consultationCharge && { consultationCharge: formData.consultationCharge, Fees: formData.consultationCharge }),
         ...(formData.maxBookingsPerSlot && { maxBookingsPerSlot: formData.maxBookingsPerSlot }),
         displayOnBookingPage: formData.displayOnBookingPage,
-        ...(formData.schedules.length > 0 && { schedules: formData.schedules }),
         ...(formData.education.length > 0 && { education: formData.education }),
         ...(formData.awards.length > 0 && { awards: formData.awards }),
         ...(formData.certifications.length > 0 && { certifications: formData.certifications }),
         ...(profileImage && { img: profileImage }),
       };
+
+      const apiSchedules = convertScheduleToAPIFormat();
+      if (scheduleLocation?.trim() && scheduleFromDate && scheduleToDate && apiSchedules.length > 0) {
+        (updateData as any).scheduleLocation = scheduleLocation.trim();
+        (updateData as any).scheduleFromDate = scheduleFromDate.format("YYYY-MM-DD");
+        (updateData as any).scheduleToDate = scheduleToDate.format("YYYY-MM-DD");
+        (updateData as any).scheduleRecursEvery = scheduleRecursEvery || "1 Week";
+        (updateData as any).schedules = apiSchedules;
+      }
 
       await updateDoctor(doctorId, updateData);
       // eslint-disable-next-line no-alert
@@ -678,174 +749,111 @@ const EditDoctor = () => {
                       </div>
                     </div>
                     <div className="bg-light px-3 py-2 mb-3">
-                      <h6 className="fw-bold mb-0">Address Information</h6>
+                      <h6 className="fw-bold mb-0">Schedule Information</h6>
                     </div>
-                    <div>
-                      <ul
-                        className="nav nav-pills schedule-tab mb-3"
-                        id="pills-tab2"
-                        role="tablist"
-                      >
-                        <li className="nav-item me-1" role="presentation">
-                          <button
-                            className="nav-link btn btn-sm btn-icon p-2 d-flex align-items-center justify-content-center w-auto active"
-                            data-bs-toggle="pill"
-                            data-bs-target="#schedules-8"
-                            type="button"
-                            role="tab"
-                            aria-selected="true"
-                          >
-                            Monday
-                          </button>
-                        </li>
-                        <li className="nav-item me-1" role="presentation">
-                          <button
-                            className="nav-link btn btn-sm btn-icon p-2 d-flex align-items-center justify-content-center w-auto"
-                            data-bs-toggle="pill"
-                            data-bs-target="#schedules-9"
-                            type="button"
-                            role="tab"
-                            aria-selected="false"
-                            tabIndex={-1}
-                          >
-                            Tuesday
-                          </button>
-                        </li>
-                        <li className="nav-item me-1" role="presentation">
-                          <button
-                            className="nav-link btn btn-sm btn-icon p-2 d-flex align-items-center justify-content-center w-auto"
-                            data-bs-toggle="pill"
-                            data-bs-target="#schedules-10"
-                            type="button"
-                            role="tab"
-                            aria-selected="false"
-                            tabIndex={-1}
-                          >
-                            Wednesday
-                          </button>
-                        </li>
-                        <li className="nav-item me-1" role="presentation">
-                          <button
-                            className="nav-link btn btn-sm btn-icon p-2 d-flex align-items-center justify-content-center w-auto"
-                            data-bs-toggle="pill"
-                            data-bs-target="#schedules-11"
-                            type="button"
-                            role="tab"
-                            aria-selected="false"
-                            tabIndex={-1}
-                          >
-                            Thursday
-                          </button>
-                        </li>
-                        <li className="nav-item me-1" role="presentation">
-                          <button
-                            className="nav-link btn btn-sm btn-icon p-2 d-flex align-items-center justify-content-center w-auto"
-                            data-bs-toggle="pill"
-                            data-bs-target="#schedules-12"
-                            type="button"
-                            role="tab"
-                            aria-selected="false"
-                            tabIndex={-1}
-                          >
-                            Friday
-                          </button>
-                        </li>
-                        <li className="nav-item me-1" role="presentation">
-                          <button
-                            className="nav-link btn btn-sm btn-icon p-2 d-flex align-items-center justify-content-center w-auto"
-                            data-bs-toggle="pill"
-                            data-bs-target="#schedules-13"
-                            type="button"
-                            role="tab"
-                            aria-selected="false"
-                            tabIndex={-1}
-                          >
-                            Saturday
-                          </button>
-                        </li>
-                        <li className="nav-item me-1" role="presentation">
-                          <button
-                            className="nav-link btn btn-sm btn-icon p-2 d-flex align-items-center justify-content-center w-auto"
-                            data-bs-toggle="pill"
-                            data-bs-target="#schedules-14"
-                            type="button"
-                            role="tab"
-                            aria-selected="false"
-                            tabIndex={-1}
-                          >
-                            Sunday
-                          </button>
-                        </li>
-                      </ul>
-                      <div className="tab-content" id="pills-tabContent2">
-                        <div
-                          className="tab-pane fade active show"
-                          id="schedules-8"
-                          role="tabpanel"
-                        >
-                          <div className="add-schedule-list">
-                            <DuplicateForms />
+                    <div className="pb-0 mb-3">
+                      <div className="row">
+                        <div className="col-lg-6">
+                          <div className="mb-3">
+                            <label className="form-label">Location</label>
+                            <input
+                              type="text"
+                              className="form-control"
+                              value={scheduleLocation}
+                              onChange={(e) => setScheduleLocation(e.target.value)}
+                              placeholder="e.g., Main Clinic, Branch Office"
+                            />
                           </div>
                         </div>
-                        <div
-                          className="tab-pane fade"
-                          id="schedules-9"
-                          role="tabpanel"
-                        >
-                          <div className="add-schedule-list">
-                            <DuplicateForms />
+                        <div className="col-lg-6">
+                          <div className="mb-3">
+                            <label className="form-label">Recurs Every</label>
+                            <CommonSelect
+                              options={[
+                                { value: "1 Week", label: "1 Week" },
+                                { value: "2 Weeks", label: "2 Weeks" },
+                                { value: "1 Month", label: "1 Month" },
+                                { value: "3 Months", label: "3 Months" },
+                                { value: "6 Months", label: "6 Months" },
+                                { value: "1 Year", label: "1 Year" },
+                              ]}
+                              className="select"
+                              value={scheduleRecursEvery}
+                              onChange={setScheduleRecursEvery}
+                            />
                           </div>
                         </div>
-                        <div
-                          className="tab-pane fade"
-                          id="schedules-10"
-                          role="tabpanel"
-                        >
-                          <div className="add-schedule-list">
-                            <DuplicateForms />
+                        <div className="col-lg-6">
+                          <div className="mb-3">
+                            <label className="form-label">Schedule Start Date</label>
+                            <div className="input-icon-end position-relative">
+                              <DatePicker
+                                className="form-control datetimepicker"
+                                format={{ format: "DD-MM-YYYY", type: "mask" }}
+                                getPopupContainer={getModalContainer}
+                                placeholder="DD-MM-YYYY"
+                                suffixIcon={null}
+                                value={scheduleFromDate}
+                                onChange={setScheduleFromDate}
+                              />
+                              <span className="input-icon-addon"><i className="ti ti-calendar" /></span>
+                            </div>
                           </div>
                         </div>
-                        <div
-                          className="tab-pane fade"
-                          id="schedules-11"
-                          role="tabpanel"
-                        >
-                          <div className="add-schedule-list">
-                            <DuplicateForms />
-                          </div>
-                        </div>
-                        <div
-                          className="tab-pane fade"
-                          id="schedules-12"
-                          role="tabpanel"
-                        >
-                          <div className="add-schedule-list">
-                            <DuplicateForms />
-                          </div>
-                        </div>
-                        <div
-                          className="tab-pane fade"
-                          id="schedules-13"
-                          role="tabpanel"
-                        >
-                          <div className="add-schedule-list">
-                            <DuplicateForms />
-                          </div>
-                        </div>
-                        <div
-                          className="tab-pane fade"
-                          id="schedules-14"
-                          role="tabpanel"
-                        >
-                          <div className="add-schedule-list">
-                            <DuplicateForms />
+                        <div className="col-lg-6">
+                          <div className="mb-3">
+                            <label className="form-label">Schedule End Date</label>
+                            <div className="input-icon-end position-relative">
+                              <DatePicker
+                                className="form-control datetimepicker"
+                                format={{ format: "DD-MM-YYYY", type: "mask" }}
+                                getPopupContainer={getModalContainer}
+                                placeholder="DD-MM-YYYY"
+                                suffixIcon={null}
+                                value={scheduleToDate}
+                                onChange={setScheduleToDate}
+                              />
+                              <span className="input-icon-addon"><i className="ti ti-calendar" /></span>
+                            </div>
                           </div>
                         </div>
                       </div>
-                      <div className="mb-3">
-                        <Link to="#" className="btn btn-dark">
-                          Apply All
-                        </Link>
+                    </div>
+                    <div className="p-3">
+                      <ul className="nav nav-pills schedule-tab mb-3" id="pills-tab2" role="tablist">
+                        {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((day, index) => (
+                          <li key={day} className="nav-item me-1" role="presentation">
+                            <button
+                              className={`nav-link btn btn-sm btn-icon p-2 d-flex align-items-center justify-content-center w-auto ${index === 0 ? "active" : ""}`}
+                              data-bs-toggle="pill"
+                              data-bs-target={`#edit-schedule-${index + 1}`}
+                              type="button"
+                              role="tab"
+                              aria-selected={index === 0}
+                              tabIndex={index === 0 ? undefined : -1}
+                            >
+                              {day}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                      <div className="tab-content" id="pills-tabContent2">
+                        {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((day, index) => (
+                          <div
+                            key={day}
+                            className={`tab-pane fade ${index === 0 ? "active show" : ""}`}
+                            id={`edit-schedule-${index + 1}`}
+                            role="tabpanel"
+                          >
+                            <div className="add-schedule-list">
+                              <EditScheduleForm
+                                day={day}
+                                rows={schedulesByDay[day] || []}
+                                onChange={(rows) => handleScheduleChange(day, rows)}
+                              />
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                     <div className="bg-light px-3 py-2 mb-3">
@@ -1024,6 +1032,115 @@ const EditDoctor = () => {
 			End Page Content
 		========================= */}
     </>
+  );
+};
+
+// Controlled schedule form for edit: session + from/to time per row
+const EditScheduleForm: React.FC<{
+  day: string;
+  rows: ScheduleRow[];
+  onChange: (rows: ScheduleRow[]) => void;
+}> = ({ day: _day, rows, onChange }) => {
+  const createRow = (): ScheduleRow => ({
+    id: Date.now() + Math.random(),
+    session: Session[0]?.value || "",
+    from: dayjs("00:00:00", "HH:mm:ss"),
+    to: dayjs("00:00:00", "HH:mm:ss"),
+  });
+
+  const handleAddRow = (row: ScheduleRow) => {
+    const idx = rows.findIndex((r) => r.id === row.id);
+    const newRows = [...rows];
+    newRows.splice(idx + 1, 0, createRow());
+    onChange(newRows);
+  };
+
+  const handleDeleteRow = (id: number) => {
+    onChange(rows.filter((r) => r.id !== id));
+  };
+
+  const handleTimeChange = (id: number, field: "from" | "to", time: Dayjs | null) => {
+    onChange(rows.map((r) => (r.id === id ? { ...r, [field]: time } : r)));
+  };
+
+  const handleSessionChange = (id: number, session: string) => {
+    onChange(rows.map((r) => (r.id === id ? { ...r, session } : r)));
+  };
+
+  useEffect(() => {
+    if (rows.length === 0) {
+      onChange([createRow()]);
+    }
+  }, []);
+
+  return (
+    <div>
+      {rows.map((row) => (
+        <div className="row gx-3" key={row.id}>
+          <div className="col-lg-5">
+            <div className="mb-3">
+              <label className="form-label">Session</label>
+              <CommonSelect
+                options={Session}
+                className="select"
+                value={row.session}
+                onChange={(value) => handleSessionChange(row.id, value)}
+              />
+            </div>
+          </div>
+          <div className="col-lg-7">
+            <div className="row align-items-end gx-3">
+              <div className="col-lg-9">
+                <div className="row gx-3">
+                  <div className="col-lg-6">
+                    <div className="mb-3">
+                      <label className="form-label">From</label>
+                      <div className="input-icon-end position-relative">
+                        <TimePicker
+                          className="form-control"
+                          value={row.from}
+                          onChange={(time: Dayjs | null) => handleTimeChange(row.id, "from", time)}
+                          defaultOpenValue={dayjs("00:00:00", "HH:mm:ss")}
+                          format="HH:mm"
+                        />
+                        <span className="input-icon-addon"><i className="ti ti-clock-hour-10" /></span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="col-lg-6">
+                    <div className="mb-3">
+                      <label className="form-label">To</label>
+                      <div className="input-icon-end position-relative">
+                        <TimePicker
+                          className="form-control"
+                          value={row.to}
+                          onChange={(time: Dayjs | null) => handleTimeChange(row.id, "to", time)}
+                          defaultOpenValue={dayjs("00:00:00", "HH:mm:ss")}
+                          format="HH:mm"
+                        />
+                        <span className="input-icon-addon"><i className="ti ti-clock-hour-10" /></span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="col-lg-3">
+                <div className="mb-3 d-flex">
+                  <Link to="#" onClick={(e) => { e.preventDefault(); handleAddRow(row); }} className="add-schedule-btn p-2 bg-light btn-icon text-dark rounded d-flex align-items-center justify-content-center" style={{ marginRight: 8 }}>
+                    <i className="ti ti-plus fs-16" />
+                  </Link>
+                  {rows.length > 1 && (
+                    <Link to="#" onClick={(e) => { e.preventDefault(); handleDeleteRow(row.id); }} className="remove-schedule-btn p-2 bg-soft-danger btn-icon text-danger rounded d-flex align-items-center justify-content-center">
+                      <i className="ti ti-trash fs-16" />
+                    </Link>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 };
 

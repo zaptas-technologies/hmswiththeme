@@ -26,26 +26,7 @@ const pharmacyRoutes_1 = require("./routes/pharmacyRoutes");
 dotenv_1.default.config();
 const start = async () => {
     const app = (0, express_1.default)();
-    const corsOptions = {
-        origin: (origin, callback) => {
-            callback(null, true);
-        },
-        credentials: true,
-        methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allowedHeaders: [
-            "Content-Type",
-            "Authorization",
-            "X-Requested-With",
-            "Accept",
-            "Origin",
-        ],
-        exposedHeaders: ["Content-Type", "Authorization"],
-        preflightContinue: false,
-        optionsSuccessStatus: 204,
-        maxAge: 86400,
-    };
-    app.use((0, cors_1.default)(corsOptions));
-    app.options("*", (0, cors_1.default)(corsOptions));
+    app.use((0, cors_1.default)({ origin: true, credentials: true }));
     app.use(express_1.default.json({ limit: "1mb" }));
     app.use((0, morgan_1.default)("dev"));
     // Static uploads (local disk). e.g. http://localhost:4000/uploads/doctors/<file>

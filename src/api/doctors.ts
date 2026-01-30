@@ -65,6 +65,15 @@ export interface Doctor {
   scheduleFromDate?: string; // ISO date string
   scheduleToDate?: string; // ISO date string
   scheduleRecursEvery?: string; // e.g., "1 Week", "1 Month"
+
+  /** Doctor schedule from DoctorSchedule model (current hospital or latest). Returned by GET /doctors/:id */
+  scheduleDetail?: {
+    location: string;
+    fromDate: string;
+    toDate: string;
+    recursEvery: string;
+    schedules: DaySchedule[];
+  } | null;
   
   // Appointment info
   appointmentType?: string;

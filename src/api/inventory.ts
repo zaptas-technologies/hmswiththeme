@@ -78,9 +78,8 @@ export const updateInventory = async (
   id: string,
   inventoryData: Partial<Inventory>
 ): Promise<Inventory> => {
-  const { data } = await api.get<Inventory>(`/inventory/${id}/update`, {
-    params: { data: JSON.stringify(inventoryData) },
-  });
+  const { id: _ignoredId, _id: _ignoredMongoId, ...body } = inventoryData;
+  const { data } = await api.put<Inventory>(`/inventory/${id}`, body);
   return data;
 };
 

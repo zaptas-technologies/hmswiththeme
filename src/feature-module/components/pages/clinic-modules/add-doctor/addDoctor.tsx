@@ -19,7 +19,10 @@ import { all_routes } from "../../../../routes/all_routes";
 import PhoneInput from "react-phone-number-input";
 import "react-phone-number-input/style.css";
 import { createDoctor, uploadDoctorImage } from "../../../../../api/doctors";
-import { getApiOrigin } from "../../../../../api/dashboard";
+import { getDoctorImageSrc } from "../../../../../api/dashboard";
+import ImageWithBasePath from "../../../../../core/imageWithBasePath";
+import { useAuth } from "../../../../../core/context/AuthContext";
+import { fetchHospitalById } from "../../../../../api/hospitals";
 import type { Doctor, DaySchedule, TimeSlot, Education, Award } from "../../../../../api/doctors";
 import type { Option } from "../../../../../core/common/common-select/commonSelect";
 
@@ -46,6 +49,7 @@ interface AwardRow {
 
 const AddDoctor = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const getModalContainer = () => {
     const modalElement = document.getElementById("modal-datepicker");
     return modalElement ? modalElement : document.body;
@@ -115,9 +119,17 @@ const AddDoctor = () => {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    // Load locations if needed in future
-    // loadLocations();
-  }, []);
+    const hospitalId = (user as any)?.hospitalId;
+    if (hospitalId) {
+      fetchHospitalById(hospitalId)
+        .then((hospital) => {
+          if (hospital?.name) {
+            setScheduleLocation(hospital.name);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [user]);
 
   const handleTagsChange = (newTags: string[]) => {
     setTags(newTags);
@@ -300,7 +312,7 @@ const AddDoctor = () => {
                 <div className="card-body">
                   <div className="border-bottom d-flex align-items-center justify-content-between pb-3 mb-3">
                     <h5 className="offcanvas-title fs-18 fw-bold">
-                      New Doctord
+                      New Doctor
                     </h5>
                   </div>
                   <form onSubmit={handleSubmit}>
@@ -340,9 +352,10 @@ const AddDoctor = () => {
                                 }}
                               />
                               {profileImageUrl && (
-                                <img
-                                  src={profileImageUrl.startsWith("/") ? getApiOrigin() + profileImageUrl : profileImageUrl}
+                                <ImageWithBasePath
+                                  src={getDoctorImageSrc(profileImageUrl)}
                                   alt="Doctor"
+                                  className="position-relative z-n1"
                                   style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
                                 />
                               )}
@@ -712,9 +725,9 @@ const AddDoctor = () => {
                             <label className="form-label">
                               Location <span className="text-danger">*</span>
                             </label>
-                            <input 
-                              type="text" 
-                              className="form-control" 
+                            <input
+                              type="text"
+                              className="form-control"
                               value={scheduleLocation}
                               onChange={(e) => setScheduleLocation(e.target.value)}
                               required
