@@ -56,6 +56,7 @@ export const getAllPatients: RequestHandler = async (req, res, next) => {
     const sort = (req.query.sort as string) || "-createdAt";
 
     const search = (req.query.search as string) || "";
+    const phone = (req.query.phone as string) || "";
     const status = (req.query.status as string) || "";
     const doctor = (req.query.doctor as string) || "";
 
@@ -63,9 +64,15 @@ export const getAllPatients: RequestHandler = async (req, res, next) => {
     if (status) filter.Status = status;
     if (doctor) filter.Doctor = new RegExp(doctor, "i");
 
+    // Search by name, phone, or email (partial match)
     if (search) {
-      const rx = new RegExp(search, "i");
+      const rx = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
       filter.$or = [{ Patient: rx }, { Phone: rx }, { Email: rx }];
+    }
+    // Explicit phone search (e.g. ?phone=9876)
+    if (phone) {
+      const phoneRx = new RegExp(phone.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      filter.Phone = phoneRx;
     }
 
     const [patients, total] = await Promise.all([

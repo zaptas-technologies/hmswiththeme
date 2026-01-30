@@ -3,7 +3,6 @@ import { all_routes } from "../../../../routes/all_routes";
 import {
   Appointment_Type,
   Department,
-  Status_Checkout,
 } from "../../../../../core/common/selectOption";
 import CommonSelect from "../../../../../core/common/common-select/commonSelect";
 import { DatePicker } from "antd";
@@ -30,6 +29,8 @@ const NewAppointment = () => {
   const [loading, setLoading] = useState(false);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
+  const [patientSearch, setPatientSearch] = useState<string>("");
+  const [patientsLoading, setPatientsLoading] = useState(false);
   const [selectedSlotTime, setSelectedSlotTime] = useState<string>(""); // HH:mm format
   const [amountPaid, setAmountPaid] = useState<string>("");
   const [paymentMode, setPaymentMode] = useState<string>("Cash");
@@ -40,7 +41,7 @@ const NewAppointment = () => {
     Appointment_Type: "",
     Date: null as Dayjs | null,
     Reason: "",
-    Status: "",
+    Status: "Schedule", // Always mark as scheduled when booking
   });
 
 
@@ -50,27 +51,46 @@ const NewAppointment = () => {
   };
 
   useEffect(() => {
-    const loadData = async () => {
+    const loadDoctors = async () => {
       try {
-        const [doctorsRes, patientsRes] = await Promise.all([
-          fetchDoctors({ limit: 100, sort: "Name_Designation" }),
-          fetchPatients({ limit: 100, sort: "Patient" }),
-        ]);
-
+        const doctorsRes = await fetchDoctors({ limit: 100, sort: "Name_Designation" });
         const doctorsList = Array.isArray(doctorsRes) ? doctorsRes : doctorsRes.data || [];
-        const patientsList = Array.isArray(patientsRes) ? patientsRes : patientsRes.data || [];
-
         setDoctors(doctorsList);
-        setPatients(patientsList);
       } catch (error) {
         // eslint-disable-next-line no-console
-        console.error("Failed to load doctors/patients:", error);
-        alert("Failed to load doctors and patients. Please refresh the page.");
+        console.error("Failed to load doctors:", error);
       }
     };
-
-    loadData();
+    loadDoctors();
   }, []);
+
+  // Load patients: initial load + debounced search by name or phone
+  useEffect(() => {
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      setPatientsLoading(true);
+      try {
+        const params: { limit: number; sort: string; search?: string } = {
+          limit: 100,
+          sort: "Patient",
+        };
+        if (patientSearch.trim()) params.search = patientSearch.trim();
+        const patientsRes = await fetchPatients(params);
+        const list = Array.isArray(patientsRes) ? patientsRes : patientsRes.data || [];
+        if (!cancelled) setPatients(list);
+      } catch (error) {
+        if (!cancelled) setPatients([]);
+        // eslint-disable-next-line no-console
+        console.error("Failed to load patients:", error);
+      } finally {
+        if (!cancelled) setPatientsLoading(false);
+      }
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [patientSearch]);
 
   const doctorOptions: Option[] = useMemo(
     () =>
@@ -85,7 +105,7 @@ const NewAppointment = () => {
     () =>
       patients.map((pat) => ({
         value: pat.Patient || "",
-        label: pat.Patient || "",
+        label: `${pat.Patient || "—"} (${pat.Phone || "—"})`,
       })),
     [patients]
   );
@@ -112,8 +132,7 @@ const NewAppointment = () => {
       !formData.Doctor ||
       !formData.Appointment_Type ||
       !formData.Date ||
-      !selectedSlotTime ||
-      !formData.Status
+      !selectedSlotTime
     ) {
       alert("Please fill in all required fields including selecting a time slot");
       return;
@@ -163,7 +182,7 @@ const NewAppointment = () => {
         Doctor: formData.Doctor,
         doctorId: selectedDoctor._id || selectedDoctor.id, // Save doctor's _id
         Mode: formData.Appointment_Type,
-        Status: formData.Status,
+        Status: "Schedule", // Always scheduled when booking
         // Additional fields
         role: selectedDoctor.role || "",
         Department: formData.Department || selectedDoctor.Department || "",
@@ -243,11 +262,27 @@ const NewAppointment = () => {
                               Add New
                             </Link>
                           </div>
+                          <div className="mb-2">
+                            <input
+                              type="text"
+                              className="form-control form-control-sm"
+                              placeholder="Search by name or phone number"
+                              value={patientSearch}
+                              onChange={(e) => setPatientSearch(e.target.value)}
+                            />
+                            {patientsLoading && (
+                              <small className="text-muted">
+                                <i className="ti ti-loader ti-spin me-1" />
+                                Searching...
+                              </small>
+                            )}
+                          </div>
                           <CommonSelect
                             options={patientOptions}
                             className="select"
                             value={formData.Patient}
                             onChange={(value) => setFormData({ ...formData, Patient: value })}
+                            isDisabled={patientsLoading}
                           />
                         </div>
                       </div>
@@ -370,17 +405,7 @@ const NewAppointment = () => {
                         placeholder="Enter appointment reason"
                       />
                     </div>
-                    <div className="mb-0">
-                      <label className="form-label mb-1 fw-medium">
-                        Status<span className="text-danger ms-1">*</span>
-                      </label>
-                      <CommonSelect
-                        options={Status_Checkout}
-                        className="select"
-                        value={formData.Status}
-                        onChange={(value) => setFormData({ ...formData, Status: value })}
-                      />
-                    </div>
+                    {/* Status is always "Schedule" when booking (not shown) */}
                     {/* Pay-first: payment collected at reception when booking */}
                     <div className="card bg-light border-0 mt-4 mb-0">
                       <div className="card-body">

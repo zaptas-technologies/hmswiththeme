@@ -34,6 +34,7 @@ export const fetchPatients = async (params?: {
   limit?: number;
   sort?: string;
   search?: string;
+  phone?: string;
   status?: string;
 }): Promise<PatientListResponse> => {
   const queryParams = new URLSearchParams();
@@ -41,6 +42,7 @@ export const fetchPatients = async (params?: {
   if (params?.limit) queryParams.append("limit", params.limit.toString());
   if (params?.sort) queryParams.append("sort", params.sort);
   if (params?.search) queryParams.append("search", params.search);
+  if (params?.phone) queryParams.append("phone", params.phone);
   if (params?.status) queryParams.append("status", params.status);
 
   const queryString = queryParams.toString();
