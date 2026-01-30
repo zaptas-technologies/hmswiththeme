@@ -75,6 +75,18 @@ const updateInventoryStatus = (inventory: InventoryDoc) => {
   }
 };
 
+/** Normalize access filter so hospital/user are ObjectIds (schema uses ObjectId). */
+const normalizeInventoryAccessFilter = (filter: Record<string, any>): Record<string, any> => {
+  const normalized = { ...filter };
+  if (normalized.hospital != null && typeof normalized.hospital === "string" && mongoose.Types.ObjectId.isValid(normalized.hospital)) {
+    normalized.hospital = new mongoose.Types.ObjectId(normalized.hospital);
+  }
+  if (normalized.user != null && typeof normalized.user === "string" && mongoose.Types.ObjectId.isValid(normalized.user)) {
+    normalized.user = new mongoose.Types.ObjectId(normalized.user);
+  }
+  return normalized;
+};
+
 // GET /api/inventory - Get all inventory items
 export const getAllInventory: RequestHandler = async (req, res, next) => {
   try {
@@ -91,9 +103,8 @@ export const getAllInventory: RequestHandler = async (req, res, next) => {
     const status = (req.query.status as string) || "";
     const category = (req.query.category as string) || "";
 
-    // Use buildAccessFilter to ensure users only see inventory from their hospital
-    const filter = buildAccessFilter(req.user);
-    
+    const accessFilter = buildAccessFilter(req.user);
+    const filter = normalizeInventoryAccessFilter(accessFilter);
     if (status) filter.Status = status;
     if (category) filter.Category = new RegExp(category, "i");
 
@@ -264,7 +275,10 @@ export const searchMedicines: RequestHandler = async (req, res, next) => {
   }
 };
 
-// GET /api/inventory/:id - Get inventory item by ID
+// GET /api/inventory/:id
+// Why findById(id) failed: some docs have _id stored as STRING in MongoDB (e.g. from import/API).
+// findById uses ObjectId(id), so it only matches docs with ObjectId _id; string _id docs are not found.
+// Fix: findOne with $or [ ObjectId(id), id ] so we match both ObjectId and string _id in one query.
 export const getInventoryById: RequestHandler = async (req, res, next) => {
   try {
     if (!req.user) {
@@ -272,24 +286,22 @@ export const getInventoryById: RequestHandler = async (req, res, next) => {
     }
 
     const { id } = req.params;
-
-    // Use buildAccessFilter to ensure users only see inventory from their hospital
-    const filter = buildAccessFilter(req.user);
-
-    // Use _id only (MongoDB ObjectId)
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    const trimmedId = (id || "").trim();
+    if (!trimmedId) {
+      return res.status(400).json({ message: "Inventory ID is required" });
+    }
+    if (!mongoose.Types.ObjectId.isValid(trimmedId)) {
       return res.status(400).json({ message: "Invalid inventory ID format" });
     }
 
-    filter._id = new mongoose.Types.ObjectId(id);
 
-    const inventory = await Inventory.findOne(filter);
+    const inventory = await Inventory.findById(id);
 
     if (!inventory) {
       return res.status(404).json({ message: "Inventory item not found" });
     }
 
-    res.json(formatInventoryResponse(inventory));
+    res.json(inventory);
   } catch (err) {
     next(err);
   }

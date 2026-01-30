@@ -42,7 +42,7 @@ const validateGRNData = (
   if (!data.Items || !Array.isArray(data.Items) || data.Items.length === 0) {
     return { isValid: false, error: "At least one item is required" };
   }
-  
+
   // Validate each item
   for (const item of data.Items) {
     if (!item.Item_Name || typeof item.Item_Name !== "string") {
@@ -58,7 +58,7 @@ const validateGRNData = (
       return { isValid: false, error: "Valid unit price is required for all items" };
     }
   }
-  
+
   return { isValid: true };
 };
 
@@ -70,23 +70,23 @@ const updateInventoryFromGRN = async (items: GRNItem[], hospitalId?: mongoose.Ty
       Item_Name: item.Item_Name,
       Batch_Number: item.Batch_Number || undefined,
     };
-    
+
     if (hospitalId) {
       filter.hospital = hospitalId;
     }
-    
+
     let inventoryItem = await Inventory.findOne(filter);
-    
+
     if (inventoryItem) {
       // Update existing inventory
       inventoryItem.Quantity += item.Quantity;
       inventoryItem.Unit_Price = item.Unit_Price; // Update price
       inventoryItem.Expiry_Date = new Date(item.Expiry_Date);
-      
+
       // Update status based on quantity and expiry
       const now = new Date();
       const expiryDate = new Date(inventoryItem.Expiry_Date);
-      
+
       if (expiryDate < now) {
         inventoryItem.Status = "Expired";
       } else if (inventoryItem.Quantity === 0) {
@@ -96,7 +96,7 @@ const updateInventoryFromGRN = async (items: GRNItem[], hospitalId?: mongoose.Ty
       } else {
         inventoryItem.Status = "Available";
       }
-      
+
       inventoryItem.Total_Value = inventoryItem.Unit_Price * inventoryItem.Quantity;
       await inventoryItem.save();
     } else {
@@ -112,11 +112,11 @@ const updateInventoryFromGRN = async (items: GRNItem[], hospitalId?: mongoose.Ty
         Total_Value: item.Total_Price,
         Status: item.Quantity > 0 ? "Available" : "Out of Stock",
       };
-      
+
       if (hospitalId) {
         newInventoryData.hospital = hospitalId;
       }
-      
+
       await Inventory.create(newInventoryData);
     }
   }
@@ -140,7 +140,7 @@ export const getAllGRN: RequestHandler = async (req, res, next) => {
 
     // Use buildAccessFilter to ensure users only see GRNs from their hospital
     const filter = buildAccessFilter(req.user);
-    
+
     if (status) filter.Status = status;
     if (supplier) filter.Supplier = new RegExp(supplier, "i");
 
@@ -190,24 +190,15 @@ export const getGRNById: RequestHandler = async (req, res, next) => {
 
     const { id } = req.params;
 
-    // Use buildAccessFilter to ensure users only see GRNs from their hospital
-    const filter = buildAccessFilter(req.user);
 
-    // Use _id or GRN_Number (business identifier)
-    if (mongoose.Types.ObjectId.isValid(id)) {
-      filter._id = new mongoose.Types.ObjectId(id);
-    } else {
-      // Try GRN_Number if not a valid ObjectId
-      filter.GRN_Number = id;
-    }
 
-    const grn = await GRN.findOne(filter);
+    const grn = await GRN.findById(id);
 
     if (!grn) {
       return res.status(404).json({ message: "GRN not found" });
     }
 
-    res.json(formatGRNResponse(grn));
+    res.json(grn);
   } catch (err) {
     next(err);
   }
@@ -249,10 +240,10 @@ export const createGRN: RequestHandler = async (req, res, next) => {
     }
 
     // Set hospital and user from request if available
-    const hospitalId = req.user && (req.user as any).hospitalId 
+    const hospitalId = req.user && (req.user as any).hospitalId
       ? new mongoose.Types.ObjectId((req.user as any).hospitalId)
       : undefined;
-    
+
     if (hospitalId) {
       cleanGRNData.hospital = hospitalId;
     }
