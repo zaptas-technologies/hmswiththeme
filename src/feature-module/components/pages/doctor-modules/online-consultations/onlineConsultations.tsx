@@ -8,7 +8,6 @@ import DiagnosisForm from "../../../../../core/common/dynamic-list/diagnosisForm
 import MedicalForm from "../../../../../core/common/dynamic-list/medicalForm";
 import AdviceForm from "../../../../../core/common/dynamic-list/AdviceForm";
 import InvestigationList from "../../../../../core/common/dynamic-list/InvestigationForm";
-import InvoiceList from "../../../../../core/common/dynamic-list/InvoiceList";
 import {
   fetchAppointmentForConsultation,
   saveConsultation,
@@ -79,13 +78,6 @@ const OnlineConsultations = () => {
     investigation: string;
     notes?: string;
   }>>([]);
-
-  const [invoice, setInvoice] = useState<Array<{
-    id: number;
-    service: string;
-    amount: string;
-    paymentMode?: string;
-  }>>([{ id: Date.now(), service: "", amount: "" }]);
 
   // Memoize MedicalForm value and onChange to prevent infinite loops
   const medicalFormValue = useMemo(
@@ -185,18 +177,6 @@ const OnlineConsultations = () => {
         if (response.appointment.Investigations && Array.isArray(response.appointment.Investigations)) {
           setInvestigations(response.appointment.Investigations);
         }
-        if (response.appointment.Invoice && Array.isArray(response.appointment.Invoice)) {
-          // Convert invoice data to match InvoiceList format
-          const invoiceData = response.appointment.Invoice.map((inv: any, idx: number) => ({
-            id: Date.now() + idx,
-            service: inv.item || inv.service || "",
-            amount: inv.price?.toString() || inv.amount?.toString() || inv.total?.toString() || "",
-            paymentMode: inv.paymentMode || "",
-          }));
-          if (invoiceData.length > 0) {
-            setInvoice(invoiceData);
-          }
-        }
       } catch (err: any) {
         setError(err?.response?.data?.message || err?.message || "Failed to load appointment data");
         // eslint-disable-next-line no-console
@@ -232,22 +212,6 @@ const OnlineConsultations = () => {
     );
     if (invalidMedications.length > 0) {
       errors.push("All medications must have a valid medicine name");
-    }
-
-    // Validate invoice (if provided, service and amount are required)
-    const invalidInvoices = invoice.filter(
-      (inv) => (inv.service && inv.service.trim() !== "") !== (inv.amount && inv.amount.trim() !== "")
-    );
-    if (invalidInvoices.length > 0) {
-      errors.push("Invoice items must have both service and amount");
-    }
-
-    // Validate invoice amounts are numbers
-    const invalidAmounts = invoice.filter(
-      (inv) => inv.amount && inv.amount.trim() !== "" && isNaN(parseFloat(inv.amount))
-    );
-    if (invalidAmounts.length > 0) {
-      errors.push("All invoice amounts must be valid numbers");
     }
 
     return {
@@ -321,20 +285,7 @@ const OnlineConsultations = () => {
           notes: (inv.notes || "").trim(),
         }));
 
-      // Format invoice for API - convert from InvoiceList format to API format
-      const formattedInvoice = invoice
-        .filter((inv) => inv.service && inv.service.trim() !== "" && inv.amount && inv.amount.trim() !== "")
-        .map((inv) => {
-          const price = parseFloat(inv.amount) || 0;
-          return {
-            item: inv.service.trim(),
-            quantity: 1,
-            price: price,
-            total: price,
-            paymentMode: (inv.paymentMode || "").trim(),
-          };
-        });
-
+      // Payment is collected at reception when booking; doctor does not collect payment during prescription/consultation
       const consultationData: ConsultationData = {
         appointmentId,
         vitals: Object.keys(vitals).some((key) => vitals[key as keyof typeof vitals]) ? vitals : undefined,
@@ -344,7 +295,6 @@ const OnlineConsultations = () => {
         advice: formattedAdvice.length > 0 ? formattedAdvice : undefined,
         investigations: formattedInvestigations.length > 0 ? formattedInvestigations : undefined,
         followUp: Object.keys(followUp).some((key) => followUp[key as keyof typeof followUp]) ? followUp : undefined,
-        invoice: formattedInvoice.length > 0 ? formattedInvoice : undefined,
       };
 
       // eslint-disable-next-line no-console
@@ -356,7 +306,6 @@ const OnlineConsultations = () => {
         medicationsCount: consultationData.medications?.length || 0,
         adviceCount: consultationData.advice?.length || 0,
         investigationsCount: consultationData.investigations?.length || 0,
-        invoiceCount: consultationData.invoice?.length || 0,
         completeAppointment: true,
       });
 
@@ -835,22 +784,7 @@ const OnlineConsultations = () => {
           </div>
           {/* end card */}
           {/* End Follow Up */}
-          {/* Start Invoice */}
-          <div className="card rounded-0">
-            <div className="card-header">
-              <h5 className="m-0 fw-bold"> Invoice </h5>
-            </div>
-            {/* end card header */}
-            <div className="card-body">
-              <InvoiceList
-                value={invoice}
-                onChange={(items) => setInvoice(items)}
-              />
-            </div>
-            {/* end card-body */}
-          </div>
-          {/* end card-body */}
-          {/* End Complaint */}
+          {/* Payment is collected at reception when booking; doctor does not collect during consultation */}
           <div className="d-flex gap-2 align-items-center justify-content-end mb-4">
             <Link
               to={all_routes.doctordashboard}

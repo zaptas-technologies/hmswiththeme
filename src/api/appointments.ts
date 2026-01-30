@@ -23,6 +23,10 @@ export interface Appointment {
   Mode?: string;
   Status: AppointmentStatus;
   Fees?: string | number; // Fee for dashboard sync
+  /** Payment collected at reception (pay-first when booking) */
+  amountPaid?: number;
+  paymentStatus?: "Paid" | "Pending" | "Refunded";
+  paymentMode?: string;
   [key: string]: any;
 }
 

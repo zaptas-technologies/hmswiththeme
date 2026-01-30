@@ -19,6 +19,10 @@ export const AppointmentSchema = new Schema(
     Status: { type: String, required: true },
     Consultation_ID: { type: String, index: true }, // Reference to consultation document
     Fees: { type: Schema.Types.Mixed },
+    // Payment collected at reception (pay-first when booking)
+    amountPaid: { type: Number, default: 0 },
+    paymentStatus: { type: String, enum: ["Paid", "Pending", "Refunded"], default: "Pending" },
+    paymentMode: { type: String },
     doctorId: { type: Schema.Types.ObjectId, ref: "Doctor", index: true },
     hospital: { type: Schema.Types.ObjectId, ref: "Hospital", index: true },
     user: { type: Schema.Types.ObjectId, ref: "User", index: true },

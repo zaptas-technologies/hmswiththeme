@@ -17,6 +17,13 @@ import type { Option } from "../../../../../core/common/common-select/commonSele
 import TimeSlotPicker from "../../../../../core/common/time-slot-picker/TimeSlotPicker";
 import { useAuth } from "../../../../../core/context/AuthContext";
 
+const PAYMENT_MODES = [
+  { value: "Cash", label: "Cash" },
+  { value: "Card", label: "Card" },
+  { value: "UPI", label: "UPI" },
+  { value: "Online", label: "Online" },
+];
+
 const NewAppointment = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -24,6 +31,8 @@ const NewAppointment = () => {
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [selectedSlotTime, setSelectedSlotTime] = useState<string>(""); // HH:mm format
+  const [amountPaid, setAmountPaid] = useState<string>("");
+  const [paymentMode, setPaymentMode] = useState<string>("Cash");
   const [formData, setFormData] = useState({
     Patient: "",
     Department: "",
@@ -89,6 +98,12 @@ const NewAppointment = () => {
   const doctorId = selectedDoctor?._id || selectedDoctor?.id || "";
   const hospitalId = user?.hospitalId || selectedDoctor?.hospital;
 
+  const consultationFee = useMemo(() => {
+    if (!selectedDoctor?.Fees) return 0;
+    const fee = parseFloat(String(selectedDoctor.Fees));
+    return isNaN(fee) ? 0 : fee;
+  }, [selectedDoctor]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -101,6 +116,20 @@ const NewAppointment = () => {
       !formData.Status
     ) {
       alert("Please fill in all required fields including selecting a time slot");
+      return;
+    }
+
+    const paid = parseFloat(amountPaid);
+    if (isNaN(paid) || paid < 0) {
+      alert("Please enter a valid amount paid.");
+      return;
+    }
+    if (paid < consultationFee) {
+      alert(`Consultation fee is ${consultationFee}. Amount paid must be at least the consultation fee.`);
+      return;
+    }
+    if (!paymentMode || paymentMode === "Select") {
+      alert("Please select a payment mode.");
       return;
     }
 
@@ -139,6 +168,9 @@ const NewAppointment = () => {
         role: selectedDoctor.role || "",
         Department: formData.Department || selectedDoctor.Department || "",
         Reason: formData.Reason || "",
+        // Pay-first: payment collected at reception when booking
+        amountPaid: paid,
+        paymentMode,
       };
 
       await createAppointment(appointmentData);
@@ -348,6 +380,58 @@ const NewAppointment = () => {
                         value={formData.Status}
                         onChange={(value) => setFormData({ ...formData, Status: value })}
                       />
+                    </div>
+                    {/* Pay-first: payment collected at reception when booking */}
+                    <div className="card bg-light border-0 mt-4 mb-0">
+                      <div className="card-body">
+                        <h6 className="fw-bold mb-3">
+                          <i className="ti ti-currency-rupee me-1" />
+                          Payment (pay first to confirm booking)
+                        </h6>
+                        <div className="row">
+                          <div className="col-md-4">
+                            <div className="mb-3">
+                              <label className="form-label mb-1 fw-medium text-muted">
+                                Consultation fee
+                              </label>
+                              <div className="form-control bg-white">
+                                {selectedDoctor
+                                  ? `₹${consultationFee.toLocaleString()}`
+                                  : "Select doctor"}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="col-md-4">
+                            <div className="mb-3">
+                              <label className="form-label mb-1 fw-medium">
+                                Amount paid<span className="text-danger ms-1">*</span>
+                              </label>
+                              <input
+                                type="number"
+                                className="form-control"
+                                min={0}
+                                step={1}
+                                placeholder="0"
+                                value={amountPaid}
+                                onChange={(e) => setAmountPaid(e.target.value)}
+                              />
+                            </div>
+                          </div>
+                          <div className="col-md-4">
+                            <div className="mb-3">
+                              <label className="form-label mb-1 fw-medium">
+                                Payment mode<span className="text-danger ms-1">*</span>
+                              </label>
+                              <CommonSelect
+                                options={PAYMENT_MODES}
+                                className="select"
+                                value={paymentMode}
+                                onChange={(value) => setPaymentMode(value)}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   <div className="d-flex align-items-center justify-content-end mt-4">
                     <Link to={all_routes.appointments} className="btn btn-light me-2">

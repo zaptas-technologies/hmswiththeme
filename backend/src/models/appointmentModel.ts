@@ -16,6 +16,9 @@ export interface AppointmentDoc extends Document {
   Status: string;
   Consultation_ID?: string;
   Fees?: string | number;
+  amountPaid?: number;
+  paymentStatus?: "Paid" | "Pending" | "Refunded";
+  paymentMode?: string;
   doctorId?: mongoose.Types.ObjectId;
   user?: mongoose.Types.ObjectId;
   hospital?: mongoose.Types.ObjectId;

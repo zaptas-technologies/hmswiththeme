@@ -21,6 +21,9 @@ export interface AppointmentRequest {
   Mode?: string;
   Status: string;
   Fees?: string | number;
+  /** Payment collected at reception (pay-first when booking) */
+  amountPaid?: number;
+  paymentMode?: string;
   [key: string]: any;
 }
 
@@ -39,6 +42,9 @@ const formatAppointmentResponse = (appt: any) => {
     Mode: obj.Mode,
     Status: obj.Status,
     Fees: obj.Fees,
+    amountPaid: obj.amountPaid,
+    paymentStatus: obj.paymentStatus,
+    paymentMode: obj.paymentMode,
     hospital: obj.hospital?.toString?.() || obj.hospital,
     createdAt: obj.createdAt,
     updatedAt: obj.updatedAt,
@@ -146,7 +152,7 @@ export const getAllAppointments: RequestHandler = async (req, res, next) => {
 
     const [appts, total] = await Promise.all([
       Appointment.find(filter)
-        .select("_id Date_Time Patient Phone Patient_Image Doctor Mode Status Fees createdAt updatedAt")
+        .select("_id Date_Time Patient Phone Patient_Image Doctor Mode Status Fees amountPaid paymentStatus paymentMode createdAt updatedAt")
         .sort(sort)
         .skip(skip)
         .limit(limit)
@@ -186,7 +192,7 @@ export const getAppointmentById: RequestHandler = async (req, res, next) => {
     }
 
     const appt = await Appointment.findOne(filter)
-      .select("_id Date_Time Patient Phone Patient_Image Doctor Mode Status Fees createdAt updatedAt")
+      .select("_id Date_Time Patient Phone Patient_Image Doctor Mode Status Fees amountPaid paymentStatus paymentMode createdAt updatedAt")
       .lean()
       .exec();
     
@@ -311,7 +317,30 @@ export const createAppointment: RequestHandler = async (req, res, next) => {
         return res.status(400).json({ message: "Invalid doctorId format. Must be a valid ObjectId." });
       }
     }
-    
+
+    // Pay-first: require payment at reception when booking appointment
+    const amountPaid = Number(req.body.amountPaid);
+    const paymentMode = typeof req.body.paymentMode === "string" ? req.body.paymentMode.trim() : "";
+    if (isNaN(amountPaid) || amountPaid < 0) {
+      return res.status(400).json({ message: "Valid amount paid is required when booking an appointment." });
+    }
+    if (!paymentMode) {
+      return res.status(400).json({ message: "Payment mode is required (e.g. Cash, Card, UPI)." });
+    }
+    let consultationFee = 0;
+    if (doctorObjectId) {
+      const doctorDoc = await Doctor.findById(doctorObjectId).select("Fees").lean().exec() as { Fees?: string } | null;
+      if (doctorDoc?.Fees != null) {
+        consultationFee = parseFloat(String(doctorDoc.Fees)) || 0;
+      }
+    }
+    if (amountPaid < consultationFee) {
+      return res.status(400).json({
+        message: `Consultation fee is ${consultationFee}. Amount paid (${amountPaid}) must be at least the consultation fee.`,
+      });
+    }
+    const paymentStatus = amountPaid > 0 ? "Paid" : "Pending";
+
     // Normalize date/time fields for reliable booking logic and uniqueness checks.
     // Prefer explicit fields if sent from frontend.
     const normalizeFromDateString = (d: Date) => {
@@ -384,6 +413,9 @@ export const createAppointment: RequestHandler = async (req, res, next) => {
       ...(appointmentDate && { appointmentDate }),
       ...(slotTime && { slotTime }),
       ...(parsedDateTime && { dateTime: parsedDateTime }),
+      amountPaid,
+      paymentStatus,
+      paymentMode,
     };
 
     const created = await Appointment.create(appointmentData);
