@@ -28,6 +28,8 @@ export interface ConsultationDoc extends Document {
     quantity?: number;
     unitPrice?: number;
     subtotal?: number;
+    batchNumber?: string;
+    expiry?: Date;
   }>;
   Advice?: Array<{ advice: string }>;
   Investigations?: Array<{ investigation: string; notes?: string }>;

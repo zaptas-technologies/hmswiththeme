@@ -1,7 +1,9 @@
 import { RequestHandler } from "express";
 import mongoose from "mongoose";
 import { DoctorLeave } from "../models/doctorLeaveModel";
+import { Hospital } from "../models/hospitalModel";
 import { buildAccessFilter } from "../middlewares/authMiddleware";
+import { sendLeaveRequestNotification } from "../services/notificationService";
 
 export interface DoctorLeaveRequest {
   Doctor: string;
@@ -227,6 +229,29 @@ export const createDoctorLeave: RequestHandler = async (req, res, next) => {
       ...cleanLeaveData,
       ...accessFilter,
     });
+
+    // Fire-and-forget: notify hospital admin of new leave request (email)
+    setImmediate(async () => {
+      const hospitalId = (leave as any).hospital;
+      if (!hospitalId) return;
+      const hospital = await Hospital.findById(hospitalId)
+        .populate("hospitalAdmin", "email")
+        .lean()
+        .exec();
+      const adminEmail = (hospital as any)?.hospitalAdmin?.email;
+      if (!adminEmail) return;
+      const fromDate = (leave as any).From_Date;
+      const toDate = (leave as any).To_Date;
+      sendLeaveRequestNotification({
+        adminEmail,
+        doctorName: (leave as any).Doctor || "Doctor",
+        days: (leave as any).No_Of_Days ?? 1,
+        reason: (leave as any).Leave_Type || (leave as any).Reason || "Leave",
+        startDate: fromDate ? new Date(fromDate).toLocaleDateString("en-IN") : "-",
+        endDate: toDate ? new Date(toDate).toLocaleDateString("en-IN") : "-",
+      });
+    });
+
     res.status(201).json(formatDoctorLeaveResponse(leave));
   } catch (err: any) {
     // Handle MongoDB duplicate key error

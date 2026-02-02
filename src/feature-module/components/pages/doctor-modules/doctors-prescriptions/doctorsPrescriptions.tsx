@@ -13,23 +13,22 @@ import {
 } from "../../../../../core/common/selectOption";
 import { useAuth } from "../../../../../core/context/AuthContext";
 import {
-  fetchPrescriptions,
-  deletePrescription,
-  type Prescription,
-} from "../../../../../api/prescriptions";
+  fetchConsultationsList,
+  type ConsultationListItem,
+} from "../../../../../api/consultations";
 import { fetchDoctors } from "../../../../../api/doctors";
 import dayjs from "dayjs";
 
 const DoctorsPrescriptions = () => {
   const { user } = useAuth();
-  const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
+  const [consultations, setConsultations] = useState<ConsultationListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [doctorName, setDoctorName] = useState<string>("");
 
   // Medicine details drawer
   const [isMedicineDrawerOpen, setIsMedicineDrawerOpen] = useState(false);
-  const [selectedPrescription, setSelectedPrescription] = useState<Prescription | null>(null);
+  const [selectedConsultation, setSelectedConsultation] = useState<ConsultationListItem | null>(null);
   const [selectedMedicine, setSelectedMedicine] = useState<any | null>(null);
   
   // Filter states
@@ -128,44 +127,21 @@ const DoctorsPrescriptions = () => {
     findDoctor();
   }, [user]);
 
-  // Load prescriptions with proper server-side pagination
-  const loadPrescriptions = useCallback(async () => {
-    // If user is not a doctor, don't proceed
+  // Load consultations (from Consultation table) with server-side pagination
+  const loadConsultations = useCallback(async () => {
     if (!user || user.role !== "doctor") {
       setLoading(false);
       return;
     }
+    if (!doctorName) return;
 
-    // Enforce doctor-only visibility: do not fetch/show other doctors' data.
-    // Wait until we have a resolved doctor name for the logged-in doctor.
-    if (!doctorName) {
-      return;
-    }
-    
     try {
       setLoading(true);
       setError(null);
-      
       const sortParam = sortBy === "Recent" ? "-createdAt" : sortBy === "Oldest" ? "createdAt" : "-createdAt";
-      
-      // eslint-disable-next-line no-console
-      console.log("[Prescriptions] Loading with params:", {
-        doctorName,
-        page,
-        pageSize,
-        searchText,
-        selectedStatuses,
-        selectedDoctors,
-        selectedDate,
-        sortBy,
-      });
-      
-      // For multiple filters, we need to fetch all and filter client-side
-      // For single filters or no filters, use server-side pagination
       const hasMultipleFilters = selectedStatuses.length > 1 || selectedDoctors.length > 1 || selectedDate !== null;
-      
-      // Always fetch scoped to the logged-in doctor.
-      const response = await fetchPrescriptions({
+
+      const response = await fetchConsultationsList({
         page: hasMultipleFilters ? 1 : page,
         limit: hasMultipleFilters ? 1000 : pageSize,
         sort: sortParam,
@@ -173,149 +149,77 @@ const DoctorsPrescriptions = () => {
         doctor: doctorName,
         status: selectedStatuses.length === 1 ? selectedStatuses[0] : undefined,
         date: selectedDate ? dayjs(selectedDate).format("YYYY-MM-DD") : undefined,
-        // If `doctorprescriptions` is empty, backend will derive rows from `consultations.Medications`.
-        includeConsultations: true,
       });
-      
-      // eslint-disable-next-line no-console
-      console.log("[Prescriptions] Response with doctor filter:", {
-        dataCount: response.data?.length || 0,
-        total: response.pagination?.total || 0,
-        doctorName,
-      });
-      
-      // Apply client-side filtering
+
       let filteredData = response.data || [];
-      
-      // Apply additional client-side doctor filtering if needed (for flexible matching)
       if (doctorName && filteredData.length > 0) {
-        // Double-check doctor name matching client-side for better accuracy
         const doctorNameLower = doctorName.toLowerCase();
-        filteredData = filteredData.filter((p) => {
-          const prescDoctor = (p.Doctor || "").toLowerCase();
-          if (!prescDoctor) return false;
-          
-          // Try multiple matching strategies
-          return prescDoctor === doctorNameLower ||
-                 prescDoctor.includes(doctorNameLower) ||
-                 doctorNameLower.includes(prescDoctor) ||
-                 prescDoctor.split(/\s+/).some((part: string) => doctorNameLower.includes(part)) ||
-                 doctorNameLower.split(/\s+/).some((part: string) => prescDoctor.includes(part));
-        });
-        
-        // eslint-disable-next-line no-console
-        console.log("[Prescriptions] After client-side doctor filtering:", {
-          before: response.data?.length || 0,
-          after: filteredData.length,
-          doctorName,
+        filteredData = filteredData.filter((c) => {
+          const doc = (c.Doctor || "").toLowerCase();
+          if (!doc) return false;
+          return doc === doctorNameLower || doc.includes(doctorNameLower) || doctorNameLower.includes(doc) ||
+            doc.split(/\s+/).some((part: string) => doctorNameLower.includes(part)) ||
+            doctorNameLower.split(/\s+/).some((part: string) => doc.includes(part));
         });
       }
-      
+
       if (hasMultipleFilters) {
         if (selectedStatuses.length > 1) {
-          filteredData = filteredData.filter((p) => selectedStatuses.includes(p.Status || ""));
+          filteredData = filteredData.filter((c) => selectedStatuses.includes(c.Status || ""));
         }
-        
         if (selectedDoctors.length > 0) {
-          filteredData = filteredData.filter((p) => 
-            selectedDoctors.some((doc) => (p.Doctor || "").includes(doc))
+          filteredData = filteredData.filter((c) =>
+            selectedDoctors.some((doc) => (c.Doctor || "").includes(doc))
           );
         }
-        
-        // Apply date filter if selected
         if (selectedDate) {
           const filterDate = dayjs(selectedDate).format("YYYY-MM-DD");
-          filteredData = filteredData.filter((p) => {
+          filteredData = filteredData.filter((c) => {
             try {
-              const prescDate = dayjs(p.Date || p.Prescribed_On).format("YYYY-MM-DD");
-              return prescDate === filterDate;
+              const d = dayjs(c.Date || c.Prescribed_On).format("YYYY-MM-DD");
+              return d === filterDate;
             } catch {
               return false;
             }
           });
         }
-        
-        // Apply client-side pagination
         const startIndex = (page - 1) * pageSize;
-        const endIndex = startIndex + pageSize;
-        const paginatedData = filteredData.slice(startIndex, endIndex);
-        
-        setPrescriptions(paginatedData);
+        setConsultations(filteredData.slice(startIndex, startIndex + pageSize));
         setTotal(filteredData.length);
       } else {
-        // Apply date filter client-side if needed
         if (selectedDate) {
           const filterDate = dayjs(selectedDate).format("YYYY-MM-DD");
-          filteredData = filteredData.filter((p) => {
+          filteredData = filteredData.filter((c) => {
             try {
-              const prescDate = dayjs(p.Date || p.Prescribed_On).format("YYYY-MM-DD");
-              return prescDate === filterDate;
+              const d = dayjs(c.Date || c.Prescribed_On).format("YYYY-MM-DD");
+              return d === filterDate;
             } catch {
               return false;
             }
           });
         }
-        
-        setPrescriptions(filteredData);
-        // Recalculate total based on filtered data if we did client-side filtering
-        if (doctorName && response.data && filteredData.length !== response.data.length) {
-          setTotal(filteredData.length);
-        } else {
-          setTotal(response.pagination?.total || filteredData.length);
-        }
+        setConsultations(filteredData);
+        setTotal(response.pagination?.total ?? filteredData.length);
       }
-      
-      // eslint-disable-next-line no-console
-      console.log("[Prescriptions] Final result:", {
-        prescriptionsCount: filteredData.length,
-        total,
-        page,
-      });
     } catch (err: any) {
-      setError(err?.response?.data?.message || err?.message || "Failed to load prescriptions");
-      setPrescriptions([]);
+      setError(err?.response?.data?.message || err?.message || "Failed to load consultations");
+      setConsultations([]);
       setTotal(0);
-      // eslint-disable-next-line no-console
-      console.error("[Prescriptions] Failed to load prescriptions:", err);
     } finally {
       setLoading(false);
     }
   }, [doctorName, page, pageSize, searchText, selectedStatuses, selectedDoctors, selectedDate, sortBy, user]);
 
   useEffect(() => {
-    // Load prescriptions even if doctorName is not set yet (will retry)
     const timer = setTimeout(() => {
-      loadPrescriptions();
+      loadConsultations();
     }, searchText ? 500 : 0);
-
     return () => clearTimeout(timer);
-  }, [loadPrescriptions, doctorName, searchText]);
+  }, [loadConsultations, doctorName, searchText]);
 
   const handleSearch = (value: string) => {
     setSearchText(value);
     setPage(1);
-  };
-
-  const handleDelete = async (prescription: Prescription) => {
-    if (!window.confirm(`Are you sure you want to delete prescription ${prescription.Prescription_ID || prescription.id}?`)) {
-      return;
-    }
-
-    try {
-      const prescriptionId = prescription._id || prescription.id;
-      if (!prescriptionId) {
-        alert("Invalid prescription ID");
-        return;
-      }
-      
-      await deletePrescription(prescriptionId);
-      alert("Prescription deleted successfully");
-      loadPrescriptions();
-    } catch (err: any) {
-      alert(`Failed to delete prescription: ${err?.response?.data?.message || err?.message || "Unknown error"}`);
-      // eslint-disable-next-line no-console
-      console.error("Failed to delete prescription:", err);
-    }
   };
 
   const formatDate = (dateStr: string) => {
@@ -345,43 +249,30 @@ const DoctorsPrescriptions = () => {
 
   const closeMedicineDrawer = () => {
     setIsMedicineDrawerOpen(false);
-    setSelectedPrescription(null);
+    setSelectedConsultation(null);
     setSelectedMedicine(null);
   };
 
-  const openMedicineDrawer = (prescription: Prescription, medicine: any) => {
-    setSelectedPrescription(prescription);
+  const openMedicineDrawer = (consultation: ConsultationListItem, medicine: any) => {
+    setSelectedConsultation(consultation);
     setSelectedMedicine(medicine);
     setIsMedicineDrawerOpen(true);
   };
 
-  // Transform prescriptions for table - ONE row per prescription
+  // Transform consultations for table - ONE row per consultation
   const tableData = useMemo(() => {
-    return prescriptions.map((presc) => {
-      const meds =
-        (presc as any).Medications && Array.isArray((presc as any).Medications)
-          ? (presc as any).Medications
-          : (presc as any).Medicine
-          ? [
-              {
-                medicine: (presc as any).Medicine,
-                dosage: (presc as any).Dosage,
-                frequency: (presc as any).Frequency,
-                duration: (presc as any).Duration,
-              },
-            ]
-          : [];
-
+    return consultations.map((c) => {
+      const meds = (c.Medications && Array.isArray(c.Medications)) ? c.Medications : [];
       return {
-        ...presc,
-        key: presc._id || presc.id,
-        img: (presc as any).Patient_Image || (presc as any).img || "user-01.jpg",
-        phone_number: (presc as any).phone_number || "",
+        ...c,
+        key: c._id || c.id,
+        img: c.Patient_Image || "user-01.jpg",
+        phone_number: "",
         _medications: meds,
         _medicationsCount: meds.length,
       };
     });
-  }, [prescriptions]);
+  }, [consultations]);
 
   const columns = [
     {
@@ -528,47 +419,16 @@ const DoctorsPrescriptions = () => {
       title: "Actions",
       width: 100,
       render: (_: any, record: any) => {
-        const prescriptionId = record._id || record.id;
-        
+        const consultationId = record._id || record.id;
         return (
           <div className="action-item d-flex align-items-center gap-2">
-            <div className="dropdown">
-              <Link
-                to="#"
-                className="btn btn-sm btn-outline-secondary"
-                data-bs-toggle="dropdown"
-                title="More options"
-              >
-                <i className="ti ti-dots-vertical" />
-              </Link>
-              <ul className="dropdown-menu dropdown-menu-end p-2">
-                <li>
-                  <Link
-                    to={`${all_routes.doctorsprescriptiondetails}?id=${prescriptionId}`}
-                    className="dropdown-item d-flex align-items-center"
-                  >
-                    <i className="ti ti-eye me-2" />
-                    View Details
-                  </Link>
-                </li>
-                <li>
-                  <hr className="dropdown-divider" />
-                </li>
-                <li>
-                  <Link
-                    to="#"
-                    className="dropdown-item d-flex align-items-center text-danger"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      handleDelete(record);
-                    }}
-                  >
-                    <i className="ti ti-trash me-2" />
-                    Delete
-                  </Link>
-                </li>
-              </ul>
-            </div>
+            <Link
+              to={`${all_routes.doctorsprescriptiondetails}?id=${consultationId}`}
+              className="btn btn-sm btn-outline-primary"
+              title="View Details"
+            >
+              <i className="ti ti-eye" />
+            </Link>
           </div>
         );
       },
@@ -829,7 +689,7 @@ const DoctorsPrescriptions = () => {
                         onClick={(e) => {
                           e.preventDefault();
                           setPage(1);
-                          loadPrescriptions();
+                          loadConsultations();
                           const filterDropdown = document.getElementById("filter-dropdown");
                           if (filterDropdown) {
                             const bsDropdown = (window as any).bootstrap?.Dropdown?.getInstance(
@@ -888,7 +748,7 @@ const DoctorsPrescriptions = () => {
               <button
                 type="button"
                 className="btn btn-sm btn-link"
-                onClick={() => loadPrescriptions()}
+                onClick={() => loadConsultations()}
               >
                 Retry
               </button>
@@ -899,17 +759,17 @@ const DoctorsPrescriptions = () => {
               <div className="spinner-border text-primary" role="status">
                 <span className="visually-hidden">Loading...</span>
               </div>
-              <p className="mt-3 text-muted">Loading prescriptions...</p>
+              <p className="mt-3 text-muted">Loading consultations...</p>
             </div>
-          ) : prescriptions.length === 0 ? (
+          ) : consultations.length === 0 ? (
             <div className="d-flex justify-content-center align-items-center py-5">
               <div className="text-center">
                 <i className="ti ti-file-off fs-48 text-muted mb-3 d-block" />
-                <p className="text-muted fw-semibold mb-2">No prescriptions found</p>
+                <p className="text-muted fw-semibold mb-2">No consultations found</p>
                 <p className="text-muted fs-13 mb-3">
                   {searchText || selectedStatuses.length > 0 || selectedDoctors.length > 0 || selectedDate
                     ? "Try adjusting your filters"
-                    : "Prescriptions with medications will appear here after completing consultations."}
+                    : "Consultations with medications will appear here after completing appointments."}
                 </p>
               </div>
             </div>
@@ -926,7 +786,7 @@ const DoctorsPrescriptions = () => {
               {total > 0 && (
                 <div className="d-flex justify-content-between align-items-center mt-3 pt-3 border-top">
                   <div className="text-muted fs-13">
-                    Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, total)} of {total} prescriptions
+                    Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, total)} of {total} consultations
                   </div>
                   <div className="d-flex align-items-center gap-2">
                     <button
@@ -1064,7 +924,7 @@ const DoctorsPrescriptions = () => {
               <div>
                 <div className="fw-bold">Medicine Details</div>
                 <div className="text-muted fs-13">
-                  {selectedPrescription?.Prescription_ID || selectedPrescription?.id || ""}
+                  {selectedConsultation?.Prescription_ID || selectedConsultation?.Consultation_ID || selectedConsultation?.id || ""}
                 </div>
               </div>
               <button type="button" className="btn btn-sm btn-light border" onClick={closeMedicineDrawer}>
@@ -1073,29 +933,29 @@ const DoctorsPrescriptions = () => {
             </div>
 
             <div className="p-3">
-              {selectedPrescription && (
+              {selectedConsultation && (
                 <div className="mb-3 p-3 bg-light rounded">
                   <div className="d-flex justify-content-between align-items-start gap-2">
                     <div>
-                      <div className="fw-semibold text-dark">{selectedPrescription.Patient || "N/A"}</div>
-                      <div className="text-muted fs-13">{selectedPrescription.Doctor || "N/A"}</div>
+                      <div className="fw-semibold text-dark">{selectedConsultation.Patient || "N/A"}</div>
+                      <div className="text-muted fs-13">{selectedConsultation.Doctor || "N/A"}</div>
                       <div className="text-muted fs-13">
-                        {formatDate((selectedPrescription as any).Prescribed_On || (selectedPrescription as any).Date || "")}
+                        {formatDate(selectedConsultation.Prescribed_On || selectedConsultation.Date || "")}
                       </div>
                     </div>
                     <span className="badge badge-soft-primary text-primary rounded fw-medium fs-13">
-                      {(selectedPrescription as any).Status || "N/A"}
+                      {selectedConsultation.Status || "N/A"}
                     </span>
                   </div>
                 </div>
               )}
 
               {/* Medicines list (switchable) */}
-              {selectedPrescription && (selectedPrescription as any)._medications?.length > 0 && (
+              {selectedConsultation && (selectedConsultation as any)._medications?.length > 0 && (
                 <div className="mb-3">
                   <div className="fw-semibold mb-2">Medicines</div>
                   <div className="d-flex flex-wrap gap-2">
-                    {(selectedPrescription as any)._medications.map((m: any, idx: number) => {
+                    {(selectedConsultation as any)._medications.map((m: any, idx: number) => {
                       const name = m.medicine || m.Medicine || `Medicine ${idx + 1}`;
                       const active = selectedMedicine === m;
                       return (
@@ -1148,14 +1008,14 @@ const DoctorsPrescriptions = () => {
                 )}
               </div>
 
-              {selectedPrescription && (
+              {selectedConsultation && (
                 <div className="mt-3 d-flex gap-2">
                   <Link
-                    to={`${all_routes.doctorsprescriptiondetails}?id=${selectedPrescription._id || selectedPrescription.id}`}
+                    to={`${all_routes.doctorsprescriptiondetails}?id=${selectedConsultation._id || selectedConsultation.id}`}
                     className="btn btn-primary flex-grow-1"
                     onClick={closeMedicineDrawer}
                   >
-                    View Prescription
+                    View Details
                   </Link>
                   <button type="button" className="btn btn-light border" onClick={closeMedicineDrawer}>
                     Close

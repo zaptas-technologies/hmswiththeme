@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import { Doctor } from "../models/doctorModel";
 import { Patient } from "../models/patientModel";
 import { Appointment } from "../models/appointmentModel";
+import { PharmacyDispense } from "../models/pharmacyDispenseModel";
 import { DoctorLeave } from "../models/doctorLeaveModel";
 import { Hospital } from "../models/hospitalModel";
 import { getDateRange, getLeaveDateRange, type Period, type LeavePeriod } from "../utils/dateRange";
@@ -75,11 +76,46 @@ export const buildAdminDashboardPayload = async (hospitalId?: string, filters?: 
     Appointment.countDocuments({ ...hospitalFilter, createdAt: { $gte: prev7DaysRange.start, $lt: prev7DaysRange.end } }),
   ]);
 
-  const revenueAgg = await Appointment.aggregate([
-    { $match: { ...appointmentMatchBase, Status: { $in: ["Confirmed", "Checked Out", "Completed"] } } },
-    { $group: { _id: null, total: { $sum: { $ifNull: [{ $toDouble: "$Fees" }, 0] } } } },
+  const pharmacyMatchBase: any = {
+    ...hospitalFilter,
+    ...(dateRange ? { createdAt: { $gte: dateRange.start, $lte: dateRange.end } } : {}),
+  };
+
+  const [hospitalRevenueAgg, pharmacyRevenueAgg] = await Promise.all([
+    Appointment.aggregate([
+      { $match: { ...appointmentMatchBase, Status: { $in: ["Confirmed", "Checked Out", "Completed"] } } },
+      { $group: { _id: null, total: { $sum: { $ifNull: [{ $toDouble: "$Fees" }, 0] } } } },
+    ]),
+    PharmacyDispense.aggregate([
+      { $match: pharmacyMatchBase },
+      { $group: { _id: null, total: { $sum: { $ifNull: ["$amountReceived", 0] } } } },
+    ]),
   ]);
-  const revenue = revenueAgg[0]?.total || 0;
+  const hospitalRevenue = hospitalRevenueAgg[0]?.total ?? 0;
+  const pharmacyRevenue = pharmacyRevenueAgg[0]?.total ?? 0;
+  const revenue = hospitalRevenue + pharmacyRevenue;
+
+  const [last7HospitalRev, prev7HospitalRev, last7PharmacyRev, prev7PharmacyRev] = await Promise.all([
+    Appointment.aggregate([
+      { $match: { ...hospitalFilter, Status: { $in: ["Confirmed", "Checked Out", "Completed"] }, createdAt: { $gte: sevenDaysAgo, $lt: now } } },
+      { $group: { _id: null, total: { $sum: { $ifNull: [{ $toDouble: "$Fees" }, 0] } } } },
+    ]),
+    Appointment.aggregate([
+      { $match: { ...hospitalFilter, Status: { $in: ["Confirmed", "Checked Out", "Completed"] }, createdAt: { $gte: fourteenDaysAgo, $lt: sevenDaysAgo } } },
+      { $group: { _id: null, total: { $sum: { $ifNull: [{ $toDouble: "$Fees" }, 0] } } } },
+    ]),
+    PharmacyDispense.aggregate([
+      { $match: { ...hospitalFilter, createdAt: { $gte: sevenDaysAgo, $lt: now } } },
+      { $group: { _id: null, total: { $sum: { $ifNull: ["$amountReceived", 0] } } } },
+    ]),
+    PharmacyDispense.aggregate([
+      { $match: { ...hospitalFilter, createdAt: { $gte: fourteenDaysAgo, $lt: sevenDaysAgo } } },
+      { $group: { _id: null, total: { $sum: { $ifNull: ["$amountReceived", 0] } } } },
+    ]),
+  ]);
+  const last7Revenue = (last7HospitalRev[0]?.total ?? 0) + (last7PharmacyRev[0]?.total ?? 0);
+  const prev7Revenue = (prev7HospitalRev[0]?.total ?? 0) + (prev7PharmacyRev[0]?.total ?? 0);
+  const revenueChange = pctChange(last7Revenue, prev7Revenue);
 
   const appointmentStats = await Appointment.aggregate([
     { $match: appointmentMatchBase },
@@ -413,6 +449,28 @@ export const buildAdminDashboardPayload = async (hospitalId?: string, filters?: 
   const patientsSparkline = await generateSparklineData(Patient, "createdAt");
   const appointmentsSparkline = await generateSparklineData(Appointment, "createdAt");
 
+  const start = startOfDay(sevenDaysAgo);
+  const days = Array.from({ length: 7 }).map((_, i) => new Date(start.getTime() + i * 24 * 60 * 60 * 1000));
+  const [hospitalRevByDay, pharmacyRevByDay] = await Promise.all([
+    Appointment.aggregate([
+      {
+        $match: {
+          ...hospitalFilter,
+          Status: { $in: ["Confirmed", "Checked Out", "Completed"] },
+          createdAt: { $gte: start, $lt: now },
+        },
+      },
+      { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } }, total: { $sum: { $ifNull: [{ $toDouble: "$Fees" }, 0] } } } },
+    ]),
+    PharmacyDispense.aggregate([
+      { $match: { ...hospitalFilter, createdAt: { $gte: start, $lt: now } } },
+      { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } }, total: { $sum: { $ifNull: ["$amountReceived", 0] } } } },
+    ]),
+  ]);
+  const hospitalRevMap = new Map<string, number>(hospitalRevByDay.map((r: any) => [r._id, r.total ?? 0]));
+  const pharmacyRevMap = new Map<string, number>(pharmacyRevByDay.map((r: any) => [r._id, r.total ?? 0]));
+  const revenueSparkline = days.map((d) => (hospitalRevMap.get(d.toISOString().slice(0, 10)) ?? 0) + (pharmacyRevMap.get(d.toISOString().slice(0, 10)) ?? 0));
+
   // Monthly appointment trend for chart
   const year = now.getFullYear();
   const yearStart = new Date(year, 0, 1);
@@ -483,8 +541,10 @@ export const buildAdminDashboardPayload = async (hospitalId?: string, filters?: 
       },
       revenue: {
         amount: revenue,
-        change: 25, // Calculate based on previous period if needed
-        sparkline: appointmentsSparkline, // Reuse appointments sparkline
+        hospitalRevenue,
+        pharmacyRevenue,
+        change: revenueChange,
+        sparkline: revenueSparkline,
       },
     },
     appointmentStatistics: {

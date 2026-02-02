@@ -18,6 +18,7 @@ import { buildInventoryRouter } from "./routes/inventoryRoutes";
 import { buildGRNRouter } from "./routes/grnRoutes";
 import { buildHospitalRouter } from "./routes/hospitalRoutes";
 import { buildPharmacyRouter } from "./routes/pharmacyRoutes";
+import { buildNotificationRouter } from "./routes/notificationRoutes";
 
 dotenv.config();
 
@@ -46,6 +47,7 @@ const start = async () => {
   app.use("/api/grn", buildGRNRouter());
   app.use("/api/hospitals", buildHospitalRouter());
   app.use("/api/pharmacies", buildPharmacyRouter());
+  app.use("/api/notifications", buildNotificationRouter());
 
   app.get("/", (_req, res) =>
     res.json({ message: "HMS API is healthy" })

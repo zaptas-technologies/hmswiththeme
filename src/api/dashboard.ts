@@ -115,7 +115,13 @@ export type AdminStats = {
   doctors: { count: number; change: number; sparkline: number[] };
   patients: { count: number; change: number; sparkline: number[] };
   appointments: { count: number; change: number; sparkline: number[] };
-  revenue: { amount: number; change: number; sparkline: number[] };
+  revenue: {
+    amount: number;
+    hospitalRevenue: number;
+    pharmacyRevenue: number;
+    change: number;
+    sparkline: number[];
+  };
 };
 
 export type AppointmentStatistics = {
@@ -318,6 +324,10 @@ export type SuperAdminBranchRow = {
   status?: string;
   admin?: { id: string; name: string; email: string; phone?: string } | null;
   counts: { doctors: number; patients: number; appointments: number };
+  /** Revenue from appointments (consultation fees) for this branch */
+  hospitalRevenue: number;
+  /** Revenue from pharmacy dispenses for this branch */
+  pharmacyRevenue: number;
 };
 
 export type SuperAdminDashboardResponse = {
@@ -328,12 +338,165 @@ export type SuperAdminDashboardResponse = {
     doctors: number;
     patients: number;
     appointments: number;
+    /** Total revenue (hospital + pharmacy) */
     revenue: number;
+    /** Revenue from appointments (consultation fees) */
+    hospitalRevenue: number;
+    /** Revenue from pharmacy dispenses */
+    pharmacyRevenue: number;
   };
   branches: SuperAdminBranchRow[];
 };
 
 export const fetchSuperAdminDashboard = async (): Promise<SuperAdminDashboardResponse> => {
   const { data } = await api.get<SuperAdminDashboardResponse>("/dashboard/super-admin");
+  return data;
+};
+
+// ---- Reports & Transactions (hospital_admin + super_admin) ----
+export type TransactionType = "hospital" | "pharmacy";
+export type TransactionItem = {
+  id: string;
+  type: TransactionType;
+  source: string;
+  reference: string;
+  amount: number;
+  date: string;
+  patientName?: string;
+  paymentMethod?: string;
+  createdAt: string;
+};
+
+export type TransactionsResponse = {
+  list: TransactionItem[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+};
+
+export type TransactionsFilters = {
+  hospitalId?: string;
+  period?: DashboardPeriod;
+  dateFrom?: string;
+  dateTo?: string;
+  type?: "all" | "hospital" | "pharmacy";
+  page?: number;
+  limit?: number;
+};
+
+export const fetchTransactions = async (
+  filters?: TransactionsFilters
+): Promise<TransactionsResponse> => {
+  const params = new URLSearchParams();
+  if (filters?.hospitalId) params.set("hospitalId", filters.hospitalId);
+  if (filters?.period) params.set("period", filters.period);
+  if (filters?.dateFrom) params.set("dateFrom", filters.dateFrom);
+  if (filters?.dateTo) params.set("dateTo", filters.dateTo);
+  if (filters?.type) params.set("type", filters.type ?? "all");
+  if (filters?.page != null) params.set("page", String(filters.page));
+  if (filters?.limit != null) params.set("limit", String(filters.limit));
+  const { data } = await api.get<TransactionsResponse>(`/dashboard/transactions?${params.toString()}`);
+  return data;
+};
+
+export type ReportsSummaryResponse = {
+  period: string;
+  dateFrom?: string;
+  dateTo?: string;
+  appointmentStatistics: {
+    all: number;
+    completed: number;
+    cancelled: number;
+    scheduled: number;
+    reschedule: number;
+  };
+  revenue: { hospitalRevenue: number; pharmacyRevenue: number; total: number };
+  topDepartments: Array<{ name: string; count: number; revenue: number }>;
+};
+
+export type ReportsFilters = {
+  hospitalId?: string;
+  period?: DashboardPeriod;
+  dateFrom?: string;
+  dateTo?: string;
+};
+
+export const fetchReports = async (
+  filters?: ReportsFilters
+): Promise<ReportsSummaryResponse> => {
+  const params = new URLSearchParams();
+  if (filters?.hospitalId) params.set("hospitalId", filters.hospitalId);
+  if (filters?.period) params.set("period", filters.period ?? "last30days");
+  if (filters?.dateFrom) params.set("dateFrom", filters.dateFrom);
+  if (filters?.dateTo) params.set("dateTo", filters.dateTo);
+  const { data } = await api.get<ReportsSummaryResponse>(`/dashboard/reports?${params.toString()}`);
+  return data;
+};
+
+export type InventoryReportBatchEntry = {
+  grn: string;
+  date: string;
+  qty: number;
+  batch: string;
+  expiry: string;
+};
+
+export type InventoryReportOutLine = {
+  batch: string;
+  expiry: string;
+  quantity: number;
+  value: number;
+};
+
+export type InventoryReportRow = {
+  itemName: string;
+  quantity: number;
+  value: number;
+  batches?: InventoryReportBatchEntry[];
+};
+
+export type InventoryReportResponse = {
+  period: string;
+  dateFrom?: string;
+  dateTo?: string;
+  search?: string;
+  in: InventoryReportRow[];
+  out: Array<{
+    itemName: string;
+    quantity: number;
+    value: number;
+    lines?: InventoryReportOutLine[];
+  }>;
+  summary: Array<{
+    itemName: string;
+    inQuantity: number;
+    inValue: number;
+    outQuantity: number;
+    outValue: number;
+    inBatches?: InventoryReportBatchEntry[];
+    outLines?: InventoryReportOutLine[];
+  }>;
+};
+
+export type InventoryReportFilters = {
+  hospitalId?: string;
+  period?: DashboardPeriod;
+  dateFrom?: string;
+  dateTo?: string;
+  /** Filter by medicine name - shows all in/out for that medicine with batch and expiry */
+  search?: string;
+};
+
+export const fetchInventoryReport = async (
+  filters?: InventoryReportFilters
+): Promise<InventoryReportResponse> => {
+  const params = new URLSearchParams();
+  if (filters?.hospitalId) params.set("hospitalId", filters.hospitalId);
+  if (filters?.period) params.set("period", filters.period ?? "last30days");
+  if (filters?.dateFrom) params.set("dateFrom", filters.dateFrom);
+  if (filters?.dateTo) params.set("dateTo", filters.dateTo);
+  if (filters?.search) params.set("search", filters.search.trim());
+  const { data } = await api.get<InventoryReportResponse>(`/dashboard/inventory-report?${params.toString()}`);
   return data;
 };

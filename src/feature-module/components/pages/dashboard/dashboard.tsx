@@ -451,8 +451,8 @@ const Dashboard = () => {
                 />
                 <div className="card-body">
                   <div className="d-flex align-items-center mb-2 justify-content-between">
-                    <span className="avatar bg-success rounded-circle">
-                      <i className="ti ti-calendar-heart fs-24" />
+                    <span className="avatar bg-primary rounded-circle">
+                      <i className="ti ti-building-hospital fs-24" />
                     </span>
                     <div className="text-end">
                       <span className={`badge px-2 py-1 fs-12 fw-medium d-inline-flex mb-1 ${stats.revenue.change >= 0 ? "bg-success" : "bg-danger"}`}>
@@ -463,11 +463,58 @@ const Dashboard = () => {
                   </div>
                   <div className="d-flex align-items-center justify-content-between overflow-hidden">
                     <div>
-                      <p className="mb-1">Revenue</p>
-                      <h3 className="fw-bold mb-0 text-truncate">{formatCurrency(stats.revenue.amount)}</h3>
+                      <p className="mb-1">Hospital Revenue</p>
+                      <h3 className="fw-bold mb-0 text-truncate">{formatCurrency(stats.revenue.hospitalRevenue ?? 0)}</h3>
                     </div>
                     <div>
                       <div id="s-col-4" className="chart-set">
+                        <Chart
+                          options={sColChart}
+                          series={[{ name: "Revenue", data: stats.revenue.sparkline }]}
+                          type="bar"
+                          width={80}
+                          height={54}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            {/* end col */}
+            <div className="col-xl-3 col-md-6">
+              <div
+                className="position-relative border card rounded-2 shadow-sm"
+                style={{ cursor: "pointer" }}
+                role="button"
+                tabIndex={0}
+                onClick={() => openCardModal("recentTransactions")}
+                onKeyDown={(e) => e.key === "Enter" && openCardModal("recentTransactions")}
+              >
+                <ImageWithBasePath
+                  src="./assets/img/bg/bg-04.svg"
+                  alt="img"
+                  className="position-absolute start-0 top-0"
+                />
+                <div className="card-body">
+                  <div className="d-flex align-items-center mb-2 justify-content-between">
+                    <span className="avatar bg-success rounded-circle">
+                      <i className="ti ti-pill fs-24" />
+                    </span>
+                    <div className="text-end">
+                      <span className={`badge px-2 py-1 fs-12 fw-medium d-inline-flex mb-1 ${stats.revenue.change >= 0 ? "bg-success" : "bg-danger"}`}>
+                        {stats.revenue.change >= 0 ? "+" : ""}{stats.revenue.change}%
+                      </span>
+                      <p className="fs-13 mb-0">in last 7 Days </p>
+                    </div>
+                  </div>
+                  <div className="d-flex align-items-center justify-content-between overflow-hidden">
+                    <div>
+                      <p className="mb-1">Pharmacy Revenue</p>
+                      <h3 className="fw-bold mb-0 text-truncate">{formatCurrency(stats.revenue.pharmacyRevenue ?? 0)}</h3>
+                    </div>
+                    <div>
+                      <div id="s-col-5" className="chart-set">
                         <SCol4Chart />
                       </div>
                     </div>

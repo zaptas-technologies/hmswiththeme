@@ -3,7 +3,7 @@ import ImageWithBasePath from "../../../../../core/imageWithBasePath";
 import { all_routes } from "../../../../routes/all_routes";
 import { useEffect, useMemo, useState } from "react";
 import dayjs from "dayjs";
-import { fetchPrescriptionById, type Prescription } from "../../../../../api/prescriptions";
+import { fetchConsultationById, type ConsultationListItem } from "../../../../../api/consultations";
 
 const DoctorsPrescriptionDetails = () => {
   const [searchParams] = useSearchParams();
@@ -11,23 +11,22 @@ const DoctorsPrescriptionDetails = () => {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [prescription, setPrescription] = useState<Prescription | null>(null);
+  const [consultation, setConsultation] = useState<(ConsultationListItem & Record<string, any>) | null>(null);
 
   useEffect(() => {
     const load = async () => {
       if (!id) {
-        setError("Missing prescription id");
+        setError("Missing consultation id");
         setLoading(false);
         return;
       }
-
       try {
         setLoading(true);
         setError(null);
-        const data = await fetchPrescriptionById(id);
-        setPrescription(data);
+        const data = await fetchConsultationById(id);
+        setConsultation(data);
       } catch (err: any) {
-        setError(err?.response?.data?.message || err?.message || "Failed to load prescription");
+        setError(err?.response?.data?.message || err?.message || "Failed to load consultation");
       } finally {
         setLoading(false);
       }
@@ -36,29 +35,18 @@ const DoctorsPrescriptionDetails = () => {
   }, [id]);
 
   const medicines = useMemo(() => {
-    if (!prescription) return [];
-    const meds = (prescription as any).Medications;
+    if (!consultation) return [];
+    const meds = consultation.Medications;
     if (Array.isArray(meds) && meds.length > 0) return meds;
-    // Fallback for legacy single medicine fields
-    if (prescription.Medicine) {
-      return [
-        {
-          medicine: prescription.Medicine,
-          dosage: prescription.Dosage,
-          frequency: prescription.Frequency,
-          duration: prescription.Duration,
-        },
-      ];
-    }
     return [];
-  }, [prescription]);
+  }, [consultation]);
 
   const prescribedOnLabel = useMemo(() => {
-    const d = (prescription?.Prescribed_On || prescription?.Date || "") as string;
+    const d = (consultation?.Prescribed_On || consultation?.Date || "") as string;
     if (!d) return "N/A";
     const parsed = dayjs(d);
     return parsed.isValid() ? parsed.format("DD MMM YYYY") : d;
-  }, [prescription?.Prescribed_On, prescription?.Date]);
+  }, [consultation?.Prescribed_On, consultation?.Date]);
 
   const handlePrint = () => window.print();
   const handleDownload = () => window.print(); // browser "Save as PDF"
@@ -69,19 +57,19 @@ const DoctorsPrescriptionDetails = () => {
         <div className="content d-flex justify-content-center align-items-center" style={{ minHeight: "60vh" }}>
           <div className="text-center">
             <div className="spinner-border text-primary mb-3" role="status" />
-            <p className="mb-0">Loading prescription…</p>
+            <p className="mb-0">Loading consultation…</p>
           </div>
         </div>
       </div>
     );
   }
 
-  if (error || !prescription) {
+  if (error || !consultation) {
     return (
       <div className="page-wrapper">
         <div className="content d-flex justify-content-center align-items-center" style={{ minHeight: "60vh" }}>
           <div className="text-center">
-            <p className="text-danger fw-semibold mb-3">{error || "Unable to load prescription."}</p>
+            <p className="text-danger fw-semibold mb-3">{error || "Unable to load consultation."}</p>
             <Link to={all_routes.doctorsprescriptions} className="btn btn-primary">
               Back to Prescriptions
             </Link>
@@ -91,7 +79,7 @@ const DoctorsPrescriptionDetails = () => {
     );
   }
 
-  const prescriptionNo = prescription.Prescription_ID || (prescription as any).PrescriptionId || prescription._id || "N/A";
+  const prescriptionNo = consultation.Prescription_ID || consultation.Consultation_ID || consultation._id || "N/A";
 
   return (
     <>
@@ -234,16 +222,16 @@ const DoctorsPrescriptionDetails = () => {
                       </div>
                       <div>
                         <h6 className="text-dark fw-semibold mb-1">
-                          {(prescription as any)?.Hospital_Name || "Clinic"}
+                          {(consultation as any)?.Hospital_Name || "Clinic"}
                         </h6>
-                        <p className="mb-1"> {(prescription as any)?.Doctor || "Doctor"} </p>
-                        <p className="mb-0"> {(prescription as any)?.role || ""}</p>
+                        <p className="mb-1"> {(consultation as any)?.Doctor || "Doctor"} </p>
+                        <p className="mb-0"> {(consultation as any)?.role || ""}</p>
                       </div>
                     </div>
                     <div className="text-lg-end">
                       <p className="text-dark mb-1">
                         Department :
-                        <span className="text-body"> {(prescription as any)?.Department || "N/A"}</span>
+                        <span className="text-body"> {(consultation as any)?.Department || "N/A"}</span>
                       </p>
                       <p className="text-dark mb-1">
                         Prescribed on :
@@ -251,7 +239,7 @@ const DoctorsPrescriptionDetails = () => {
                       </p>
                       <p className="text-dark mb-0">
                         Consultation :
-                        <span className="text-body"> {(prescription as any)?.consultationId || "N/A"}</span>
+                        <span className="text-body"> {(consultation as any)?.consultationId || "N/A"}</span>
                       </p>
                     </div>
                   </div>
@@ -259,10 +247,10 @@ const DoctorsPrescriptionDetails = () => {
                   <div className="mb-3">
                     <h6 className=" mb-2 fs-14 fw-medium"> Patient Details </h6>
                     <div className="px-3 py-2 bg-light rounded d-flex align-items-center justify-content-between">
-                      <h6 className="m-0 fw-semibold fs-16"> {prescription.Patient || "N/A"} </h6>
+                      <h6 className="m-0 fw-semibold fs-16"> {consultation.Patient || "N/A"} </h6>
                       <div className="d-flex align-items-center  gap-3">
                         <p className="mb-0 text-dark">
-                          Patient ID <span className="text-body"> {prescription.patientId || "N/A"}</span>
+                          Patient ID <span className="text-body"> {consultation.patientId || "N/A"}</span>
                         </p>
                       </div>
                     </div>
@@ -279,17 +267,19 @@ const DoctorsPrescriptionDetails = () => {
                           <thead className="table-light">
                             <tr>
                               <th className="text-dark">SNO</th>
-                              <th className="text-dark">Medecine Name</th>
+                              <th className="text-dark">Medicine Name</th>
                               <th className="text-dark">Dosage</th>
-                              <th className="text-dark"> Frequency</th>
-                              <th className="text-dark"> Duration </th>
-                              <th className="text-dark"> Timings</th>
+                              <th className="text-dark">Frequency</th>
+                              <th className="text-dark">Duration</th>
+                              <th className="text-dark">Timings</th>
+                              <th className="text-dark">Batch</th>
+                              <th className="text-dark">Expiry</th>
                             </tr>
                           </thead>
                           <tbody>
                             {medicines.length === 0 ? (
                               <tr>
-                                <td colSpan={6} className="text-center text-muted py-3">
+                                <td colSpan={8} className="text-center text-muted py-3">
                                   No medicines found.
                                 </td>
                               </tr>
@@ -302,6 +292,8 @@ const DoctorsPrescriptionDetails = () => {
                                   <td>{m?.frequency || "-"}</td>
                                   <td>{m?.duration || "-"}</td>
                                   <td>{m?.timing || "-"}</td>
+                                  <td>{m?.batchNumber || "-"}</td>
+                                  <td>{m?.expiry ? (typeof m.expiry === "string" ? m.expiry : new Date(m.expiry).toISOString().slice(0, 10)) : "-"}</td>
                                 </tr>
                               ))
                             )}
@@ -314,13 +306,13 @@ const DoctorsPrescriptionDetails = () => {
                   {/* Items */}
                   <div className="pb-3 mb-3 border-1 border-bottom">
                     <h6 className="mb-1 fs-16 fw-semibold">Advice</h6>
-                    <p className="mb-0">{(prescription as any)?.AdviceText || "-"}</p>
+                    <p className="mb-0">{(consultation as any)?.AdviceText || "-"}</p>
                   </div>
                   {/* Items */}
                   <div className="pb-3 mb-3 border-1 border-bottom d-flex align-items-center justify-content-between flex-wrap gap-2">
                     <div className="">
                       <h6 className="mb-1 16-14 fw-semibold"> Follow Up</h6>
-                      <p className="mb-0">{(prescription as any)?.FollowUpText || "-"}</p>
+                      <p className="mb-0">{(consultation as any)?.FollowUpText || "-"}</p>
                     </div>
                     <div className="">
                       <ImageWithBasePath

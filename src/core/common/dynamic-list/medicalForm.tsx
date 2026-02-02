@@ -31,6 +31,9 @@ export interface MedicationItem {
   quantity?: number;
   unitPrice?: number;
   subtotal?: number;
+  /** Batch and expiry compulsory for medicine tracking */
+  batchNumber?: string;
+  expiry?: string;
 }
 
 interface MedicalFormProps {
@@ -52,6 +55,8 @@ const MedicalForm: React.FC<MedicalFormProps> = ({ value, onChange }) => {
     quantity: 1,
     unitPrice: 0,
     subtotal: 0,
+    batchNumber: "",
+    expiry: "",
   });
 
   const [medications, setMedications] = useState<MedicationItem[]>(
@@ -117,6 +122,10 @@ const MedicalForm: React.FC<MedicalFormProps> = ({ value, onChange }) => {
               quantity,
               unitPrice,
               subtotal,
+              inventoryBatchNumber: details?.batchNumber ?? details?.Batch_Number,
+              inventoryExpiryDate: details?.expiryDate ?? (details?.Expiry_Date ? new Date(details.Expiry_Date).toISOString().slice(0, 10) : undefined),
+              batchNumber: details?.batchNumber ?? details?.Batch_Number ?? "",
+              expiry: details?.expiryDate ?? (details?.Expiry_Date ? new Date(details.Expiry_Date).toISOString().slice(0, 10) : ""),
             }
           : {}),
       };
@@ -170,6 +179,14 @@ const MedicalForm: React.FC<MedicalFormProps> = ({ value, onChange }) => {
 
   const handleInstructionChange = (id: number, value: string) => {
     setMedications((prev) => prev.map((item) => (item.id === id ? { ...item, instruction: value } : item)));
+  };
+
+  const handleBatchChange = (id: number, value: string) => {
+    setMedications((prev) => prev.map((item) => (item.id === id ? { ...item, batchNumber: value } : item)));
+  };
+
+  const handleExpiryChange = (id: number, value: string) => {
+    setMedications((prev) => prev.map((item) => (item.id === id ? { ...item, expiry: value } : item)));
   };
 
   // Display dosage: prefer plain dosage text, else derive from mg/m
@@ -417,6 +434,39 @@ const MedicalForm: React.FC<MedicalFormProps> = ({ value, onChange }) => {
                       value={item.instruction || ""}
                       onChange={(e) => handleInstructionChange(item.id, e.target.value)}
                       placeholder="Optional"
+                    />
+                  </div>
+                </div>
+                <div className="col-lg-2">
+                  <div className="mb-3">
+                    {index === 0 && (
+                      <label className="form-label mb-1 text-dark fs-14 fw-medium">
+                        Batch <span className="text-danger">*</span>
+                      </label>
+                    )}
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={item.batchNumber ?? item.inventoryBatchNumber ?? ""}
+                      onChange={(e) => handleBatchChange(item.id, e.target.value)}
+                      placeholder="Batch no."
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="col-lg-2">
+                  <div className="mb-3">
+                    {index === 0 && (
+                      <label className="form-label mb-1 text-dark fs-14 fw-medium">
+                        Expiry <span className="text-danger">*</span>
+                      </label>
+                    )}
+                    <input
+                      type="date"
+                      className="form-control"
+                      value={item.expiry ?? item.inventoryExpiryDate ?? ""}
+                      onChange={(e) => handleExpiryChange(item.id, e.target.value)}
+                      required
                     />
                   </div>
                 </div>

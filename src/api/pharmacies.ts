@@ -23,6 +23,7 @@ export interface PharmacyResponse {
 }
 
 export interface PharmacyRequest {
+  id?: string;
   name: string;
   email: string;
   phone?: string;
@@ -73,39 +74,25 @@ export const impersonatePharmacy = async (id: string): Promise<{ token: string; 
   return data;
 };
 
-// Pharmacy Dashboard (for pharmacist role – prescriptions & consultations for hospital)
-export interface PharmacyDashboardPrescription {
-  id: string;
-  _id: string;
-  Prescription_ID?: string;
-  Date?: string;
-  Prescribed_On?: string;
-  Patient: string;
-  Patient_Image?: string;
-  Doctor: string;
-  Medicine?: string;
-  Status: string;
-  Dosage?: string;
-  Frequency?: string;
-  Duration?: string;
-  Medications?: Array<{ medicine: string; dosage?: string; frequency?: string; duration?: string; inventoryId?: string }>;
-  Appointment_ID?: string;
-  consultationId?: string;
-  Amount?: number;
-  createdAt?: string;
-}
-
+// Pharmacy Dashboard: data from Consultation table (pending = not dispensed, completed = dispensed)
 export interface PharmacyDashboardConsultation {
   id: string;
   _id: string;
+  Consultation_ID?: string;
   Appointment_ID?: string;
   Patient: string;
   Doctor: string;
   Status: string;
-  Medications?: Array<{ medicine: string; dosage?: string; frequency?: string; duration?: string; inventoryId?: string }>;
+  Medications?: Array<{ medicine: string; dosage?: string; frequency?: string; duration?: string; quantity?: number; unitPrice?: number; inventoryId?: string; batchNumber?: string; expiry?: string }>;
   Consultation_Date?: string;
   Completed_At?: string;
   createdAt?: string;
+  fulfilledBy?: {
+    id: string;
+    amountReceived: number;
+    paymentMethod: string;
+    dispensedAt: string;
+  } | null;
 }
 
 export interface PharmacyDashboardStats {
@@ -114,41 +101,81 @@ export interface PharmacyDashboardStats {
   completedTodayCount: number;
 }
 
-export interface PharmacyDashboardResponse {
-  hospital: { id: string; name: string; city?: string; state?: string } | null;
-  prescriptions: PharmacyDashboardPrescription[];
-  completedPrescriptions: PharmacyDashboardPrescription[];
-  stats: PharmacyDashboardStats;
-  consultations: PharmacyDashboardConsultation[];
+export interface PharmacyDashboardPagination {
+  total: number;
+  page: number;
+  limit: number;
+  pages: number;
 }
 
-export const fetchPharmacyDashboard = async (): Promise<PharmacyDashboardResponse> => {
-  const { data } = await api.get<PharmacyDashboardResponse>("/pharmacies/dashboard");
+export interface PharmacyDashboardResponse {
+  hospital: { id: string; name: string; city?: string; state?: string } | null;
+  stats: PharmacyDashboardStats;
+  consultations: PharmacyDashboardConsultation[];
+  pagination: PharmacyDashboardPagination;
+}
+
+export interface FetchPharmacyDashboardParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  tab?: "all" | "pending" | "completed";
+}
+
+/** Pharmacy dashboard: list from Consultation table only (pending = not dispensed, completed = dispensed). */
+export const fetchPharmacyDashboard = async (
+  params?: FetchPharmacyDashboardParams
+): Promise<PharmacyDashboardResponse> => {
+  const queryParams = new URLSearchParams();
+  if (params?.page != null) queryParams.append("page", String(params.page));
+  if (params?.limit != null) queryParams.append("limit", String(params.limit));
+  if (params?.search != null && params.search !== "") queryParams.append("search", params.search);
+  if (params?.tab != null) queryParams.append("tab", params.tab);
+  const qs = queryParams.toString();
+  const url = `/pharmacies/dashboard${qs ? `?${qs}` : ""}`;
+  const { data } = await api.get<PharmacyDashboardResponse>(url);
   return data;
 };
 
-export interface PrescriptionPriceLineItem {
+export interface ConsultationPriceLineItem {
   medicine: string;
   dosage?: string;
   unitPrice: number;
   quantity: number;
   subtotal: number;
+  inventoryId?: string;
+  /** Batch number (required for dispense) */
+  batchNumber?: string | null;
+  /** Expiry date (YYYY-MM-DD, required for dispense) */
+  expiry?: string | null;
 }
 
-export interface PrescriptionPriceBreakdown {
-  lineItems: PrescriptionPriceLineItem[];
+export interface ConsultationPriceBreakdown {
+  lineItems: ConsultationPriceLineItem[];
   total: number;
 }
 
-export const fetchPrescriptionPriceBreakdown = async (prescriptionId: string): Promise<PrescriptionPriceBreakdown> => {
-  const { data } = await api.get<PrescriptionPriceBreakdown>(`/prescriptions/${prescriptionId}/price-breakdown`);
+export const fetchConsultationPriceBreakdown = async (consultationId: string): Promise<ConsultationPriceBreakdown> => {
+  const { data } = await api.get<ConsultationPriceBreakdown>(`/pharmacies/consultations/${consultationId}/price-breakdown`);
   return data;
 };
 
-export const fulfillPrescription = async (
-  prescriptionId: string,
-  payload: { amountPaid: number; paymentMode?: string }
-): Promise<PharmacyDashboardPrescription> => {
-  const { data } = await api.post<PharmacyDashboardPrescription>(`/prescriptions/${prescriptionId}/fulfill`, payload);
+/** Prescription price breakdown (for pharmacy invoice page). Uses prescriptions API. */
+export const fetchPrescriptionPriceBreakdown = async (prescriptionId: string): Promise<ConsultationPriceBreakdown> => {
+  const { data } = await api.get<ConsultationPriceBreakdown>(`/prescriptions/${prescriptionId}/price-breakdown`);
+  return data;
+};
+
+export interface FulfillConsultationPayload {
+  amountReceived: number;
+  paymentMode?: string;
+  lineItems?: Array<{ medicine: string; dosage?: string; quantity: number; unitPrice: number; subtotal: number; inventoryId?: string; batchNumber?: string | null; expiry?: string | null }>;
+}
+
+export const fulfillConsultation = async (
+  consultationId: string,
+  payload: FulfillConsultationPayload
+): Promise<{ id: string; consultationId: string; patientName: string; doctorName: string; amountReceived: number; paymentMethod: string; medications: ConsultationPriceLineItem[]; createdAt: string }> => {
+  const { data } = await api.post(`/pharmacies/fulfill`, { consultationId, ...payload });
   return data;
 };

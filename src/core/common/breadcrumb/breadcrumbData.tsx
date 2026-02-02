@@ -259,6 +259,37 @@ export const breadcrumbMap: Record<string, any[]> = {
         { label: 'Home', path: '/',icon: 'isax isax-home-2 me-1', active: false },
         { label: 'Transactions', active: true },
     ],
+    '/clinic/transactions': [
+        { label: 'Home', path: '/',icon: 'isax isax-home-2 me-1', active: false },
+        { label: 'Transactions', active: true },
+    ],
+    '/clinic/reports': [
+        { label: 'Home', path: '/',icon: 'isax isax-home-2 me-1', active: false },
+        { label: 'Reports', active: true },
+    ],
+    '/clinic/inventory-report': [
+        { label: 'Home', path: '/',icon: 'isax isax-home-2 me-1', active: false },
+        { label: 'Inventory Report', active: true },
+    ],
+    '/pharmacy/dashboard': [
+        { label: 'Home', path: '/', icon: 'isax isax-home-2 me-1', active: false },
+        { label: 'Pharmacy Dashboard', active: true },
+    ],
+    '/pharmacy/reports': [
+        { label: 'Home', path: '/', icon: 'isax isax-home-2 me-1', active: false },
+        { label: 'Pharmacy', path: '/pharmacy/dashboard', active: false },
+        { label: 'Pharmacy Reports', active: true },
+    ],
+    '/pharmacy/transactions': [
+        { label: 'Home', path: '/', icon: 'isax isax-home-2 me-1', active: false },
+        { label: 'Pharmacy', path: '/pharmacy/dashboard', active: false },
+        { label: 'Pharmacy Transactions', active: true },
+    ],
+    '/pharmacy/inventory-report': [
+        { label: 'Home', path: '/', icon: 'isax isax-home-2 me-1', active: false },
+        { label: 'Pharmacy', path: '/pharmacy/dashboard', active: false },
+        { label: 'Inventory Report', active: true },
+    ],
     '/bank-accounts': [
         { label: 'Home', path: '/',icon: 'isax isax-home-2 me-1', active: false },
         { label: 'Bank Accounts', active: true },

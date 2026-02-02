@@ -116,11 +116,13 @@ const PatientPrescriptionDetails = () => {
                           <thead>
                             <tr>
                               <th>SNO</th>
-                              <th>Medecine Name</th>
+                              <th>Medicine Name</th>
                               <th>Dosage</th>
-                              <th> Frequency</th>
-                              <th> Duration </th>
-                              <th> Timings</th>
+                              <th>Frequency</th>
+                              <th>Duration</th>
+                              <th>Timings</th>
+                              <th>Batch</th>
+                              <th>Expiry</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -131,6 +133,8 @@ const PatientPrescriptionDetails = () => {
                               <td> 1-0-1 </td>
                               <td> 1 month </td>
                               <td> Before meal </td>
+                              <td>—</td>
+                              <td>—</td>
                             </tr>
                             <tr>
                               <td>02</td>
@@ -139,6 +143,8 @@ const PatientPrescriptionDetails = () => {
                               <td> 1-1-1 </td>
                               <td> 1 month </td>
                               <td> After meal </td>
+                              <td>—</td>
+                              <td>—</td>
                             </tr>
                             <tr>
                               <td>03</td>
@@ -147,6 +153,8 @@ const PatientPrescriptionDetails = () => {
                               <td> 1-0-1 </td>
                               <td> 1 month </td>
                               <td> After meal </td>
+                              <td>—</td>
+                              <td>—</td>
                             </tr>
                             <tr>
                               <td>04</td>
@@ -155,6 +163,8 @@ const PatientPrescriptionDetails = () => {
                               <td> 1-0-1 </td>
                               <td> 1 month </td>
                               <td> Before meal </td>
+                              <td>—</td>
+                              <td>—</td>
                             </tr>
                           </tbody>
                         </table>

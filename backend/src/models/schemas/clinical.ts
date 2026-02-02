@@ -220,6 +220,9 @@ export const ConsultationSchema = new Schema(
       quantity: { type: Number, default: 1 },
       unitPrice: { type: Number, default: 0 },
       subtotal: { type: Number, default: 0 },
+      // Batch and expiry for medicine tracking (required in UI)
+      batchNumber: { type: String },
+      expiry: { type: Date },
     }],
     // Advice
     Advice: [{
@@ -252,6 +255,36 @@ export const ConsultationSchema = new Schema(
     // Consultation Date
     Consultation_Date: { type: Date, default: Date.now },
     Completed_At: { type: Date },
+    // Role-based access
+    user: { type: Schema.Types.ObjectId, ref: "User", index: true },
+    hospital: { type: Schema.Types.ObjectId, ref: "Hospital", index: true },
+  },
+  { timestamps: true, strict: false }
+);
+
+export const PharmacyDispenseSchema = new Schema(
+  {
+    hospital: { type: Schema.Types.ObjectId, ref: "Hospital", required: true, index: true },
+    consultationId: { type: Schema.Types.ObjectId, ref: "Consultation", required: true, index: true },
+    appointmentId: { type: Schema.Types.ObjectId, ref: "Appointment", index: true },
+    doctorId: { type: Schema.Types.ObjectId, ref: "Doctor", index: true },
+    doctorName: { type: String, required: true },
+    patientId: { type: Schema.Types.ObjectId, ref: "Patient", index: true },
+    patientName: { type: String, required: true },
+    amountReceived: { type: Number, required: true, default: 0 },
+    paymentMethod: { type: String, required: true, default: "Cash" },
+    medications: [{
+      medicine: { type: String, required: true },
+      dosage: { type: String },
+      quantity: { type: Number, required: true, default: 1 },
+      unitPrice: { type: Number, default: 0 },
+      subtotal: { type: Number, default: 0 },
+      inventoryId: { type: Schema.Types.ObjectId, ref: "Inventory" },
+      batchNumber: { type: String },
+      expiry: { type: Date },
+    }],
+    dispensedBy: { type: Schema.Types.ObjectId, ref: "User", index: true },
+    notes: { type: String },
   },
   { timestamps: true, strict: false }
 );

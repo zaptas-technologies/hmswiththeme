@@ -479,7 +479,7 @@ export const getPrescriptionPriceBreakdown: RequestHandler = async (req, res, ne
     const hospitalId = req.user.hospitalId;
     const hospitalObjectId = hospitalId ? new mongoose.Types.ObjectId(hospitalId) : null;
 
-    const lineItems: Array<{ medicine: string; dosage?: string; unitPrice: number; quantity: number; subtotal: number }> = [];
+    const lineItems: Array<{ medicine: string; dosage?: string; unitPrice: number; quantity: number; subtotal: number; batchNumber?: string; expiry?: string }> = [];
     let total = 0;
 
     for (const med of medications) {
@@ -487,8 +487,10 @@ export const getPrescriptionPriceBreakdown: RequestHandler = async (req, res, ne
       const medicineName = typeof (med as any).medicine === "string" ? (med as any).medicine : "—";
       const dosage = (med as any).dosage;
       const quantity = 1;
+      let batchNumber: string | undefined = (med as any).batchNumber ? String((med as any).batchNumber).trim() : undefined;
+      let expiry: string | undefined = (med as any).expiry ? (typeof (med as any).expiry === "string" ? (med as any).expiry : new Date((med as any).expiry).toISOString().slice(0, 10)) : undefined;
       if (!invId || !hospitalObjectId) {
-        lineItems.push({ medicine: medicineName, dosage, unitPrice: 0, quantity, subtotal: 0 });
+        lineItems.push({ medicine: medicineName, dosage, unitPrice: 0, quantity, subtotal: 0, batchNumber, expiry });
         continue;
       }
       const invObjId = invId instanceof mongoose.Types.ObjectId ? invId : new mongoose.Types.ObjectId(String(invId));
@@ -496,18 +498,22 @@ export const getPrescriptionPriceBreakdown: RequestHandler = async (req, res, ne
         _id: invObjId,
         hospital: hospitalObjectId,
       })
-        .select("Item_Name Unit_Price Quantity")
+        .select("Item_Name Unit_Price Quantity Batch_Number Expiry_Date")
         .lean()
         .exec();
       const unitPrice = (inv as any)?.Unit_Price ?? 0;
       const subtotal = unitPrice * quantity;
       total += subtotal;
+      if (!batchNumber && (inv as any).Batch_Number) batchNumber = String((inv as any).Batch_Number);
+      if (!expiry && (inv as any).Expiry_Date) expiry = new Date((inv as any).Expiry_Date).toISOString().slice(0, 10);
       lineItems.push({
         medicine: (inv as any)?.Item_Name || medicineName,
         dosage,
         unitPrice,
         quantity,
         subtotal,
+        batchNumber,
+        expiry,
       });
     }
 

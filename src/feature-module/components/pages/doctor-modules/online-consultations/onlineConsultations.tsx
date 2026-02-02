@@ -60,6 +60,9 @@ const OnlineConsultations = () => {
     quantity?: number;
     unitPrice?: number;
     subtotal?: number;
+    /** Required for medicine tracking */
+    batchNumber?: string;
+    expiry?: string;
   }>>([]);
 
   const [complaints, setComplaints] = useState<Array<{
@@ -101,6 +104,8 @@ const OnlineConsultations = () => {
         quantity: med.quantity,
         unitPrice: med.unitPrice,
         subtotal: med.subtotal,
+        batchNumber: med.batchNumber,
+        expiry: med.expiry,
       })),
     [medications]
   );
@@ -125,6 +130,8 @@ const OnlineConsultations = () => {
       quantity?: number;
       unitPrice?: number;
       subtotal?: number;
+      batchNumber?: string;
+      expiry?: string;
     }>) => {
       setMedications(
         meds.map((med) => ({
@@ -143,6 +150,8 @@ const OnlineConsultations = () => {
           quantity: med.quantity,
           unitPrice: med.unitPrice,
           subtotal: med.subtotal,
+          batchNumber: med.batchNumber,
+          expiry: med.expiry,
         }))
       );
     },
@@ -215,12 +224,13 @@ const OnlineConsultations = () => {
       errors.push("Height must be a valid number");
     }
 
-    // Validate medications (if provided, medicine name is required)
-    const invalidMedications = medications.filter(
-      (med) => med.medicine && med.medicine.trim() !== "" && !med.medicine.trim()
+    // Validate medications: if medicine name is provided, batch and expiry are required
+    const medsWithName = medications.filter((med) => med.medicine && med.medicine.trim() !== "");
+    const missingBatchOrExpiry = medsWithName.filter(
+      (med) => !(med.batchNumber && med.batchNumber.trim() !== "") || !(med.expiry && med.expiry.trim() !== "")
     );
-    if (invalidMedications.length > 0) {
-      errors.push("All medications must have a valid medicine name");
+    if (missingBatchOrExpiry.length > 0) {
+      errors.push("Batch number and expiry date are required for every medicine. Please fill them for all medication rows.");
     }
 
     return {
@@ -264,6 +274,8 @@ const OnlineConsultations = () => {
           quantity: typeof med.quantity === "number" && med.quantity >= 0 ? med.quantity : 1,
           unitPrice: typeof med.unitPrice === "number" && med.unitPrice >= 0 ? med.unitPrice : 0,
           subtotal: typeof med.subtotal === "number" && med.subtotal >= 0 ? med.subtotal : (med.unitPrice ?? 0) * (med.quantity ?? 1),
+          batchNumber: (med.batchNumber || "").trim() || undefined,
+          expiry: (med.expiry || "").trim() || undefined,
         }));
 
       // Format complaints for API
@@ -382,7 +394,7 @@ const OnlineConsultations = () => {
           {/* Start Page Header */}
           <div className="d-flex align-items-sm-center flex-sm-row flex-column gap-2 pb-3 mb-3 border-1 border-bottom">
             <div className="flex-grow-1">
-              <h4 className="fw-bold mb-0">  Consultatiosns </h4>
+              <h4 className="fw-bold mb-0"> Consultations </h4>
             </div>
             <div className="text-end d-flex">
               {/* dropdown*/}

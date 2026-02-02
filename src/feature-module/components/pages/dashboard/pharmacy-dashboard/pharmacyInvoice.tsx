@@ -13,7 +13,7 @@ const PharmacyInvoice = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [prescription, setPrescription] = useState<Prescription | null>(null);
-  const [priceBreakdown, setPriceBreakdown] = useState<{ lineItems: Array<{ medicine: string; dosage?: string; unitPrice: number; quantity: number; subtotal: number }>; total: number } | null>(null);
+  const [priceBreakdown, setPriceBreakdown] = useState<{ lineItems: Array<{ medicine: string; dosage?: string; unitPrice: number; quantity: number; subtotal: number; batchNumber?: string; expiry?: string }>; total: number } | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -48,6 +48,8 @@ const PharmacyInvoice = () => {
         quantity: line.quantity,
         unitPrice: line.unitPrice,
         subtotal: line.subtotal,
+        batchNumber: line.batchNumber,
+        expiry: line.expiry,
       }));
     }
     if (!prescription) return [];
@@ -59,6 +61,8 @@ const PharmacyInvoice = () => {
         quantity: 1,
         unitPrice: 0,
         subtotal: 0,
+        batchNumber: m?.batchNumber,
+        expiry: m?.expiry ? (typeof m.expiry === "string" ? m.expiry : new Date(m.expiry).toISOString().slice(0, 10)) : undefined,
       }));
     }
     if (prescription.Medicine) {
@@ -69,6 +73,8 @@ const PharmacyInvoice = () => {
           quantity: 1,
           unitPrice: 0,
           subtotal: 0,
+          batchNumber: undefined,
+          expiry: undefined,
         },
       ];
     }
@@ -230,6 +236,8 @@ const PharmacyInvoice = () => {
                             <th className="text-dark">#</th>
                             <th className="text-dark">Medicine Name</th>
                             <th className="text-dark">Dosage</th>
+                            <th className="text-dark">Batch</th>
+                            <th className="text-dark">Expiry</th>
                             <th className="text-dark text-center">Qty</th>
                             {hasPrices && <th className="text-dark text-end">Unit Price</th>}
                             {hasPrices && <th className="text-dark text-end">Amount</th>}
@@ -238,7 +246,7 @@ const PharmacyInvoice = () => {
                         <tbody>
                           {medicines.length === 0 ? (
                             <tr>
-                              <td colSpan={hasPrices ? 6 : 4} className="text-center text-muted py-3">
+                              <td colSpan={hasPrices ? 8 : 6} className="text-center text-muted py-3">
                                 No items.
                               </td>
                             </tr>
@@ -248,6 +256,8 @@ const PharmacyInvoice = () => {
                                 <td>{idx + 1}</td>
                                 <td>{m.medicine}</td>
                                 <td>{m.dosage || "—"}</td>
+                                <td>{m.batchNumber || "—"}</td>
+                                <td>{m.expiry || "—"}</td>
                                 <td className="text-center">{m.quantity}</td>
                                 {hasPrices && <td className="text-end">{formatCurrency(m.unitPrice ?? 0)}</td>}
                                 {hasPrices && <td className="text-end fw-medium">{formatCurrency(m.subtotal ?? 0)}</td>}
@@ -257,7 +267,7 @@ const PharmacyInvoice = () => {
                         </tbody>
                         <tfoot className="table-light">
                           <tr>
-                            <td colSpan={hasPrices ? 4 : 3} className="text-end fw-bold">
+                            <td colSpan={hasPrices ? 6 : 5} className="text-end fw-bold">
                               Total Amount Paid
                             </td>
                             {hasPrices ? <td className="text-end" /> : null}

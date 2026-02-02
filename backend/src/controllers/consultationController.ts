@@ -4,7 +4,6 @@ import { Appointment } from "../models/appointmentModel";
 import { Patient } from "../models/patientModel";
 import { Consultation } from "../models/consultationModel";
 import { Doctor } from "../models/doctorModel";
-import { Prescription } from "../models/prescriptionModel";
 import { DashboardAppointment } from "../models/dashboardAppointmentModel";
 import { DashboardPatient } from "../models/dashboardPatientModel";
 import { User } from "../models/userModel";
@@ -348,6 +347,9 @@ export const saveConsultation: RequestHandler = async (req, res, next) => {
         const quantity = typeof m.quantity === "number" && m.quantity >= 0 ? m.quantity : 1;
         const unitPrice = typeof m.unitPrice === "number" && m.unitPrice >= 0 ? m.unitPrice : 0;
         const subtotal = typeof m.subtotal === "number" && m.subtotal >= 0 ? m.subtotal : unitPrice * quantity;
+        const batchNumber = String(m.batchNumber ?? m.batch ?? "").trim();
+        const expiryRaw = m.expiry;
+        const expiry = expiryRaw ? (expiryRaw instanceof Date ? expiryRaw : new Date(expiryRaw)) : undefined;
         return {
           medicine: String(m.medicine || "").trim(),
           dosage: String(m.dosage || "").trim(),
@@ -357,6 +359,8 @@ export const saveConsultation: RequestHandler = async (req, res, next) => {
           quantity,
           unitPrice,
           subtotal,
+          ...(batchNumber ? { batchNumber } : {}),
+          ...(expiry && !isNaN(expiry.getTime()) ? { expiry } : {}),
         };
       });
     }
@@ -382,18 +386,21 @@ export const saveConsultation: RequestHandler = async (req, res, next) => {
 
     let consultation = await Consultation.findOne(consultationFilter).exec();
 
-    // Always persist access fields as real ObjectIds
+    // Always persist access fields (user, hospital) as ObjectIds. Always save hospitalId on consultation.
     const accessFilter = buildAccessFilter(req.user);
     const normalizedAccessFilter: any = {};
     if (accessFilter.user && typeof accessFilter.user === "string" && mongoose.Types.ObjectId.isValid(accessFilter.user)) {
       normalizedAccessFilter.user = new mongoose.Types.ObjectId(accessFilter.user);
     }
+    // Prefer hospital from user (HOSPITAL_ADMIN, PHARMACIST), else from appointment (USER/doctor, SUPER_ADMIN)
     if (
       accessFilter.hospital &&
       typeof accessFilter.hospital === "string" &&
       mongoose.Types.ObjectId.isValid(accessFilter.hospital)
     ) {
       normalizedAccessFilter.hospital = new mongoose.Types.ObjectId(accessFilter.hospital);
+    } else if (appointment.hospital && mongoose.Types.ObjectId.isValid(String(appointment.hospital))) {
+      normalizedAccessFilter.hospital = new mongoose.Types.ObjectId(String(appointment.hospital));
     }
 
     if (consultation) {
@@ -498,127 +505,7 @@ export const saveConsultation: RequestHandler = async (req, res, next) => {
 
     await appointment.save();
 
-    if (completeAppointment && consultationData?.medications && consultationData.medications.length > 0) {
-      try {
-        const prescriptionId = `#PRE${Date.now().toString().slice(-4)}`;
-        const prescriptionDate = new Date().toISOString().split("T")[0];
-        const accessFilter = buildAccessFilter(req.user);
-        
-        // Resolve patientId from Patient model
-        let patientId: mongoose.Types.ObjectId | undefined;
-        try {
-          const patientFilter = buildAccessFilter(req.user);
-          patientFilter.$or = [
-            { Patient: appointment.Patient },
-            { Phone: appointment.Phone },
-          ];
-          const patient = await Patient.findOne(patientFilter).select("_id").lean().exec() as { _id?: any } | null;
-          if (patient?._id) {
-            patientId = new mongoose.Types.ObjectId(String(patient._id));
-          }
-        } catch (err) {
-          // eslint-disable-next-line no-console
-          console.error("Error resolving patientId for prescription:", err);
-        }
-        
-        // Resolve doctorId from appointment
-        let doctorIdObj: mongoose.Types.ObjectId | undefined;
-        if (appointment.doctorId && mongoose.Types.ObjectId.isValid(String(appointment.doctorId))) {
-          doctorIdObj = new mongoose.Types.ObjectId(String(appointment.doctorId));
-        }
-        
-        // consultationId is the consultation's _id
-        const consultationIdObj = consultation && consultation._id 
-          ? new mongoose.Types.ObjectId(String(consultation._id))
-          : undefined;
-        
-        const appointmentObjectId = new mongoose.Types.ObjectId(String(appointment._id));
-
-        const meds = consultationData.medications
-          .map((m: any) => {
-            const medicineName = (m.medicine || m.Medicine || m.name || "").trim();
-            if (!medicineName) return null;
-            const inventoryIdStr = String(m.inventoryId || "").trim();
-            const inventoryId =
-              inventoryIdStr && mongoose.Types.ObjectId.isValid(inventoryIdStr)
-                ? new mongoose.Types.ObjectId(inventoryIdStr)
-                : undefined;
-            return {
-              medicine: medicineName,
-              dosage: String(m.dosage || m.Dosage || "").trim(),
-              frequency: String(m.frequency || m.Frequency || "").trim(),
-              duration: String(m.duration || m.Duration || "").trim(),
-              ...(inventoryId ? { inventoryId } : {}),
-            };
-          })
-          .filter(Boolean) as Array<any>;
-
-        if (meds.length === 0) return;
-
-        // One prescription per appointment/consultation (store multiple meds inside Medications[])
-        const normalizedPrescriptionAccessFilter: any = {};
-        if (accessFilter.user && typeof accessFilter.user === "string") {
-          normalizedPrescriptionAccessFilter.user = new mongoose.Types.ObjectId(accessFilter.user);
-        }
-        if (accessFilter.hospital && typeof accessFilter.hospital === "string") {
-          normalizedPrescriptionAccessFilter.hospital = new mongoose.Types.ObjectId(accessFilter.hospital);
-        }
-
-        // If already exists for same appointment+consultation, update it; else create
-        const existingPrescription = await Prescription.findOne({
-          Appointment_ID: appointmentObjectId,
-          ...(consultationIdObj ? { consultationId: consultationIdObj } : {}),
-          ...(normalizedPrescriptionAccessFilter.user ? { user: normalizedPrescriptionAccessFilter.user } : {}),
-          ...(normalizedPrescriptionAccessFilter.hospital ? { hospital: normalizedPrescriptionAccessFilter.hospital } : {}),
-        }).exec();
-
-        if (existingPrescription) {
-          existingPrescription.set({
-            Date: prescriptionDate,
-            Prescribed_On: prescriptionDate,
-            Patient: appointment.Patient || "",
-            Patient_Image: appointment.Patient_Image || "",
-            Doctor: appointment.Doctor || "",
-            Status: "Active",
-            Appointment_ID: appointmentObjectId,
-            ...(consultationIdObj ? { consultationId: consultationIdObj } : {}),
-            ...(patientId ? { patientId } : {}),
-            ...(doctorIdObj ? { doctorId: doctorIdObj } : {}),
-            // Keep legacy single fields in sync (first medicine)
-            Medicine: meds[0]?.medicine || "",
-            Dosage: meds[0]?.dosage || "",
-            Frequency: meds[0]?.frequency || "",
-            Duration: meds[0]?.duration || "",
-            Medications: meds,
-          });
-          existingPrescription.markModified("Medications");
-          await existingPrescription.save();
-        } else {
-          await Prescription.create({
-            Prescription_ID: prescriptionId,
-            Date: prescriptionDate,
-            Prescribed_On: prescriptionDate,
-            Patient: appointment.Patient || "",
-            Patient_Image: appointment.Patient_Image || "",
-            Doctor: appointment.Doctor || "",
-            Status: "Active",
-            Appointment_ID: appointmentObjectId,
-            ...(consultationIdObj ? { consultationId: consultationIdObj } : {}),
-            ...(patientId ? { patientId } : {}),
-            ...(doctorIdObj ? { doctorId: doctorIdObj } : {}),
-            // Legacy single fields (first medicine)
-            Medicine: meds[0]?.medicine || "",
-            Dosage: meds[0]?.dosage || "",
-            Frequency: meds[0]?.frequency || "",
-            Duration: meds[0]?.duration || "",
-            Medications: meds,
-            ...normalizedPrescriptionAccessFilter,
-          });
-        }
-      } catch (prescriptionErr: any) {
-        // Don't fail the consultation save if prescription creation fails
-      }
-    }
+    // All data is stored in Consultation only (hospital + user set via normalizedAccessFilter above).
 
     const updatedAppointment = typeof appointment.toObject === "function" ? appointment.toObject() : appointment;
 
@@ -630,6 +517,177 @@ export const saveConsultation: RequestHandler = async (req, res, next) => {
     if (err?.name === "ValidationError") {
       return res.status(400).json({ message: err.message });
     }
+    next(err);
+  }
+};
+
+/** List consultations for doctor (prescriptions list). Filter by doctor, status, date, search. */
+export const getConsultationsList: RequestHandler = async (req, res, next) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+
+    const page = Math.max(1, parseInt(String(req.query.page), 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit), 10) || 10));
+    const sort = (req.query.sort as string) || "-createdAt";
+    const search = (req.query.search as string) || "";
+    const Doctor = (req.query.doctor as string) || "";
+    const Status = (req.query.status as string) || "";
+    const date = (req.query.date as string) || "";
+
+    const filter = buildAccessFilter(req.user) as Record<string, unknown>;
+    const andConditions: unknown[] = [];
+
+    if (Doctor) {
+      const decoded = decodeURIComponent(Doctor.replace(/\+/g, " ")).trim();
+      const parts = decoded.split(/\s*-\s*/);
+      const base = parts[0]?.trim() || decoded;
+      const words = base.split(/\s+/).filter((w) => w.length > 0);
+      const escapedFull = decoded.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const escapedBase = base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const patterns = [escapedFull, escapedBase];
+      words.forEach((w) => {
+        if (w.length > 2) patterns.push(w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+      });
+      andConditions.push({
+        $or: patterns.map((p) => ({ Doctor: { $regex: p, $options: "i" } })),
+      });
+    }
+
+    if (Status) {
+      const norm = String(Status).toLowerCase();
+      if (norm === "active" || norm === "completed") filter.Status = "Completed";
+      else if (norm === "cancelled") filter.Status = "Cancelled";
+      else if (norm === "draft") filter.Status = "Draft";
+      else filter.Status = Status;
+    }
+
+    if (date) {
+      const parsed = new Date(date);
+      if (!isNaN(parsed.getTime())) {
+        const start = new Date(parsed);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(parsed);
+        end.setHours(23, 59, 59, 999);
+        andConditions.push({
+          $or: [
+            { Consultation_Date: { $gte: start, $lte: end } },
+            { Completed_At: { $gte: start, $lte: end } },
+            { createdAt: { $gte: start, $lte: end } },
+          ],
+        });
+      }
+    }
+
+    if (search) {
+      const rx = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      andConditions.push({
+        $or: [
+          { Patient: rx },
+          { Doctor: rx },
+          { "Medications.medicine": rx },
+        ],
+      });
+    }
+
+    if (andConditions.length > 0) filter.$and = andConditions;
+
+    const sortField = sort.startsWith("-") ? sort.slice(1) : sort;
+    const sortDir = sort.startsWith("-") ? -1 : 1;
+    const sortOpt: Record<string, 1 | -1> = { [sortField]: sortDir };
+    const skip = (page - 1) * limit;
+
+    const [list, total] = await Promise.all([
+      Consultation.find(filter)
+        .sort(sortOpt)
+        .skip(skip)
+        .limit(limit)
+        .select("_id Appointment_ID Patient Patient_Image Doctor Status Medications Consultation_Date Completed_At createdAt updatedAt")
+        .lean()
+        .exec(),
+      Consultation.countDocuments(filter),
+    ]);
+
+    const formatRow = (c: any) => {
+      const derivedDate = c.Completed_At || c.Consultation_Date || c.createdAt;
+      const dateStr = derivedDate ? new Date(derivedDate).toISOString().split("T")[0] : "";
+      const statusDisplay = c.Status === "Completed" ? "Active" : c.Status;
+      return {
+        _id: c._id?.toString(),
+        id: c._id?.toString(),
+        Consultation_ID: c._id?.toString(),
+        Prescription_ID: `CONS-${c._id}`,
+        Date: dateStr,
+        Prescribed_On: dateStr,
+        Patient: c.Patient,
+        Patient_Image: c.Patient_Image,
+        Doctor: c.Doctor,
+        Status: statusDisplay,
+        Medications: c.Medications || [],
+        Consultation_Date: c.Consultation_Date,
+        Completed_At: c.Completed_At,
+        createdAt: c.createdAt,
+        updatedAt: c.updatedAt,
+      };
+    };
+
+    res.json({
+      data: list.map(formatRow),
+      pagination: { total, page, limit, pages: Math.ceil(total / limit) || 1 },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/** Get single consultation by id (for doctor prescription details). */
+export const getConsultationById: RequestHandler = async (req, res, next) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+
+    const { id } = req.params;
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid consultation id" });
+    }
+
+    const filter = buildAccessFilter(req.user) as Record<string, unknown>;
+    filter._id = new mongoose.Types.ObjectId(id);
+
+    const consultation = await Consultation.findOne(filter)
+      .select("_id Appointment_ID Patient Patient_Image Doctor Doctor_Image Status Medications Consultation_Date Completed_At createdAt updatedAt Vitals Complaints Diagnosis Advice Investigations FollowUp")
+      .lean()
+      .exec();
+
+    if (!consultation) return res.status(404).json({ message: "Consultation not found" });
+
+    const c = consultation as any;
+    const derivedDate = c.Completed_At || c.Consultation_Date || c.createdAt;
+    const dateStr = derivedDate ? new Date(derivedDate).toISOString().split("T")[0] : "";
+
+    res.json({
+      _id: c._id?.toString(),
+      id: c._id?.toString(),
+      Consultation_ID: c._id?.toString(),
+      Prescription_ID: `CONS-${c._id}`,
+      Date: dateStr,
+      Prescribed_On: dateStr,
+      Patient: c.Patient,
+      Patient_Image: c.Patient_Image,
+      Doctor: c.Doctor,
+      Doctor_Image: c.Doctor_Image,
+      Status: c.Status === "Completed" ? "Active" : c.Status,
+      Medications: c.Medications || [],
+      Consultation_Date: c.Consultation_Date,
+      Completed_At: c.Completed_At,
+      createdAt: c.createdAt,
+      updatedAt: c.updatedAt,
+      Vitals: c.Vitals,
+      Complaints: c.Complaints,
+      Diagnosis: c.Diagnosis,
+      Advice: c.Advice,
+      Investigations: c.Investigations,
+      FollowUp: c.FollowUp,
+    });
+  } catch (err) {
     next(err);
   }
 };

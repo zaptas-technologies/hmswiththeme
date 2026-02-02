@@ -28,6 +28,9 @@ export const all_routes = {
 
   //Dashboard routes
   dashboard: "/dashboard",
+  clinicReports: "/clinic/reports",
+  clinicTransactions: "/clinic/transactions",
+  clinicInventoryReport: "/clinic/inventory-report",
   doctordashboard: "/doctor/doctor-dashboard",
   patientdashboard: "/patient/patient-dashboard",
 
@@ -132,6 +135,9 @@ export const all_routes = {
   addPharmacy: "/add-pharmacy",
   editPharmacy: "/edit-pharmacy",
   pharmacyDashboard: "/pharmacy/dashboard",
+  pharmacyReports: "/pharmacy/reports",
+  pharmacyTransactions: "/pharmacy/transactions",
+  pharmacyInventoryReport: "/pharmacy/inventory-report",
   pharmacyInvoice: "/pharmacy/invoice",
   assets: "/assets",
   activities: "/activities",

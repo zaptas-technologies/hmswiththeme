@@ -60,8 +60,8 @@ const AddGRN = () => {
   }, [isEdit, id, navigate]);
 
   const addItem = () => {
-    if (!currentItem.Item_Name || !currentItem.Expiry_Date || !currentItem.Quantity || !currentItem.Unit_Price) {
-      alert("Please fill all required item fields");
+    if (!currentItem.Item_Name || !currentItem.Batch_Number || !currentItem.Expiry_Date || !currentItem.Quantity || !currentItem.Unit_Price) {
+      alert("Please fill Item Name, Batch Number, Expiry Date, Quantity and Unit Price");
       return;
     }
 
@@ -255,7 +255,7 @@ const AddGRN = () => {
                   />
                 </div>
                 <div className="col-md-2 mb-3">
-                  <label className="form-label">Batch Number</label>
+                  <label className="form-label">Batch Number <span className="text-danger">*</span></label>
                   <input
                     type="text"
                     className="form-control"

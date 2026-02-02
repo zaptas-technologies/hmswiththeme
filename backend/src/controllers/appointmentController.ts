@@ -5,6 +5,7 @@ import { User } from "../models/userModel";
 import { Doctor } from "../models/doctorModel";
 import { DoctorSchedule } from "../models/doctorScheduleModel";
 import { buildAccessFilter } from "../middlewares/authMiddleware";
+import { sendAppointmentConfirmation } from "../services/notificationService";
 
 export interface AppointmentRequest {
   Date_Time: string;
@@ -419,6 +420,19 @@ export const createAppointment: RequestHandler = async (req, res, next) => {
     };
 
     const created = await Appointment.create(appointmentData);
+
+    // Fire-and-forget: send appointment confirmation via email/WhatsApp (if configured)
+    setImmediate(() => {
+      sendAppointmentConfirmation({
+        patientName: created.Patient || "Patient",
+        patientPhone: created.Phone || "",
+        patientEmail: (created as any).patientEmail,
+        doctorName: created.Doctor || "Doctor",
+        dateTime: created.Date_Time || String(created.dateTime || ""),
+        mode: created.Mode,
+        fees: created.Fees,
+      });
+    });
 
     res.status(201).json(formatAppointmentResponse(created));
   } catch (err: any) {

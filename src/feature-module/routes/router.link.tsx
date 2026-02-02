@@ -92,9 +92,15 @@ import Pages from "../components/pages/content-modules/page/pages";
 import States from "../components/pages/content-modules/states/states";
 import Testimonials from "../components/pages/content-modules/testimonials/testimonials";
 import Dashboard from "../components/pages/dashboard/dashboard";
+import TransactionsPage from "../components/pages/dashboard/transactions-page/transactionsPage";
+import ReportsPage from "../components/pages/dashboard/reports-page/reportsPage";
+import InventoryReportPage from "../components/pages/dashboard/inventory-report-page/inventoryReportPage";
 import DoctorDahboard from "../components/pages/dashboard/doctor-dashboard/doctorDahboard";
 import PatientDashboard from "../components/pages/dashboard/patient-dashboard/patientDashboard";
 import PharmacyDashboard from "../components/pages/dashboard/pharmacy-dashboard/pharmacyDashboard";
+import PharmacyReportsPage from "../components/pages/dashboard/pharmacy-reports-page/pharmacyReportsPage";
+import PharmacyTransactionsPage from "../components/pages/dashboard/pharmacy-transactions-page/pharmacyTransactionsPage";
+import PharmacyInventoryReportPage from "../components/pages/dashboard/pharmacy-inventory-report-page/pharmacyInventoryReportPage";
 import PharmacyInvoice from "../components/pages/dashboard/pharmacy-dashboard/pharmacyInvoice";
 import SuperAdminDashboard from "../components/pages/super-admin/super-admin-dashboard/superAdminDashboard";
 import DoctorAppointments from "../components/pages/doctor-modules/doctor-appointments/doctorAppointments";
@@ -272,6 +278,21 @@ export const publicRoutes = [
   {
     path: routes.dashboard,
     element: <Dashboard />,
+    route: Route,
+  },
+  {
+    path: routes.clinicTransactions,
+    element: <TransactionsPage />,
+    route: Route,
+  },
+  {
+    path: routes.clinicReports,
+    element: <ReportsPage />,
+    route: Route,
+  },
+  {
+    path: routes.clinicInventoryReport,
+    element: <InventoryReportPage />,
     route: Route,
   },
   {
@@ -1412,6 +1433,21 @@ export const publicRoutes = [
   {
     path: routes.pharmacyDashboard,
     element: <PharmacyDashboard />,
+    route: Route,
+  },
+  {
+    path: routes.pharmacyReports,
+    element: <PharmacyReportsPage />,
+    route: Route,
+  },
+  {
+    path: routes.pharmacyTransactions,
+    element: <PharmacyTransactionsPage />,
+    route: Route,
+  },
+  {
+    path: routes.pharmacyInventoryReport,
+    element: <PharmacyInventoryReportPage />,
     route: Route,
   },
   {
