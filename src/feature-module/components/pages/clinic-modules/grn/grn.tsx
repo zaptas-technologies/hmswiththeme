@@ -8,6 +8,7 @@ import {
   deleteGRN,
   fetchGRN,
   type GRN,
+  type GRNItem,
 } from "../../../../../api/grn";
 
 const GRNList = () => {
@@ -210,6 +211,48 @@ const GRNList = () => {
     loadGRN({ page: pagination.current || page, pageSize: pagination.pageSize || pageSize });
   };
 
+  const expandableRowRender = useMemo(
+    () => ({
+      expandedRowRender: (record: GRN) => {
+        const items = record.Items || [];
+        if (items.length === 0) {
+          return (
+            <div className="p-3 text-muted small">No items in this GRN.</div>
+          );
+        }
+        const itemColumns: ColumnsType<GRNItem> = [
+          { title: "#", key: "idx", width: 48, render: (_: any, __: any, idx: number) => idx + 1 },
+          { title: "Item Name", dataIndex: "Item_Name", key: "Item_Name", render: (t: string) => t || "-" },
+          { title: "Item Code", dataIndex: "Item_Code", key: "Item_Code", render: (t: string) => t || "-" },
+          { title: "Batch Number", dataIndex: "Batch_Number", key: "Batch_Number", render: (t: string) => t || "-" },
+          {
+            title: "Expiry Date",
+            dataIndex: "Expiry_Date",
+            key: "Expiry_Date",
+            render: (d: Date | string) => (d ? formatDate(d) : "-"),
+          },
+          { title: "Quantity", dataIndex: "Quantity", key: "Quantity", render: (q: number, r: GRNItem) => `${q ?? 0} ${r.Unit || ""}`.trim() || "0" },
+          { title: "Unit Price", dataIndex: "Unit_Price", key: "Unit_Price", render: (n: number) => (n != null ? `$${Number(n).toFixed(2)}` : "-") },
+          { title: "Total Price", dataIndex: "Total_Price", key: "Total_Price", render: (n: number) => (n != null ? `$${Number(n).toFixed(2)}` : "-") },
+        ];
+        return (
+          <div className="p-2">
+            <Table
+              columns={itemColumns}
+              dataSource={items}
+              rowKey={(_, idx) => String(idx)}
+              pagination={false}
+              size="small"
+              className="mb-0"
+            />
+          </div>
+        );
+      },
+      rowExpandable: () => true,
+    }),
+    []
+  );
+
   return (
     <>
       <div className="page-wrapper">
@@ -290,6 +333,7 @@ const GRNList = () => {
               dataSource={rows}
               rowKey={(record) => record._id || record.id || ""}
               loading={loading}
+              expandable={expandableRowRender}
               pagination={{
                 current: page,
                 pageSize: pageSize,
